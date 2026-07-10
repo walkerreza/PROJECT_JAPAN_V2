@@ -1,58 +1,207 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Japanlingo V2
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Japanlingo V2 adalah platform belajar bahasa Jepang berbasis kelas untuk program JLPT, dengan fokus awal pada kelas N3. Project ini menggabungkan roadmap mingguan, PPT/presentasi, kosakata, flashcard, kuis, progress, gamifikasi, payment Midtrans, access key, dan kloter belajar.
 
-## About Laravel
+Tujuan V2 bukan memindahkan web lama secara mentah, tetapi membangun ulang pengalaman belajar yang lebih jelas: user memilih kelas, masuk ke roadmap mingguan, belajar lewat konten interaktif, mengerjakan kuis, lalu membuka progress berikutnya setelah lulus.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+![Kelas N3 Mingguan](public/images/kelas-n3-mingguan.jpg)
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Ringkasan Produk
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+Japanlingo V2 dirancang untuk kebutuhan kursus Jepang yang lebih terarah:
 
-## Learning Laravel
+- User belajar dari kelas/program, bukan dari halaman materi panjang.
+- Setiap kelas berisi modul mingguan.
+- Setiap modul dapat berisi PPT, kosakata, flashcard, dan kuis.
+- Flashcard menjadi bentuk materi interaktif sebelum kuis.
+- Kuis menjadi gate untuk membuka week berikutnya.
+- Free user dapat preview Week 1.
+- Premium/access key membuka kelas lanjutan sesuai scope akses.
+- Kloter mengatur batch belajar berdasarkan tanggal mulai dan minggu aktif.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+![Kelas Kosakata](public/images/kelas-n3-kosakata.jpg)
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Fitur Utama
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+### User
 
-## Agentic Development
+- Dashboard belajar dengan quick access.
+- Halaman kelas sebagai entry point utama.
+- Roadmap mingguan bergaya learning path.
+- PPT/presentasi yang dibagikan admin.
+- Library kosakata Jepang.
+- Flashcard interaktif.
+- Kuis dengan timer, nyawa, score, XP, dan feedback.
+- Progress dan pencapaian.
+- Notifikasi in-app untuk payment, akses, kloter, konten, dan progress.
+- Redeem access key dari profile.
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+### Admin
+
+- Manajemen kelas/program.
+- Manajemen modul mingguan.
+- Builder PPT/presentasi.
+- Builder flashcard.
+- Builder kuis dan soal.
+- Library kosakata.
+- Data user dan analitik pembelajaran.
+- Import konten tertentu dari spreadsheet atau file pendukung.
+
+### Superadmin
+
+- Dashboard operasional.
+- Manajemen user dan admin.
+- Manajemen payment plan.
+- Monitoring transaksi Midtrans/manual.
+- Generate dan revoke access key.
+- Manajemen kloter belajar.
+- Assign user ke kloter.
+- Monitoring kapasitas dan progress anggota kloter.
+- Pengaturan sistem dasar.
+
+![Kelas Kanji](public/images/kelas-n3-kanji.jpg)
+
+## Alur Belajar
+
+```text
+Login
+-> Kelas
+-> Pilih kelas N3
+-> Roadmap mingguan
+-> PPT / Kosakata / Flashcard
+-> Kuis
+-> Lulus passing score
+-> Progress tersimpan
+-> Week berikutnya terbuka
+```
+
+Aturan utama:
+
+- Flashcard harus selesai sebelum kuis.
+- Kuis lulus jika memenuhi `passing_score`.
+- Progress modul hanya dianggap selesai jika kuis lulus.
+- Jika user berada dalam kloter, week yang belum masuk minggu aktif kloter tetap terkunci.
+
+## Payment dan Access
+
+Project ini memakai Midtrans untuk checkout. Scope akses dibuat hybrid agar fleksibel:
+
+- `global`: membuka semua kelas premium.
+- `program`: membuka satu kelas/program tertentu.
+
+Access key juga mendukung akses global, per kelas, atau per kloter. Ini berguna untuk kebutuhan semi-manual dari superadmin atau kloter khusus.
+
+Email notification sudah disiapkan, tetapi default nonaktif. Notifikasi utama tetap berjalan lewat bell/sidebar.
+
+```env
+MAIL_NOTIFICATIONS_ENABLED=false
+```
+
+Aktifkan email hanya jika SMTP valid sudah tersedia.
+
+## Stack
+
+- Laravel 13
+- PHP 8.3
+- MySQL
+- Inertia.js
+- React
+- Vite
+- Tailwind CSS
+- Material UI Icons
+- Framer Motion
+- Midtrans
+
+## Setup Local
+
+Clone repository, lalu install dependency:
 
 ```bash
-composer require laravel/boost --dev
+composer install
+npm install
+```
 
-php artisan boost:install
-``
+Copy environment:
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+```bash
+cp .env.example .env
+php artisan key:generate
+```
 
-## Contributing
+Sesuaikan database MySQL:
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=Project_japan
+DB_USERNAME=root
+DB_PASSWORD=
+```
 
-## Code of Conduct
+Jalankan migration dan seeder:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```bash
+php artisan migrate --seed
+```
 
-## Security Vulnerabilities
+Jalankan aplikasi:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+php artisan serve
+npm run dev
+```
 
-## License
+Build production:
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```bash
+npm run build
+```
+
+## Env Penting
+
+Midtrans sandbox:
+
+```env
+MIDTRANS_SERVER_KEY=
+MIDTRANS_CLIENT_KEY=
+MIDTRANS_IS_PRODUCTION=false
+MIDTRANS_IS_SANITIZED=true
+MIDTRANS_IS_3DS=true
+```
+
+Mail notification:
+
+```env
+MAIL_NOTIFICATIONS_ENABLED=false
+MAIL_MAILER=log
+```
+
+Untuk production, gunakan SMTP yang valid dan jangan commit `.env`.
+
+## Struktur Konteks Project
+
+Catatan keputusan produk ada di folder:
+
+```text
+../context_project/6-changed/
+```
+
+Dokumen yang sebaiknya dibaca lebih dulu:
+
+- `latest-changed.md`
+- `modul-mingguan-concept.md`
+- `kloter-payment-access-2026-07-09.md`
+- `hybrid-payment-access-scope-2026-07-06.md`
+
+## Catatan Development
+
+- Target aktif adalah `japanlingov2`.
+- Project lama `japanlingo` hanya referensi.
+- Jangan menghidupkan ulang halaman materi panjang sebagai flow utama user.
+- Jangan menambah tabel baru jika relasi existing sudah cukup.
+- Untuk fitur berat seperti import PDF/PPT lanjutan, pertimbangkan storage dan resource VPS.
+
+## Status
+
+V2 saat ini adalah checkpoint aktif untuk pengembangan kelas N3, roadmap mingguan, kloter, payment, notifikasi, dan presentasi. Fokus berikutnya adalah QA, polishing UI, pematangan admin input, dan validasi flow user end-to-end.
