@@ -1,0 +1,283 @@
+import React, { useState } from 'react';
+import { Head } from '@inertiajs/react';
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { KabutoIcon } from '@/Components/JapaneseIcons';
+import { motion } from 'framer-motion';
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
+import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
+import StarsIcon from '@mui/icons-material/Stars';
+import { MascotGuide } from '@/Components/User/UserVisuals';
+
+const hashColor = (name) => {
+    const colors = [
+        'from-violet-500 to-purple-700',
+        'from-cyan-500 to-red-700',
+        'from-emerald-500 to-green-700',
+        'from-rose-500 to-pink-700',
+        'from-orange-500 to-red-700',
+        'from-teal-500 to-cyan-700',
+        'from-rose-500 to-violet-700',
+        'from-fuchsia-500 to-pink-700',
+    ];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    return colors[Math.abs(hash) % colors.length];
+};
+
+const Avatar = ({ name, size = 'md', gradient }) => {
+    const sizes = { sm: 'w-10 h-10 text-base', md: 'w-12 h-12 text-lg', lg: 'w-16 h-16 text-2xl', xl: 'w-20 h-20 text-3xl' };
+    const bg = gradient || hashColor(name);
+    return (
+        <div className={`${sizes[size]} rounded-full bg-gradient-to-br ${bg} flex items-center justify-center font-bold text-white shadow-lg flex-shrink-0 transition-colors duration-300`}>
+            {name.charAt(0).toUpperCase()}
+        </div>
+    );
+};
+
+const TABS = ['Weekly', 'Monthly', 'All Time'];
+
+const medalEmoji = (rank) => {
+    if (rank === 1) return <KabutoIcon className="w-5 h-5 inline-block text-yellow-500" />;
+    if (rank === 2) return <KabutoIcon className="w-5 h-5 inline-block text-gray-300" />;
+    if (rank === 3) return <KabutoIcon className="w-5 h-5 inline-block text-amber-600" />;
+    return null;
+};
+
+const rowVariants = {
+    hidden: { opacity: 0, x: -24 },
+    visible: (i) => ({ opacity: 1, x: 0, transition: { delay: i * 0.06, duration: 0.4, ease: 'easeOut' } }),
+};
+
+export default function Leaderboard({ players = [] }) {
+    const [activeTab, setActiveTab] = useState('Weekly');
+
+    const totalXP = players.reduce((s, p) => s + (p.xp || 0), 0);
+    const top3 = players.filter(p => p.rank <= 3).sort((a, b) => a.rank - b.rank);
+    const rest = players.filter(p => p.rank > 3);
+
+    const podiumOrder = top3.length >= 3 ? [top3[1], top3[0], top3[2]] : top3;
+
+    const podiumStyles = {
+        1: { height: 'h-40', gradient: 'from-amber-400 to-yellow-600', ring: 'ring-amber-400', glow: 'shadow-amber-400/50', avatarGrad: 'from-amber-300 to-yellow-500' },
+        2: { height: 'h-28', gradient: 'from-slate-400 to-slate-600 dark:from-slate-300 dark:to-gray-500', ring: 'ring-slate-400', glow: 'shadow-slate-400/30', avatarGrad: 'from-slate-400 to-slate-600 dark:from-slate-300 dark:to-gray-500' },
+        3: { height: 'h-20', gradient: 'from-amber-600 to-orange-800 dark:from-amber-700 dark:to-orange-900', ring: 'ring-amber-700', glow: 'shadow-amber-700/30', avatarGrad: 'from-amber-600 to-orange-700 dark:from-amber-700 dark:to-orange-800' },
+    };
+
+    return (
+        <AuthenticatedLayout>
+            <Head title="Papan Peringkat - Japanlingo" />
+
+            <div className="relative min-h-screen overflow-hidden bg-[#f5eadb] text-slate-900 transition-colors duration-300 dark:bg-gray-950 dark:text-white">
+                <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(140deg,rgba(245,158,11,0.18)_0%,transparent_28%),linear-gradient(230deg,rgba(220,38,38,0.10)_0%,transparent_34%),repeating-linear-gradient(90deg,rgba(120,53,15,0.05)_0_1px,transparent_1px_74px),repeating-linear-gradient(0deg,rgba(120,53,15,0.04)_0_1px,transparent_1px_74px)] dark:bg-[linear-gradient(140deg,rgba(245,158,11,0.12)_0%,transparent_28%),linear-gradient(230deg,rgba(220,38,38,0.12)_0%,transparent_34%),repeating-linear-gradient(90deg,rgba(255,255,255,0.032)_0_1px,transparent_1px_74px),repeating-linear-gradient(0deg,rgba(255,255,255,0.026)_0_1px,transparent_1px_74px)]" />
+                <div className="pointer-events-none absolute left-8 top-32 hidden text-[12rem] font-black leading-none text-amber-900/[0.055] dark:text-white/[0.035] lg:block">勝</div>
+                <div className="pointer-events-none absolute right-8 top-[620px] hidden text-[12rem] font-black leading-none text-red-900/[0.04] dark:text-white/[0.03] lg:block">位</div>
+                {/* ── HERO ── */}
+                <div className="relative z-10 px-4 pt-10 pb-8 transition-colors duration-300">
+                    <div className="max-w-2xl mx-auto text-center">
+                        <div className="flex items-center justify-center gap-2 mb-1">
+                            <EmojiEventsIcon className="text-amber-500 dark:text-amber-400" style={{ fontSize: 32 }} />
+                            <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-amber-600 to-yellow-500 dark:from-amber-300 dark:to-yellow-500 bg-clip-text text-transparent transition-colors duration-300">
+                                Papan Peringkat
+                            </h1>
+                            <EmojiEventsIcon className="text-amber-500 dark:text-amber-400" style={{ fontSize: 32 }} />
+                        </div>
+                        <p className="text-slate-500 dark:text-gray-400 text-sm mb-5 transition-colors duration-300">Bersaing dengan pemain lain dan raih posisi teratas!</p>
+
+                        {/* Stats mini */}
+                        <div className="mx-auto flex max-w-lg justify-center gap-4 rounded-[1.5rem] border border-white/70 bg-white/55 p-3 shadow-xl shadow-amber-900/5 backdrop-blur-md dark:border-gray-800 dark:bg-gray-900/55">
+                            <div className="flex-1 rounded-2xl bg-white/75 px-5 py-3 text-center shadow-sm transition-colors duration-300 dark:bg-gray-950/70">
+                                <p className="text-xl font-bold text-slate-800 dark:text-white transition-colors duration-300">{players.length}</p>
+                                <p className="text-xs text-slate-500 dark:text-gray-400 transition-colors duration-300">Total Peserta</p>
+                            </div>
+                            <div className="flex-1 rounded-2xl bg-white/75 px-5 py-3 text-center shadow-sm transition-colors duration-300 dark:bg-gray-950/70">
+                                <p className="text-xl font-bold text-amber-500 dark:text-amber-400 transition-colors duration-300">{totalXP.toLocaleString()}</p>
+                                <p className="text-xs text-slate-500 dark:text-gray-400 transition-colors duration-300">Total XP Terdistribusi</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="relative z-10 max-w-2xl mx-auto px-4 pb-16">
+                    <div className="my-6">
+                        <MascotGuide
+                            tone="amber"
+                            title="Liga Mingguan"
+                            message="Peringkat naik dari XP dan konsistensi. Selesaikan quest modul mingguan untuk mengejar posisi podium."
+                        />
+                    </div>
+                    {/* ── TABS ── */}
+                    <div className="flex gap-2 my-6 rounded-2xl border border-white/70 bg-white/60 p-1.5 shadow-xl shadow-amber-900/5 backdrop-blur-md transition-colors duration-300 dark:border-gray-800 dark:bg-gray-900/60">
+                        {TABS.map(tab => (
+                            <button
+                                key={tab}
+                                onClick={() => setActiveTab(tab)}
+                                className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all duration-300 ${
+                                    activeTab === tab
+                                        ? 'bg-gradient-to-r from-amber-400 to-yellow-500 dark:from-amber-500 dark:to-yellow-500 text-slate-900 dark:text-gray-950 shadow-lg shadow-amber-500/30'
+                                        : 'text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white'
+                                }`}
+                            >
+                                {tab}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* ── PODIUM ── */}
+                    {podiumOrder.length >= 3 && (
+                        <div className="relative mb-8 flex items-end justify-center gap-3 rounded-[2rem] border border-white/70 bg-white/35 px-4 pt-8 shadow-2xl shadow-amber-900/5 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/35">
+                            {podiumOrder.map((player) => {
+                                const st = podiumStyles[player.rank];
+                                const isFirst = player.rank === 1;
+                                return (
+                                    <motion.div
+                                        key={player.rank}
+                                        initial={{ opacity: 0, y: 30 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.5, delay: player.rank === 1 ? 0 : 0.15 }}
+                                        className="flex flex-col items-center gap-2 flex-1"
+                                    >
+                                        {/* Crown for rank 1 */}
+                                        {isFirst && (
+                                            <motion.div
+                                                animate={{ scale: [1, 1.15, 1] }}
+                                                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                                                className="text-3xl"
+                                            >
+                                                <KabutoIcon className="w-5 h-5 inline-block text-yellow-400" />
+                                            </motion.div>
+                                        )}
+
+                                        {/* Avatar + glow ring */}
+                                        <div className={`relative ${isFirst ? 'ring-4 ring-offset-2 ring-offset-[#F8FAFC] dark:ring-offset-gray-950 ring-amber-400 rounded-full shadow-2xl shadow-amber-400/50 transition-colors duration-300' : ''}`}>
+                                            {isFirst && (
+                                                <motion.div
+                                                    animate={{ opacity: [0.4, 0.9, 0.4] }}
+                                                    transition={{ duration: 2, repeat: Infinity }}
+                                                    className="absolute inset-0 rounded-full bg-amber-400/30 blur-md"
+                                                />
+                                            )}
+                                            <Avatar name={player.name} size={isFirst ? 'xl' : 'lg'} gradient={st.avatarGrad} />
+                                        </div>
+
+                                        {/* Name + XP */}
+                                        <div className="text-center">
+                                            <p className="text-xs font-semibold text-slate-800 dark:text-white truncate max-w-[80px] transition-colors duration-300">{player.name}</p>
+                                            <span className={`text-xs font-bold bg-gradient-to-r ${st.gradient} bg-clip-text text-transparent`}>
+                                                {player.xp?.toLocaleString()} XP
+                                            </span>
+                                        </div>
+
+                                        {/* Podium base */}
+                                        <div className={`w-full ${st.height} bg-gradient-to-t ${st.gradient} rounded-t-xl flex items-start justify-center pt-2 shadow-sm transition-colors duration-300`}>
+                                            <span className="text-lg font-black text-white/90 dark:text-white/80">#{player.rank}</span>
+                                        </div>
+                                    </motion.div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    {/* ── RANKING TABLE ── */}
+                    <div className="overflow-hidden rounded-[2rem] border border-white/70 bg-white/72 shadow-2xl shadow-amber-900/5 backdrop-blur-md transition-colors duration-300 dark:border-gray-800 dark:bg-gray-900/72">
+                        <div className="px-4 py-3 border-b border-slate-100 dark:border-gray-800 flex items-center gap-2 transition-colors duration-300">
+                            <StarsIcon className="text-amber-500 dark:text-amber-400" style={{ fontSize: 18 }} />
+                            <span className="text-sm font-semibold text-slate-700 dark:text-gray-300 transition-colors duration-300">Peringkat Lengkap</span>
+                        </div>
+
+                        {/* Sticky "isMe" row if in rest */}
+                        {(() => {
+                            const meRow = players.find(p => p.isMe && p.rank > 3);
+                            if (!meRow) return null;
+                            return (
+                                <div className="sticky top-0 z-10 border-l-4 border-amber-400 bg-amber-50/90 dark:bg-amber-950/40 backdrop-blur-sm px-4 py-3 flex items-center gap-3 border-b border-slate-200 dark:border-gray-800 transition-colors duration-300">
+                                    <span className="w-6 text-center text-sm font-bold text-amber-600 dark:text-amber-400 transition-colors duration-300">#{meRow.rank}</span>
+                                    <Avatar name={meRow.name} size="sm" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-bold text-amber-600 dark:text-amber-300 flex items-center gap-1 transition-colors duration-300">
+                                            {meRow.name} <span className="text-xs bg-amber-200/50 dark:bg-amber-500/30 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-full transition-colors duration-300">Kamu</span>
+                                        </p>
+                                        <p className="text-xs text-slate-500 dark:text-gray-400 transition-colors duration-300">{meRow.level}</p>
+                                    </div>
+                                    {meRow.streak > 0 && (
+                                        <span className="flex items-center gap-0.5 text-xs font-bold text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-950/50 px-2 py-1 rounded-full transition-colors duration-300">
+                                            <LocalFireDepartmentIcon style={{ fontSize: 13 }} /> {meRow.streak}
+                                        </span>
+                                    )}
+                                    <span className="text-base font-extrabold text-amber-600 dark:text-amber-400 transition-colors duration-300">{meRow.xp?.toLocaleString()}</span>
+                                </div>
+                            );
+                        })()}
+
+                        {/* All rows */}
+                        <div>
+                            {players.map((player, i) => {
+                                const medal = medalEmoji(player.rank);
+                                const isTop3 = player.rank <= 3;
+                                return (
+                                    <motion.div
+                                        key={player.rank}
+                                        custom={i}
+                                        variants={rowVariants}
+                                        initial="hidden"
+                                        animate="visible"
+                                        className={`flex items-center gap-3 px-4 py-3 border-b border-slate-100 dark:border-gray-800/60 last:border-0 transition-colors duration-300 cursor-default
+                                            ${player.isMe ? 'border-l-4 border-amber-400 bg-amber-50/50 hover:bg-amber-50 dark:bg-amber-950/30 dark:hover:bg-amber-950/50' : 'hover:bg-slate-50 dark:hover:bg-gray-800'}
+                                        `}
+                                    >
+                                        {/* Rank */}
+                                        <div className="w-8 text-center flex-shrink-0">
+                                            {medal ? (
+                                                <span className="text-xl">{medal}</span>
+                                            ) : (
+                                                <span className={`text-sm font-bold ${player.isMe ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-gray-500'} transition-colors duration-300`}>
+                                                    #{player.rank}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {/* Avatar */}
+                                        <Avatar name={player.name} size="sm" gradient={isTop3 ? podiumStyles[player.rank]?.avatarGrad : undefined} />
+
+                                        {/* Info */}
+                                        <div className="flex-1 min-w-0">
+                                            <p className={`text-sm font-semibold truncate ${player.isMe ? 'text-amber-600 dark:text-amber-300' : 'text-slate-800 dark:text-white'} transition-colors duration-300`}>
+                                                {player.name}
+                                                {player.isMe && (
+                                                    <span className="ml-1.5 text-xs bg-amber-200/50 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-full font-normal transition-colors duration-300">Kamu</span>
+                                                )}
+                                            </p>
+                                            <p className="text-xs text-slate-500 dark:text-gray-500 truncate transition-colors duration-300">{player.level}</p>
+                                        </div>
+
+                                        {/* Streak */}
+                                        {player.streak > 0 && (
+                                            <span className="flex items-center gap-0.5 text-xs font-bold text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-950/60 px-2 py-1 rounded-full flex-shrink-0 transition-colors duration-300">
+                                                <LocalFireDepartmentIcon style={{ fontSize: 13 }} />
+                                                {player.streak}
+                                            </span>
+                                        )}
+
+                                        {/* XP */}
+                                        <div className="text-right flex-shrink-0">
+                                            <p className={`text-base font-extrabold ${player.isMe ? 'text-amber-600 dark:text-amber-400' : isTop3 ? 'text-amber-500 dark:text-yellow-400' : 'text-slate-800 dark:text-white'} transition-colors duration-300`}>
+                                                {player.xp?.toLocaleString()}
+                                            </p>
+                                            <p className="text-xs text-slate-500 dark:text-gray-600 transition-colors duration-300">XP</p>
+                                        </div>
+                                    </motion.div>
+                                );
+                            })}
+
+                            {players.length === 0 && (
+                                <div className="py-16 text-center text-slate-500 dark:text-gray-600 transition-colors duration-300">
+                                    <EmojiEventsIcon style={{ fontSize: 48 }} className="mb-3 opacity-30" />
+                                    <p>Belum ada pemain</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </AuthenticatedLayout>
+    );
+}
