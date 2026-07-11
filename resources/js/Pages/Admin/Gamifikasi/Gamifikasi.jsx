@@ -3,6 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router } from '@inertiajs/react';
 import Card from '@/Components/UI/Card';
 import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
+import LeagueIcon from '@/Components/Gamification/LeagueIcon';
 
 import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
@@ -26,7 +27,7 @@ const emptyForm = {
     condition_value: 1,
 };
 
-export default function Gamification({ achievements = [] }) {
+export default function Gamification({ achievements = [], settings = {} }) {
     const [showForm, setShowForm] = useState(false);
     const [editId, setEditId] = useState(null);
     const [form, setForm] = useState({ ...emptyForm });
@@ -133,6 +134,23 @@ export default function Gamification({ achievements = [] }) {
                         <div className="rounded-2xl bg-emerald-50 p-4 dark:bg-emerald-900/20">
                             <p className="text-2xl font-black text-emerald-700 dark:text-emerald-300">{unlockedCount}</p>
                             <p className="text-xs font-black uppercase tracking-widest text-emerald-600">Total Unlock</p>
+                        </div>
+                    </div>
+
+                    <div className="mt-4 rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-800/40">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <p className="text-sm font-black text-gray-900 dark:text-white">Perjalanan Liga</p>
+                                <p className="mt-1 text-xs font-semibold text-gray-500 dark:text-gray-400">Aturan XP global dari Superadmin.</p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {(settings.leagues || []).map((league) => (
+                                    <span key={`${league.name}-${league.min_xp}`} className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-[10px] font-black text-gray-600 shadow-sm dark:bg-gray-900 dark:text-gray-300">
+                                        <LeagueIcon iconKey={league.icon} className="h-3.5 w-3.5" />
+                                        {league.name}: {Number(league.min_xp || 0).toLocaleString()} XP
+                                    </span>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </section>

@@ -30,6 +30,38 @@ import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { KabutoIcon } from '@/Components/JapaneseIcons';
 
+const resolveThemeMode = () => {
+    if (typeof window === 'undefined') {
+        return 'system';
+    }
+
+    return window.localStorage.getItem('theme') || 'system';
+};
+
+const shouldUseDarkMode = (mode) => {
+    if (typeof window === 'undefined') {
+        return false;
+    }
+
+    if (mode === 'dark') {
+        return true;
+    }
+
+    if (mode === 'light') {
+        return false;
+    }
+
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+};
+
+const applyDocumentTheme = (mode = resolveThemeMode()) => {
+    if (typeof document === 'undefined') {
+        return;
+    }
+
+    document.documentElement.classList.toggle('dark', shouldUseDarkMode(mode));
+};
+
 export default function AuthenticatedLayout({ children }) {
     const { user } = usePage().props.auth;
     const flash = usePage().props.flash || {};
@@ -43,6 +75,20 @@ export default function AuthenticatedLayout({ children }) {
     const menuRef = useRef(null);
 
     const [toastAchievements, setToastAchievements] = useState([]);
+
+    useEffect(() => {
+        const syncTheme = () => applyDocumentTheme();
+        const mediaQuery = window.matchMedia?.('(prefers-color-scheme: dark)');
+
+        syncTheme();
+        window.addEventListener('storage', syncTheme);
+        mediaQuery?.addEventListener?.('change', syncTheme);
+
+        return () => {
+            window.removeEventListener('storage', syncTheme);
+            mediaQuery?.removeEventListener?.('change', syncTheme);
+        };
+    }, []);
 
     useEffect(() => {
         if (flash.achievement_unlocked) {
@@ -151,7 +197,7 @@ export default function AuthenticatedLayout({ children }) {
     const userMenu = [
         { href: '/user/dashboard', icon: <DashboardIcon sx={{ fontSize: 28 }} />, label: 'Beranda' },
         { href: '/user/kelas', icon: <SchoolIcon sx={{ fontSize: 28 }} />, label: 'Kelas' },
-        { href: '/user/leaderboard', icon: <EmojiEventsIcon sx={{ fontSize: 28 }} />, label: 'Pencapaian' },
+        { href: '/user/leaderboard', icon: <EmojiEventsIcon sx={{ fontSize: 28 }} />, label: 'Peringkat' },
         { href: '/user/progress', icon: <MonitorHeartIcon sx={{ fontSize: 28 }} />, label: 'Progress' },
         ...(shouldShowUpgrade ? [{ href: '/pricing', icon: <RocketLaunchIcon sx={{ fontSize: 24 }} />, label: 'Upgrade', variant: 'upgrade' }] : []),
     ];

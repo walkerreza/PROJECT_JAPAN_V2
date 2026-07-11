@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Pencapaian;
+use App\Services\GamifikasiConfigService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -26,10 +27,13 @@ class AdminGamifikasiController extends Controller
     /**
      * Tampilkan halaman daftar semua achievements ke admin.
      */
-    public function index()
+    public function index(GamifikasiConfigService $gamifikasiConfig)
     {
         return Inertia::render('Admin/Gamifikasi/Gamifikasi', [
             'achievements' => Pencapaian::withCount('users')->orderBy('created_at', 'desc')->get(),
+            'settings' => [
+                'leagues' => $gamifikasiConfig->leagues(),
+            ],
         ]);
     }
 

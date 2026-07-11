@@ -10,6 +10,7 @@ use App\Models\ProgramPembelajaran;
 use App\Models\Transaksi;
 use App\Services\AksesLanggananService;
 use App\Services\AksesPremiumService;
+use App\Services\GamifikasiConfigService;
 use App\Services\KloterBelajarService;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -66,7 +67,7 @@ class HalamanController extends Controller
         return Inertia::render('Roadmap');
     }
 
-    public function userProfile()
+    public function userProfile(GamifikasiConfigService $gamifikasiConfig)
     {
         $user = Auth::user();
 
@@ -102,6 +103,21 @@ class HalamanController extends Controller
                     },
                     'created_at_label' => optional($transaction->created_at)->format('d M Y H:i'),
                 ]),
+            'achievements' => $user?->achievements()
+                ->latest('user_achievements.unlocked_at')
+                ->take(8)
+                ->get()
+                ->map(fn ($achievement) => [
+                    'id' => $achievement->id,
+                    'name' => $achievement->name,
+                    'description' => $achievement->description,
+                    'icon' => $achievement->icon,
+                    'xp_reward' => $achievement->xp_reward,
+                    'unlocked_at_label' => optional($achievement->pivot?->unlocked_at)->format('d M Y'),
+                ]) ?? [],
+            'gamificationSettings' => [
+                'leagues' => $gamifikasiConfig->leagues(),
+            ],
         ]);
     }
 

@@ -22,6 +22,13 @@ class GamifikasiConfigService
                 ['days' => 100, 'xp' => 1000],
             ],
         ],
+        'leagues' => [
+            ['name' => 'Bronze', 'min_xp' => 0, 'icon' => 'bronze_kabuto'],
+            ['name' => 'Silver', 'min_xp' => 500, 'icon' => 'silver_shuriken'],
+            ['name' => 'Gold', 'min_xp' => 2000, 'icon' => 'gold_sakura'],
+            ['name' => 'Diamond', 'min_xp' => 5000, 'icon' => 'diamond_torii'],
+            ['name' => 'Amethyst', 'min_xp' => 12000, 'icon' => 'amethyst_scroll'],
+        ],
     ];
 
     public function all(): array
@@ -43,6 +50,19 @@ class GamifikasiConfigService
     public function streak(): array
     {
         return $this->all()['streak'];
+    }
+
+    public function leagues(): array
+    {
+        return collect($this->all()['leagues'] ?? self::DEFAULTS['leagues'])
+            ->map(fn (array $league) => [
+                'name' => (string) ($league['name'] ?? 'Liga'),
+                'min_xp' => (int) ($league['min_xp'] ?? 0),
+                'icon' => (string) ($league['icon'] ?? 'bronze_kabuto'),
+            ])
+            ->sortBy('min_xp')
+            ->values()
+            ->all();
     }
 
     public function quizXpForScore(int $correctCount, int $totalQuestions): int
@@ -101,6 +121,7 @@ class GamifikasiConfigService
         return match ($key) {
             'quiz_xp' => 'Konfigurasi XP berdasarkan hasil pengerjaan kuis.',
             'streak' => 'Konfigurasi bonus XP untuk streak belajar.',
+            'leagues' => 'Konfigurasi perjalanan liga berdasarkan total XP user.',
             default => 'Konfigurasi gamifikasi.',
         };
     }

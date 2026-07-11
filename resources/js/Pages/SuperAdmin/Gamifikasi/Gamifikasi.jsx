@@ -4,6 +4,7 @@ import { Head, router, useForm } from '@inertiajs/react';
 import Card from '@/Components/UI/Card';
 import StatCard from '@/Components/Features/Dashboard/StatCard';
 import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
+import LeagueIcon, { LEAGUE_ICON_OPTIONS, resolveLeagueIconKey } from '@/Components/Gamification/LeagueIcon';
 
 import BoltIcon from '@mui/icons-material/Bolt';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
@@ -27,6 +28,13 @@ const defaultSettings = {
             { days: 100, xp: 1000 },
         ],
     },
+    leagues: [
+        { name: 'Bronze', min_xp: 0, icon: 'bronze_kabuto' },
+        { name: 'Silver', min_xp: 500, icon: 'silver_shuriken' },
+        { name: 'Gold', min_xp: 2000, icon: 'gold_sakura' },
+        { name: 'Diamond', min_xp: 5000, icon: 'diamond_torii' },
+        { name: 'Amethyst', min_xp: 12000, icon: 'amethyst_scroll' },
+    ],
 };
 
 function NumberField({ label, value, onChange, helper, min = 0, max = 100000 }) {
@@ -61,6 +69,10 @@ export default function Gamification({
             ...(settings.streak || {}),
             milestones: settings.streak?.milestones?.length ? settings.streak.milestones : defaultSettings.streak.milestones,
         },
+        leagues: (settings.leagues?.length ? settings.leagues : defaultSettings.leagues).map((league) => ({
+            ...league,
+            icon: resolveLeagueIconKey(league.icon),
+        })),
     };
 
     const { data, setData, put, processing, errors } = useForm(initialSettings);
@@ -94,6 +106,31 @@ export default function Gamification({
             ...data.streak,
             milestones: data.streak.milestones.filter((_, itemIndex) => itemIndex !== index),
         });
+    };
+
+    const updateLeague = (index, key, value) => {
+        const leagues = [...data.leagues];
+        leagues[index] = {
+            ...leagues[index],
+            [key]: key === 'min_xp' ? Math.max(0, Number(value) || 0) : value,
+        };
+        setData('leagues', leagues);
+    };
+
+    const addLeague = () => {
+        const lastLeague = data.leagues[data.leagues.length - 1];
+        setData('leagues', [
+            ...data.leagues,
+            {
+                name: 'Liga Baru',
+                min_xp: (Number(lastLeague?.min_xp) || 0) + 1000,
+                icon: 'bronze_kabuto',
+            },
+        ]);
+    };
+
+    const removeLeague = (index) => {
+        setData('leagues', data.leagues.filter((_, itemIndex) => itemIndex !== index));
     };
 
     const saveSettings = (event) => {
@@ -251,6 +288,63 @@ export default function Gamification({
                     </Card>
 
                     <Card>
+                        <h2 className="flex items-center gap-2 text-lg font-black text-gray-900 dark:text-white">
+                            <EmojiEventsIcon sx={{ fontSize: 20 }} />
+                            Perjalanan Liga
+                        </h2>
+                        <p className="mt-1 text-sm font-medium text-gray-500 dark:text-gray-400">
+                            Threshold XP ini dipakai di profile user untuk menentukan liga saat ini dan progres menuju liga berikutnya.
+                        </p>
+
+                        <div className="mt-5 space-y-3">
+                            {data.leagues.map((league, index) => (
+                                <div key={`${league.name}-${index}`} className="grid grid-cols-[88px_1fr_160px_120px_auto] items-end gap-3 rounded-2xl border border-gray-100 p-3 dark:border-gray-800">
+                                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-red-500 to-rose-700 text-white shadow-lg shadow-red-500/20">
+                                        <LeagueIcon iconKey={league.icon} className="h-6 w-6" />
+                                    </div>
+                                    <label className="block">
+                                        <span className="text-[11px] font-black uppercase tracking-[0.16em] text-gray-400">Nama Liga</span>
+                                        <input
+                                            value={league.name || ''}
+                                            onChange={(event) => updateLeague(index, 'name', event.target.value)}
+                                            className="mt-2 h-11 w-full rounded-2xl border border-gray-200 bg-white px-4 text-sm font-black text-gray-900 outline-none transition focus:border-red-400 focus:ring-4 focus:ring-red-100 dark:border-gray-800 dark:bg-gray-950 dark:text-white dark:focus:ring-red-900/30"
+                                        />
+                                    </label>
+                                    <label className="block">
+                                        <span className="text-[11px] font-black uppercase tracking-[0.16em] text-gray-400">Icon</span>
+                                        <select
+                                            value={league.icon || 'bronze_kabuto'}
+                                            onChange={(event) => updateLeague(index, 'icon', event.target.value)}
+                                            className="mt-2 h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm font-black text-gray-900 outline-none transition focus:border-red-400 focus:ring-4 focus:ring-red-100 dark:border-gray-800 dark:bg-gray-950 dark:text-white dark:focus:ring-red-900/30"
+                                        >
+                                            {LEAGUE_ICON_OPTIONS.map((option) => (
+                                                <option key={option.key} value={option.key}>{option.label}</option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                    <NumberField label="Minimal XP" value={league.min_xp} onChange={(value) => updateLeague(index, 'min_xp', value)} max={10000000} />
+                                    <button
+                                        type="button"
+                                        onClick={() => removeLeague(index)}
+                                        disabled={data.leagues.length <= 1}
+                                        className="mb-1 rounded-xl border border-gray-200 px-3 py-2 text-xs font-black text-gray-500 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-700 dark:hover:bg-gray-800"
+                                    >
+                                        Hapus
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={addLeague}
+                            className="mt-4 rounded-2xl border border-dashed border-gray-300 px-4 py-3 text-sm font-black text-gray-600 transition hover:border-red-300 hover:text-red-600 dark:border-gray-700 dark:text-gray-300"
+                        >
+                            Tambah Liga
+                        </button>
+                    </Card>
+
+                    <Card>
                         <h2 className="text-lg font-black text-gray-900 dark:text-white">Top Learners</h2>
                         <p className="mt-1 text-sm font-medium text-gray-500 dark:text-gray-400">Diambil dari XP user aktif.</p>
                         <div className="mt-5 space-y-3">
@@ -308,6 +402,20 @@ export default function Gamification({
                                             {milestone.days} hari = {milestone.xp} XP
                                         </span>
                                     ))}
+                                </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-gray-100 p-4 dark:border-gray-800">
+                                <h3 className="text-sm font-black text-gray-900 dark:text-white">Liga</h3>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    {[...data.leagues]
+                                        .sort((a, b) => Number(a.min_xp || 0) - Number(b.min_xp || 0))
+                                        .map((league, index) => (
+                                            <span key={`${league.name}-${index}-summary`} className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-black text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                                                <LeagueIcon iconKey={league.icon} className="h-3.5 w-3.5" />
+                                                {league.name}: {Number(league.min_xp || 0).toLocaleString()} XP
+                                            </span>
+                                        ))}
                                 </div>
                             </div>
 

@@ -44,6 +44,10 @@ class SuperAdminGamifikasiController extends SuperAdminDasarController
             'streak.milestones' => ['required', 'array', 'max:10'],
             'streak.milestones.*.days' => ['required', 'integer', 'min:1', 'max:3650'],
             'streak.milestones.*.xp' => ['required', 'integer', 'min:0', 'max:100000'],
+            'leagues' => ['required', 'array', 'min:1', 'max:10'],
+            'leagues.*.name' => ['required', 'string', 'max:50'],
+            'leagues.*.min_xp' => ['required', 'integer', 'min:0', 'max:10000000'],
+            'leagues.*.icon' => ['nullable', 'string', 'max:50'],
         ]);
 
         $validated['streak']['milestones'] = collect($validated['streak']['milestones'])
@@ -53,6 +57,17 @@ class SuperAdminGamifikasiController extends SuperAdminDasarController
             ])
             ->unique('days')
             ->sortBy('days')
+            ->values()
+            ->all();
+
+        $validated['leagues'] = collect($validated['leagues'])
+            ->map(fn (array $league) => [
+                'name' => trim($league['name']),
+                'min_xp' => (int) $league['min_xp'],
+                'icon' => trim((string) ($league['icon'] ?? '')) ?: 'bronze_kabuto',
+            ])
+            ->unique('min_xp')
+            ->sortBy('min_xp')
             ->values()
             ->all();
 

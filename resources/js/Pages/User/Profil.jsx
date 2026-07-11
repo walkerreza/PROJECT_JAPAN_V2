@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { KabutoIcon, ShurikenIcon, HitodamaIcon, ScrollIcon } from '@/Components/JapaneseIcons';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import ConfirmActionDialog from '@/Components/UI/ConfirmActionDialog';
+import LeagueIcon from '@/Components/Gamification/LeagueIcon';
 import { motion, AnimatePresence } from 'framer-motion';
 import theme from '@/Components/theme/themes';
 
@@ -21,17 +21,38 @@ import MilitaryTechIcon from '@mui/icons-material/MilitaryTech';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
 
-const LEAGUE_TIERS = [
-    { name: 'Bronze',   color: 'text-amber-700 dark:text-amber-500',  bg: 'bg-amber-50 dark:bg-amber-900/20',  bar: 'bg-amber-500',  icon: <KabutoIcon className="w-5 h-5 text-amber-700" />, min: 0     },
-    { name: 'Silver',   color: 'text-slate-600 dark:text-slate-400',  bg: 'bg-slate-50 dark:bg-slate-800/50',  bar: 'bg-slate-500',  icon: <KabutoIcon className="w-5 h-5 text-slate-400" />, min: 500   },
-    { name: 'Gold',     color: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-50 dark:bg-yellow-900/20', bar: 'bg-yellow-500', icon: <KabutoIcon className="w-5 h-5 text-yellow-500" />, min: 2000  },
-    { name: 'Diamond',  color: 'text-red-600 dark:text-red-400',   bg: 'bg-red-50 dark:bg-red-900/20',   bar: 'bg-red-500',   icon: <ShurikenIcon className="w-5 h-5 text-cyan-400 animate-pulse" />, min: 5000  },
-    { name: 'Amethyst', color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-50 dark:bg-purple-900/20', bar: 'bg-purple-500', icon: <ShurikenIcon className="w-5 h-5 text-purple-500 animate-spin" />, min: 12000 },
+const DEFAULT_LEAGUE_TIERS = [
+    { name: 'Bronze', min_xp: 0, icon: 'bronze_kabuto' },
+    { name: 'Silver', min_xp: 500, icon: 'silver_shuriken' },
+    { name: 'Gold', min_xp: 2000, icon: 'gold_sakura' },
+    { name: 'Diamond', min_xp: 5000, icon: 'diamond_torii' },
+    { name: 'Amethyst', min_xp: 12000, icon: 'amethyst_scroll' },
 ];
 
-const getLeague = (xp) => {
+const LEAGUE_STYLES = [
+    { color: 'text-amber-700 dark:text-amber-500', bar: 'bg-amber-500', frame: 'from-amber-500 to-orange-700 shadow-amber-500/25' },
+    { color: 'text-slate-600 dark:text-slate-400', bar: 'bg-slate-500', frame: 'from-slate-300 to-slate-700 shadow-slate-500/25' },
+    { color: 'text-yellow-600 dark:text-yellow-400', bar: 'bg-yellow-500', frame: 'from-yellow-300 to-amber-600 shadow-yellow-500/25' },
+    { color: 'text-red-600 dark:text-red-400', bar: 'bg-red-500', frame: 'from-cyan-300 via-red-500 to-rose-700 shadow-red-500/25' },
+    { color: 'text-purple-600 dark:text-purple-400', bar: 'bg-purple-500', frame: 'from-fuchsia-400 to-purple-800 shadow-purple-500/25' },
+];
+
+const normalizeLeagueTiers = (leagues = []) => {
+    const source = leagues.length ? leagues : DEFAULT_LEAGUE_TIERS;
+
+    return source
+        .map((league, index) => ({
+            name: league.name || 'Liga',
+            min: Number(league.min_xp ?? league.min ?? 0),
+            icon: league.icon || 'bronze_kabuto',
+            ...(LEAGUE_STYLES[index] || LEAGUE_STYLES[LEAGUE_STYLES.length - 1]),
+        }))
+        .sort((a, b) => a.min - b.min);
+};
+
+const getLeague = (xp, tiers) => {
     const xpNum = parseInt(String(xp).replace(/\D/g, '')) || 0;
-    return [...LEAGUE_TIERS].reverse().find(t => xpNum >= t.min) || LEAGUE_TIERS[0];
+    return [...tiers].reverse().find(t => xpNum >= t.min) || tiers[0];
 };
 
 const InputField = ({ label, type = 'text', defaultValue, placeholder, disabled }) => (
@@ -111,7 +132,7 @@ const transactionTone = (status) => {
     };
 };
 
-export default function Profile({ recentTransactions = [] }) {
+export default function Profile({ recentTransactions = [], achievements = [], gamificationSettings = {} }) {
     const { user } = usePage().props.auth;
     const [activeTab, setActiveTab] = useState('stats');
     const [saved, setSaved] = useState(false);
@@ -176,13 +197,19 @@ export default function Profile({ recentTransactions = [] }) {
     const isPrem = Boolean(accessStatus.is_premium ?? user.subscription_status === 'premium');
     const shouldShowUpgrade = accessStatus.should_show_upgrade ?? !isPrem;
     const activeUntilLabel = accessStatus.active_until_label;
-    const league = getLeague(xp);
+    const leagueTiers = normalizeLeagueTiers(gamificationSettings.leagues || []);
+    const league = getLeague(xp, leagueTiers);
 
-    const currentTierIndex = LEAGUE_TIERS.findIndex(t => t.name === league.name);
-    const nextTier = LEAGUE_TIERS[currentTierIndex + 1];
+    const currentTierIndex = leagueTiers.findIndex(t => t.name === league.name);
+    const nextTier = leagueTiers[currentTierIndex + 1];
     const progressPct = nextTier 
         ? Math.min(100, Math.round(((xp - league.min) / (nextTier.min - league.min)) * 100))
         : 100;
+    const achievementSlots = Array.from({ length: 8 }, (_, index) => achievements[index] || null);
+    const achievementPreviewCount = achievements.length;
+    const nextAchievementHint = achievements.length > 0
+        ? 'Pertahankan streak dan skor kuis untuk membuka lencana berikutnya.'
+        : 'Mulai dari kuis pertama atau selesaikan modul mingguan untuk membuka lencana.';
 
     return (
         <AuthenticatedLayout header={false}>
@@ -312,8 +339,8 @@ export default function Profile({ recentTransactions = [] }) {
                                             </div>
                                             
                                             <div className="flex items-center gap-6 mb-8">
-                                                <div className="w-20 h-20 bg-gray-50 dark:bg-gray-800 rounded-[1.5rem] flex items-center justify-center text-4xl shadow-inner border border-gray-100 dark:border-gray-700">
-                                                    {league.icon}
+                                                <div className={`w-20 h-20 rounded-[1.5rem] flex items-center justify-center border border-white/40 bg-gradient-to-br ${league.frame} text-white shadow-xl`}>
+                                                    <LeagueIcon iconKey={league.icon} className="h-10 w-10 drop-shadow" />
                                                 </div>
                                                 <div className="flex-1">
                                                     <p className="text-sm font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">Liga Saat Ini</p>
@@ -347,28 +374,82 @@ export default function Profile({ recentTransactions = [] }) {
                                         </div>
 
                                         {/* Badges / Pencapaian Card */}
-                                        <div className="col-span-2 bg-white dark:bg-gray-900 rounded-[2rem] shadow-sm border border-gray-100 dark:border-gray-800 p-6 sm:p-8 transition-colors">
-                                            <div className="flex justify-between items-center mb-6">
-                                                <div className="flex items-center gap-2">
-                                                    <MilitaryTechIcon sx={{ color: '#f43f5e' }} />
-                                                    <h3 className="font-black text-gray-900 dark:text-white text-lg">Pencapaian</h3>
+                                        <div className="col-span-2 overflow-hidden rounded-[2rem] border border-gray-100 bg-white shadow-sm transition-colors dark:border-gray-800 dark:bg-gray-900">
+                                            <div className="relative overflow-hidden bg-gradient-to-br from-rose-600 via-red-500 to-orange-500 p-6 text-white sm:p-8">
+                                                <div className="absolute -right-10 -top-10 h-36 w-36 rounded-full bg-white/10 blur-2xl" />
+                                                <div className="absolute bottom-0 right-8 text-8xl font-black text-white/10">達</div>
+                                                <div className="relative flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+                                                    <div>
+                                                        <div className="mb-3 flex items-center gap-2">
+                                                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 backdrop-blur">
+                                                                <MilitaryTechIcon />
+                                                            </div>
+                                                            <p className="text-xs font-black uppercase tracking-[0.25em] text-white/75">Achievement Board</p>
+                                                        </div>
+                                                        <h3 className="text-2xl font-black tracking-tight">Pencapaian</h3>
+                                                        <p className="mt-2 max-w-xl text-sm font-semibold text-white/80">{nextAchievementHint}</p>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2 text-center">
+                                                        <div className="rounded-2xl bg-white/15 px-4 py-3 backdrop-blur">
+                                                            <p className="text-2xl font-black">{achievementPreviewCount}</p>
+                                                            <p className="text-[10px] font-black uppercase tracking-widest text-white/70">Terbuka</p>
+                                                        </div>
+                                                        <div className="rounded-2xl bg-white/15 px-4 py-3 backdrop-blur">
+                                                            <p className="text-2xl font-black">{achievementSlots.length}</p>
+                                                            <p className="text-[10px] font-black uppercase tracking-widest text-white/70">Slot</p>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <button className="text-sm font-black text-rose-500 dark:text-rose-400 hover:text-rose-600 dark:hover:text-rose-300 uppercase tracking-widest">Lihat Semua</button>
                                             </div>
 
-                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                                                {[
-                                                    { icon: <ShurikenIcon className="w-5 h-5 text-emerald-500" />, label: 'Penembak Jitu', desc: '100% Akurasi', color: 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-800/30' },
-                                                    { icon: <ScrollIcon className="w-5 h-5 text-indigo-500" />, label: 'Kutu Buku', desc: '50 Pelajaran', color: 'bg-violet-50 dark:bg-violet-900/10 border-violet-100 dark:border-violet-800/30' },
-                                                    { icon: <HitodamaIcon className="w-5 h-5 text-sky-500" />, label: 'Melesat', desc: 'Selesai < 1 Menit', color: 'bg-sky-50 dark:bg-sky-900/10 border-sky-100 dark:border-sky-800/30' },
-                                                    { icon: <LockIcon className="w-5 h-5" />, label: 'Terkunci', desc: 'Level 10', color: 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700/50 grayscale opacity-50' },
-                                                ].map((badge, idx) => (
-                                                    <div key={idx} className={`p-4 rounded-2xl border flex flex-col items-center text-center ${badge.color}`}>
-                                                        <div className="text-3xl mb-3">{badge.icon}</div>
-                                                        <p className="text-sm font-black text-gray-800 dark:text-gray-200">{badge.label}</p>
-                                                        <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mt-1">{badge.desc}</p>
+                                            <div className="p-5 sm:p-6">
+                                                <div className="mb-5 flex items-center justify-between gap-3">
+                                                    <div>
+                                                        <p className="text-sm font-black text-gray-900 dark:text-white">Galeri Lencana</p>
+                                                        <p className="mt-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                                                            {achievementPreviewCount > 0 ? 'Lencana terbaru dan slot target berikutnya.' : 'Slot target disiapkan untuk progres berikutnya.'}
+                                                        </p>
                                                     </div>
-                                                ))}
+                                                    <Link href={route('user.progress')} className="rounded-full bg-rose-50 px-4 py-2 text-xs font-black uppercase tracking-widest text-rose-600 transition hover:bg-rose-100 dark:bg-rose-900/20 dark:text-rose-300">
+                                                        Lihat Semua
+                                                    </Link>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                                                    {achievementSlots.map((achievement, idx) => {
+                                                        const tone = [
+                                                            'from-emerald-400 to-teal-600 shadow-emerald-500/20',
+                                                            'from-violet-400 to-purple-700 shadow-violet-500/20',
+                                                            'from-sky-400 to-blue-700 shadow-sky-500/20',
+                                                            'from-rose-400 to-red-700 shadow-rose-500/20',
+                                                        ][idx % 4];
+
+                                                        if (!achievement) {
+                                                            return (
+                                                                <div key={`locked-${idx}`} className="group rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-4 text-center transition hover:border-rose-200 hover:bg-rose-50/40 dark:border-gray-700 dark:bg-gray-800/40 dark:hover:border-rose-900/50 dark:hover:bg-rose-950/20">
+                                                                    <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-gray-300 shadow-sm transition group-hover:text-rose-300 dark:bg-gray-900 dark:text-gray-600">
+                                                                        <LockIcon sx={{ fontSize: 20 }} />
+                                                                    </div>
+                                                                    <p className="text-xs font-black text-gray-400 dark:text-gray-500">Terkunci</p>
+                                                                    <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">Target Baru</p>
+                                                                </div>
+                                                            );
+                                                        }
+
+                                                        return (
+                                                            <div key={achievement.id} className="rounded-2xl border border-gray-100 bg-white p-4 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg dark:border-gray-800 dark:bg-gray-950">
+                                                                <div className={`mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${tone} text-xl text-white shadow-lg`}>
+                                                                    {achievement.icon || <MilitaryTechIcon />}
+                                                                </div>
+                                                                <p className="line-clamp-2 min-h-[2.25rem] text-sm font-black leading-tight text-gray-800 dark:text-gray-200">{achievement.name}</p>
+                                                                <p className="mt-2 text-[10px] font-black uppercase tracking-wider text-rose-500">+{achievement.xp_reward || 0} XP</p>
+                                                                {achievement.unlocked_at_label && (
+                                                                    <p className="mt-1 text-[10px] font-semibold text-gray-400">{achievement.unlocked_at_label}</p>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
                                         </div>
                                     </motion.div>

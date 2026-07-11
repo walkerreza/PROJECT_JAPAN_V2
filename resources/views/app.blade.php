@@ -41,6 +41,14 @@
         @endphp
         <script>
             window.__JAPANLINGO_THEME__ = @json($japanlingoTheme);
+            (() => {
+                const mode = localStorage.getItem('theme') || 'system';
+                const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+                if (mode === 'dark' || (mode === 'system' && prefersDark)) {
+                    document.documentElement.classList.add('dark');
+                }
+            })();
         </script>
         @viteReactRefresh
         @vite(['resources/js/app.jsx', "resources/js/Pages/{$page['component']}.jsx"])
