@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\Materi;
 use App\Models\LevelPembelajaran;
 use App\Models\Modul;
 use App\Models\ProgramPembelajaran;
@@ -42,19 +41,8 @@ class N3CourseSeeder extends Seeder
             ]
         );
 
-        $lesson = Materi::updateOrCreate(
-            ['module_id' => $module->id, 'order' => 1],
-            [
-                'title' => 'Hari 1: Di Supermarket',
-                'type' => 'text',
-                'content' => '<h2>Kosakata dan Kanji</h2><p>Berikut adalah beberapa kanji yang sering ditemui saat berbelanja.</p>',
-                'duration_minutes' => 15,
-                'status' => 'published',
-            ]
-        );
-
         $quiz = Kuis::updateOrCreate(
-            ['lesson_id' => $lesson->id],
+            ['module_id' => $module->id],
             ['type' => 'multiple_choice', 'time_limit' => 300, 'status' => 'published']
         );
 

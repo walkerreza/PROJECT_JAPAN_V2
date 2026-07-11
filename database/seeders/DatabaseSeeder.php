@@ -25,7 +25,6 @@ class DatabaseSeeder extends Seeder
             KloterDemoSeeder::class,
             ProgramPaymentPlanSeeder::class,
             AchievementSeeder::class,
-            DemoDataSeeder::class,
         ]);
     }
 }

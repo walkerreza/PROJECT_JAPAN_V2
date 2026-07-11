@@ -6,7 +6,6 @@ use App\Models\DeckPresentasi;
 use App\Models\Flashcard;
 use App\Models\Kuis;
 use App\Models\LevelPembelajaran;
-use App\Models\Materi;
 use App\Models\Modul;
 use App\Models\ProgramPembelajaran;
 use App\Models\SetFlashcard;
@@ -48,22 +47,10 @@ class KelasDemoSeeder extends Seeder
                     ]
                 );
 
-                $lesson = Materi::updateOrCreate(
-                    ['module_id' => $module->id, 'order' => 1],
-                    [
-                        'title' => $moduleData['lesson_title'],
-                        'type' => 'text',
-                        'content' => '<p>' . $moduleData['lesson_body'] . '</p>',
-                        'duration_minutes' => $moduleData['duration_minutes'],
-                        'status' => 'published',
-                    ]
-                );
-
                 $flashcardSet = SetFlashcard::updateOrCreate(
                     ['module_id' => $module->id, 'title' => $moduleData['flashcard_title']],
                     [
                         'level_id' => $level->id,
-                        'lesson_id' => $lesson->id,
                         'description' => $moduleData['flashcard_description'],
                         'source_type' => 'manual',
                         'status' => 'published',
@@ -85,7 +72,7 @@ class KelasDemoSeeder extends Seeder
                 }
 
                 $quiz = Kuis::updateOrCreate(
-                    ['module_id' => $module->id, 'lesson_id' => $lesson->id],
+                    ['module_id' => $module->id],
                     [
                         'type' => 'multiple_choice',
                         'time_limit' => $moduleData['time_limit'],
@@ -110,7 +97,6 @@ class KelasDemoSeeder extends Seeder
                     ['module_id' => $module->id, 'title' => $moduleData['presentation_title']],
                     [
                         'level_id' => $level->id,
-                        'lesson_id' => $lesson->id,
                         'description' => $moduleData['presentation_description'],
                         'status' => 'published',
                     ]
