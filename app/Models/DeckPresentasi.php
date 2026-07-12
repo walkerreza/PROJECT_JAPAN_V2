@@ -62,7 +62,7 @@ class DeckPresentasi extends Model
             return $path;
         }
 
-        return route('presentations.pdf.inline', $this, false);
+        return route('presentations.pdf.content', $this, false);
     }
 
     public function finalPdfPath(): ?string

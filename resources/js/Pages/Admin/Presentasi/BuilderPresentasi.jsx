@@ -231,6 +231,7 @@ export default function BuilderPresentasi({ deck }) {
     const [status, setStatus] = useState(deck.status || 'draft');
     const [showImportMenu, setShowImportMenu] = useState(false);
     const [pptxFile, setPptxFile] = useState(null);
+    const [pdfFile, setPdfFile] = useState(null);
     const [imageFiles, setImageFiles] = useState([]);
     const [embedUrl, setEmbedUrl] = useState('');
     const [embedTitle, setEmbedTitle] = useState('');
@@ -376,6 +377,24 @@ export default function BuilderPresentasi({ deck }) {
         });
     };
 
+    const importPdf = (event) => {
+        event.preventDefault();
+        if (!pdfFile) return;
+
+        pendingImportStartIndexRef.current = slides.length;
+        setIsImporting(true);
+        router.post(route('admin.presentations.import.pdf', deck.id), {
+            pdf_file: pdfFile,
+        }, {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => {
+                setPdfFile(null);
+            },
+            onFinish: () => setIsImporting(false),
+        });
+    };
+
     const importImages = (event) => {
         event.preventDefault();
         if (!imageFiles.length) return;
@@ -502,6 +521,19 @@ export default function BuilderPresentasi({ deck }) {
                                             />
                                             <button disabled={!pptxFile || isImporting} className="h-9 w-full rounded-xl bg-orange-600 px-4 text-xs font-black text-white disabled:opacity-50">Import Draft Editable</button>
                                         </form>
+                                        <form onSubmit={importPdf} className="space-y-2 border-t border-gray-100 pt-4 dark:border-gray-800">
+                                            <div>
+                                                <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-600">PDF Final</p>
+                                                <p className="text-xs font-bold text-gray-500">Maks 50 MB. Disimpan private dan ditampilkan ke user lewat canvas viewer.</p>
+                                            </div>
+                                            <input
+                                                type="file"
+                                                accept="application/pdf"
+                                                onChange={(event) => setPdfFile(event.target.files?.[0] || null)}
+                                                className="w-full text-xs font-bold text-gray-600 file:mr-2 file:rounded-xl file:border-0 file:bg-emerald-50 file:px-3 file:py-2 file:text-xs file:font-black file:text-emerald-700 dark:text-gray-300 dark:file:bg-emerald-900/20 dark:file:text-emerald-300"
+                                            />
+                                            <button disabled={!pdfFile || isImporting} className="h-9 w-full rounded-xl bg-emerald-600 px-4 text-xs font-black text-white disabled:opacity-50">Import PDF Final</button>
+                                        </form>
                                         <form onSubmit={importImages} className="space-y-2 border-t border-gray-100 pt-4 dark:border-gray-800">
                                             <div>
                                                 <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-600">Gambar</p>
@@ -518,7 +550,7 @@ export default function BuilderPresentasi({ deck }) {
                                         </form>
                                         <form onSubmit={importEmbedLink} className="space-y-2 border-t border-gray-100 pt-4 dark:border-gray-800">
                                             <div>
-                                                <p className="text-xs font-black uppercase tracking-[0.2em] text-violet-600">Link Canva / PPT Online</p>
+                                                <p className="text-xs font-black uppercase tracking-[0.2em] text-violet-600">Link Canva / Google Drive / PPT Online</p>
                                                 <p className="text-xs font-bold text-gray-500">Tidak masuk storage. Gunakan link public/embed agar tampil ke user.</p>
                                             </div>
                                             <input
@@ -530,7 +562,7 @@ export default function BuilderPresentasi({ deck }) {
                                             <input
                                                 value={embedUrl}
                                                 onChange={(event) => setEmbedUrl(event.target.value)}
-                                                placeholder="https://www.canva.com/design/.../view?embed"
+                                                placeholder="https://drive.google.com/drive/folders/... atau https://www.canva.com/design/..."
                                                 className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs font-bold text-gray-700 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
                                             />
                                             <button disabled={!embedUrl.trim()} className="h-9 w-full rounded-xl bg-violet-600 px-4 text-xs font-black text-white disabled:opacity-50">Tambah Link ke Slide</button>

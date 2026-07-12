@@ -13,8 +13,8 @@ class ImportPresentasiPdfService
 
     public function import(DeckPresentasi $deck, UploadedFile $file): int
     {
-        $path = $this->storage->storePublicUpload($file, "presentations/assets/{$deck->id}/pdf", 'pdf');
-        $url = route('presentations.pdf.inline', $deck, false);
+        $path = $this->storage->storePrivateUpload($file, "presentations/{$deck->id}/pdf", 'pdf');
+        $url = route('presentations.pdf.content', $deck, false);
 
         $deck->slides()
             ->where('layout', 'pdf')
@@ -29,7 +29,7 @@ class ImportPresentasiPdfService
             'import_status' => 'ready',
             'import_summary' => [
                 'slides_imported' => 1,
-                'note' => 'PDF adalah format final presentasi. User melihat file ini sebagai carousel di browser.',
+                'note' => 'PDF adalah format final presentasi. User melihat file ini lewat canvas viewer tanpa link download langsung.',
             ],
         ]);
 

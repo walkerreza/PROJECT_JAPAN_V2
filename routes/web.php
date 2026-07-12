@@ -56,7 +56,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/payments/midtrans/checkout', [PembayaranMidtransController::class, 'checkout'])->name('payments.midtrans.checkout');
     Route::post('/payments/midtrans/{transactionCode}/snap', [PembayaranMidtransController::class, 'snap'])->name('payments.midtrans.snap');
     Route::post('/payments/midtrans/{transactionCode}/sync', [PembayaranMidtransController::class, 'sync'])->name('payments.midtrans.sync');
-    Route::get('/presentations/{presentationDeck}/pdf', [AdminPresentasiController::class, 'inlinePdf'])->name('presentations.pdf.inline');
+    Route::get('/presentations/{presentationDeck}/content-stream', [AdminPresentasiController::class, 'pdfContent'])
+        ->middleware('throttle:30,1')
+        ->name('presentations.pdf.content');
 
     // Notifications
     Route::get('/notifications', [\App\Http\Controllers\NotifikasiController::class, 'index'])->name('notifications.index');
@@ -136,6 +138,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/presentations/{presentationDeck}/builder', [AdminPresentasiController::class, 'builder'])->name('presentations.builder');
         Route::post('/presentations/{presentationDeck}/builder', [AdminPresentasiController::class, 'updateSlides'])->name('presentations.builder.update');
         Route::post('/presentations/{presentationDeck}/import/pptx', [AdminPresentasiController::class, 'importPptx'])->name('presentations.import.pptx');
+        Route::post('/presentations/{presentationDeck}/import/pdf', [AdminPresentasiController::class, 'importPdf'])->name('presentations.import.pdf');
         Route::post('/presentations/{presentationDeck}/import/images', [AdminPresentasiController::class, 'importImages'])->name('presentations.import.images');
         Route::post('/presentations/{presentationDeck}/background-image', [AdminPresentasiController::class, 'uploadBackgroundImage'])->name('presentations.background.upload');
         Route::post('/presentations/{presentationDeck}/slides/{presentationSlide}/jamboard', [AdminPresentasiController::class, 'saveSlideBoard'])->name('presentations.slides.jamboard.save');

@@ -8,9 +8,12 @@ use App\Models\Modul;
 use App\Models\DeckPresentasi;
 use App\Models\SlidePresentasi;
 use App\Services\ImportPresentasiGambarService;
+use App\Services\ImportPresentasiPdfService;
 use App\Services\ImportPresentasiPptxService;
+use App\Services\AksesPremiumService;
 use App\Services\NotifikasiPenggunaService;
 use App\Services\PresentasiStorageService;
+use App\Models\LogAktivitas;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -195,25 +198,68 @@ class AdminPresentasiController extends Controller
         return redirect()->back()->with('success', "{$count} gambar berhasil diimport menjadi slide.");
     }
 
-    public function inlinePdf(DeckPresentasi $presentationDeck)
+    public function importPdf(Request $request, DeckPresentasi $presentationDeck, ImportPresentasiPdfService $importer)
     {
+        $validated = $request->validate([
+            'pdf_file' => ['required', 'file', 'mimes:pdf', 'max:51200'],
+        ]);
+
+        $count = $importer->import($presentationDeck, $validated['pdf_file']);
+
+        return redirect()->back()->with('success', "{$count} PDF final berhasil diimport. User akan melihatnya lewat canvas viewer tanpa tombol download.");
+    }
+
+    public function pdfContent(Request $request, DeckPresentasi $presentationDeck, AksesPremiumService $aksesPremium)
+    {
+        $presentationDeck->loadMissing('module');
+
+        abort_unless($this->bolehAksesPdf($request, $presentationDeck, $aksesPremium), 403);
+
         $pdfPath = $presentationDeck->finalPdfPath();
 
         abort_unless($pdfPath, 404);
-        abort_unless(Storage::disk('public')->exists($pdfPath), 404);
 
-        $path = Storage::disk('public')->path($pdfPath);
-        $filename = $presentationDeck->finalPdfName();
-        $contents = file_get_contents($path);
+        $disk = Storage::disk('local')->exists($pdfPath) ? 'local' : null;
 
-        abort_if($contents === false || $contents === '', 404);
+        if (! $disk && Storage::disk('public')->exists($pdfPath)) {
+            $disk = 'public';
+        }
 
-        return response($contents, 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Length' => (string) strlen($contents),
-            'Content-Disposition' => 'inline; filename="' . addslashes($filename) . '"',
-            'Cache-Control' => 'private, max-age=0, must-revalidate',
+        abort_unless($disk, 404);
+
+        $path = Storage::disk($disk)->path($pdfPath);
+
+        $this->catatAksesPdf($request, $presentationDeck);
+
+        return response()->stream(function () use ($path) {
+            $handle = fopen($path, 'rb');
+
+            if ($handle === false) {
+                return;
+            }
+
+            $offset = 0;
+
+            while (! feof($handle)) {
+                $chunk = fread($handle, 8192);
+
+                if ($chunk === false || $chunk === '') {
+                    break;
+                }
+
+                echo $this->xorPdfChunk($chunk, $offset);
+                $offset += strlen($chunk);
+            }
+
+            fclose($handle);
+        }, 200, [
+            'Content-Type' => 'application/octet-stream',
+            'Content-Disposition' => 'inline',
+            'Cache-Control' => 'private, no-store, max-age=0',
+            'Pragma' => 'no-cache',
             'X-Content-Type-Options' => 'nosniff',
+            'X-Japanlingo-Pdf-Transport' => 'xor-v1',
+            'X-Japanlingo-Pdf-Size' => (string) filesize($path),
         ]);
     }
 
@@ -294,5 +340,72 @@ class AdminPresentasiController extends Controller
             $url,
             ['presentation_deck_id' => $deck->id, 'module_id' => $deck->module_id]
         );
+    }
+
+    private function bolehAksesPdf(Request $request, DeckPresentasi $deck, AksesPremiumService $aksesPremium): bool
+    {
+        $user = $request->user();
+
+        if (! $user) {
+            return false;
+        }
+
+        if (in_array($user->role, ['admin', 'superadmin'], true)) {
+            return true;
+        }
+
+        if ($user->role !== 'user' || $deck->status !== 'published' || ! $deck->module) {
+            return false;
+        }
+
+        return $aksesPremium->bolehAksesModul($user, $deck->module);
+    }
+
+    private function catatAksesPdf(Request $request, DeckPresentasi $deck): void
+    {
+        $user = $request->user();
+
+        if (! $user || $user->role !== 'user') {
+            return;
+        }
+
+        $recentExists = LogAktivitas::where('actor_id', $user->id)
+            ->where('action', 'presentation_pdf_view')
+            ->where('target_type', 'presentation_deck')
+            ->where('target_id', $deck->id)
+            ->where('created_at', '>=', now()->subMinutes(10))
+            ->exists();
+
+        if ($recentExists) {
+            return;
+        }
+
+        LogAktivitas::create([
+            'actor_id' => $user->id,
+            'action' => 'presentation_pdf_view',
+            'target_type' => 'presentation_deck',
+            'target_id' => $deck->id,
+            'description' => "Membuka PDF presentasi {$deck->title}.",
+            'metadata' => [
+                'module_id' => $deck->module_id,
+                'file_name' => $deck->finalPdfName(),
+            ],
+            'ip_address' => $request->ip(),
+            'user_agent' => substr((string) $request->userAgent(), 0, 1000),
+        ]);
+    }
+
+    private function xorPdfChunk(string $chunk, int $offset = 0): string
+    {
+        $key = 'japanlingo-pdf-viewer';
+        $keyLength = strlen($key);
+        $length = strlen($chunk);
+        $encoded = '';
+
+        for ($index = 0; $index < $length; $index++) {
+            $encoded .= $chunk[$index] ^ $key[($offset + $index) % $keyLength];
+        }
+
+        return $encoded;
     }
 }

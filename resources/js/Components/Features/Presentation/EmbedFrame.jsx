@@ -4,6 +4,7 @@ const imagePattern = /\.(png|jpe?g|webp|gif|avif|svg)(\?.*)?$/i;
 const embeddableHosts = [
     'canva.com',
     'docs.google.com',
+    'drive.google.com',
     'onedrive.live.com',
     '1drv.ms',
     'office.com',
@@ -40,6 +41,18 @@ export function toEmbedUrl(value = '') {
 
     if (url.hostname.includes('canva.com') && !url.searchParams.has('embed')) {
         url.searchParams.set('embed', '');
+    }
+
+    if (url.hostname.includes('drive.google.com')) {
+        const folderMatch = url.pathname.match(/\/folders\/([^/?#]+)/);
+        if (folderMatch?.[1]) {
+            return `https://drive.google.com/embeddedfolderview?id=${folderMatch[1]}#grid`;
+        }
+
+        const fileMatch = url.pathname.match(/\/file\/d\/([^/?#]+)/);
+        if (fileMatch?.[1]) {
+            return `https://drive.google.com/file/d/${fileMatch[1]}/preview`;
+        }
     }
 
     return url.toString();
