@@ -73,7 +73,7 @@ class SuperAdminPembayaranController extends SuperAdminDasarController
             'plans' => PaketPembayaran::query()
                 ->with('programPembelajaran:id,title')
                 ->orderBy('price')
-                ->get(['id', 'name', 'slug', 'scope_type', 'program_pembelajaran_id', 'description', 'price', 'duration_days', 'is_active'])
+                ->get(['id', 'name', 'slug', 'scope_type', 'program_pembelajaran_id', 'description', 'price', 'duration_days', 'features', 'is_active'])
                 ->map(fn (PaketPembayaran $plan) => [
                     'id' => $plan->id,
                     'name' => $plan->name,
@@ -86,6 +86,7 @@ class SuperAdminPembayaranController extends SuperAdminDasarController
                     'price' => $plan->price,
                     'price_formatted' => 'Rp ' . number_format($plan->price),
                     'duration_days' => $plan->duration_days,
+                    'features' => collect($plan->features ?? [])->implode("\n"),
                     'is_active' => $plan->is_active,
                 ]),
             'users' => Pengguna::where('role', 'user')->orderBy('username')->get(['id', 'username', 'email'])->map(fn (Pengguna $user) => [
@@ -159,6 +160,42 @@ class SuperAdminPembayaranController extends SuperAdminDasarController
         $this->logActivity($request, 'payment.plan_created', 'payment_plan', $plan->id, "Membuat payment plan {$plan->name}");
 
         return redirect()->back()->with('success', 'Payment plan berhasil dibuat');
+    }
+
+    public function updatePlan(Request $request, PaketPembayaran $plan)
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'slug' => ['required', 'string', 'max:255', Rule::unique('payment_plans', 'slug')->ignore($plan->id)],
+            'description' => ['nullable', 'string', 'max:500'],
+            'price' => ['required', 'integer', 'min:0'],
+            'duration_days' => ['required', 'integer', 'min:1'],
+            'scope_type' => ['required', Rule::in([AksesLanggananService::SCOPE_GLOBAL, AksesLanggananService::SCOPE_PROGRAM])],
+            'program_pembelajaran_id' => [
+                Rule::requiredIf($request->input('scope_type') === AksesLanggananService::SCOPE_PROGRAM),
+                'nullable',
+                'exists:program_pembelajaran,id',
+            ],
+            'features' => ['nullable', 'string'],
+            'is_active' => ['boolean'],
+        ]);
+
+        $scope = app(AksesLanggananService::class)->normalizeScope(
+            $validated['scope_type'],
+            $validated['program_pembelajaran_id'] ?? null
+        );
+
+        $plan->update([
+            ...$validated,
+            ...$scope,
+            'features' => $validated['features']
+                ? collect(explode("\n", $validated['features']))->map(fn ($item) => trim($item))->filter()->values()->all()
+                : [],
+        ]);
+
+        $this->logActivity($request, 'payment.plan_updated', 'payment_plan', $plan->id, "Mengubah payment plan {$plan->name}");
+
+        return redirect()->back()->with('success', 'Payment plan berhasil diperbarui');
     }
 
     public function storeTransaction(Request $request)

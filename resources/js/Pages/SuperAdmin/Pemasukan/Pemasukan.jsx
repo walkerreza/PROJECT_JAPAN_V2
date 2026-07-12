@@ -50,6 +50,7 @@ export default function Pemasukan({
     const [showPlanForm, setShowPlanForm] = useState(false);
     const [showTransactionForm, setShowTransactionForm] = useState(false);
     const [showAccessKeyForm, setShowAccessKeyForm] = useState(false);
+    const [editingPlan, setEditingPlan] = useState(null);
     const [rejectTarget, setRejectTarget] = useState(null);
     const [approvalNotes, setApprovalNotes] = useState('');
     const [rejectionNotes, setRejectionNotes] = useState('');
@@ -73,13 +74,49 @@ export default function Pemasukan({
 
     const submitPlan = (e) => {
         e.preventDefault();
-        planForm.post(route('superadmin.payments.plans.store'), {
+        const options = {
             preserveScroll: true,
             onSuccess: () => {
                 setShowPlanForm(false);
+                setEditingPlan(null);
                 planForm.reset();
             },
+        };
+
+        if (editingPlan) {
+            planForm.put(route('superadmin.payments.plans.update', editingPlan.id), options);
+            return;
+        }
+
+        planForm.post(route('superadmin.payments.plans.store'), options);
+    };
+
+    const openPlanCreateForm = () => {
+        setEditingPlan(null);
+        planForm.reset();
+        setShowPlanForm(true);
+    };
+
+    const openPlanEditForm = (plan) => {
+        setEditingPlan(plan);
+        planForm.setData({
+            name: plan.name || '',
+            slug: plan.slug || '',
+            description: plan.description || '',
+            price: plan.price ?? '',
+            duration_days: plan.duration_days || 30,
+            scope_type: plan.scope_type || 'global',
+            program_pembelajaran_id: plan.program_pembelajaran_id || '',
+            features: plan.features || '',
+            is_active: Boolean(plan.is_active),
         });
+        setShowPlanForm(true);
+    };
+
+    const closePlanForm = () => {
+        setShowPlanForm(false);
+        setEditingPlan(null);
+        planForm.reset();
     };
 
     const submitTransaction = (e) => {
@@ -141,7 +178,7 @@ export default function Pemasukan({
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-3">
-                        <button onClick={() => setShowPlanForm(true)} className="rounded-xl border border-gray-200 dark:border-gray-700 px-5 py-3 text-sm font-black text-gray-700 dark:text-gray-300">
+                        <button onClick={openPlanCreateForm} className="rounded-xl border border-gray-200 dark:border-gray-700 px-5 py-3 text-sm font-black text-gray-700 dark:text-gray-300">
                             Buat Plan
                         </button>
                         <button onClick={() => setShowAccessKeyForm(true)} className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm font-black text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300">
@@ -298,6 +335,13 @@ export default function Pemasukan({
                                             <span className="rounded-full bg-gray-100 dark:bg-gray-800 px-3 py-1 text-xs font-bold text-gray-600 dark:text-gray-400">{plan.duration_days} hari</span>
                                             <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-bold text-sky-700 dark:bg-sky-900/20 dark:text-sky-300">{plan.scope_label}</span>
                                         </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => openPlanEditForm(plan)}
+                                            className="mt-3 rounded-lg border border-gray-200 px-3 py-2 text-xs font-black text-gray-700 hover:border-red-200 hover:bg-red-50 hover:text-red-600 dark:border-gray-700 dark:text-gray-300 dark:hover:border-red-900/40 dark:hover:bg-red-900/20 dark:hover:text-red-300"
+                                        >
+                                            Edit Harga
+                                        </button>
                                     </div>
                                 ))}
                             </div>
@@ -358,7 +402,10 @@ export default function Pemasukan({
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
                     <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-gray-900 shadow-2xl">
                         <div className="border-b border-gray-100 dark:border-gray-800 p-6">
-                            <h3 className="text-lg font-black text-gray-900 dark:text-white">Buat Payment Plan</h3>
+                            <h3 className="text-lg font-black text-gray-900 dark:text-white">{editingPlan ? 'Edit Payment Plan' : 'Buat Payment Plan'}</h3>
+                            {editingPlan && (
+                                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Perubahan harga berlaku untuk checkout/transaksi baru.</p>
+                            )}
                         </div>
                         <form onSubmit={submitPlan} className="space-y-4 p-6">
                             <input value={planForm.data.name} onChange={(e) => planForm.setData('name', e.target.value)} placeholder="Nama plan" className="h-11 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 text-sm" />
@@ -399,8 +446,8 @@ export default function Pemasukan({
                                 Aktif
                             </label>
                             <div className="flex justify-end gap-3">
-                                <button type="button" onClick={() => setShowPlanForm(false)} className="rounded-xl border border-gray-200 dark:border-gray-700 px-5 py-2.5 text-sm font-bold">Batal</button>
-                                <button disabled={planForm.processing} className="rounded-xl bg-red-600 px-5 py-2.5 text-sm font-black text-white">{planForm.processing ? 'Menyimpan...' : 'Simpan Plan'}</button>
+                                <button type="button" onClick={closePlanForm} className="rounded-xl border border-gray-200 dark:border-gray-700 px-5 py-2.5 text-sm font-bold">Batal</button>
+                                <button disabled={planForm.processing} className="rounded-xl bg-red-600 px-5 py-2.5 text-sm font-black text-white">{planForm.processing ? 'Menyimpan...' : editingPlan ? 'Update Plan' : 'Simpan Plan'}</button>
                             </div>
                         </form>
                     </div>

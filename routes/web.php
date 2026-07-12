@@ -98,6 +98,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/activity', SuperAdminAktivitasController::class)->name('activity');
         Route::get('/payments', SuperAdminPembayaranController::class)->name('payments');
         Route::post('/payments/plans', [SuperAdminPembayaranController::class, 'storePlan'])->name('payments.plans.store');
+        Route::put('/payments/plans/{plan}', [SuperAdminPembayaranController::class, 'updatePlan'])->name('payments.plans.update');
         Route::post('/payments/transactions', [SuperAdminPembayaranController::class, 'storeTransaction'])->name('payments.transactions.store');
         Route::patch('/payments/transactions/{transaction}/approve', [SuperAdminPembayaranController::class, 'approve'])->name('payments.transactions.approve');
         Route::patch('/payments/transactions/{transaction}/reject', [SuperAdminPembayaranController::class, 'reject'])->name('payments.transactions.reject');
