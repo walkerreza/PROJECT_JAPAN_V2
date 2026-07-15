@@ -1,72 +1,24 @@
 import React, { useMemo, useState } from 'react';
 import { Head, Link } from '@inertiajs/react';
-import { motion } from 'framer-motion';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import theme from '@/Components/theme/themes';
 
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import FilterListIcon from '@mui/icons-material/FilterList';
 import GroupsIcon from '@mui/icons-material/Groups';
+import HourglassTopIcon from '@mui/icons-material/HourglassTop';
 import LockIcon from '@mui/icons-material/Lock';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import SchoolIcon from '@mui/icons-material/School';
 import SearchIcon from '@mui/icons-material/Search';
 import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium';
-import HourglassTopIcon from '@mui/icons-material/HourglassTop';
 
-const cardVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: (index) => ({
-        opacity: 1,
-        y: 0,
-        transition: { delay: index * 0.04, duration: 0.32, ease: 'easeOut' },
-    }),
-};
-
-const statusOptions = [
-    { value: 'all', label: 'Semua' },
-    { value: 'active', label: 'Aktif' },
-    { value: 'waiting', label: 'Menunggu kloter' },
+const catalogFilters = [
+    { value: 'all', label: 'Semua kelas' },
+    { value: 'locked', label: 'Buka akses' },
     { value: 'preview', label: 'Preview' },
-    { value: 'locked', label: 'Perlu akses' },
 ];
-
-const accessMeta = (item) => {
-    if (item.waiting_for_kloter) {
-        return {
-            key: 'waiting',
-            label: 'Menunggu kloter',
-            badge: 'bg-sky-50 text-sky-700 ring-sky-100 dark:bg-sky-900/25 dark:text-sky-300 dark:ring-sky-900/40',
-            icon: HourglassTopIcon,
-        };
-    }
-
-    if (item.has_class_access) {
-        return {
-            key: 'active',
-            label: 'Aktif',
-            badge: 'bg-emerald-50 text-emerald-700 ring-emerald-100 dark:bg-emerald-900/25 dark:text-emerald-300 dark:ring-emerald-900/40',
-            icon: CheckCircleIcon,
-        };
-    }
-
-    if (item.payment_plan) {
-        return {
-            key: 'locked',
-            label: 'Perlu akses',
-            badge: 'bg-rose-50 text-rose-700 ring-rose-100 dark:bg-rose-900/25 dark:text-rose-300 dark:ring-rose-900/40',
-            icon: LockIcon,
-        };
-    }
-
-    return {
-        key: 'preview',
-        label: 'Preview',
-        badge: 'bg-amber-50 text-amber-700 ring-amber-100 dark:bg-amber-900/25 dark:text-amber-300 dark:ring-amber-900/40',
-        icon: PlayArrowIcon,
-    };
-};
 
 const clampProgress = (value) => Math.max(0, Math.min(100, Number(value ?? 0)));
 
@@ -83,172 +35,239 @@ const createCheckoutRequestKey = () => {
     });
 };
 
-function EmptyThumbnail({ compact = false }) {
-    return (
-        <div className={`absolute inset-0 bg-gradient-to-br ${theme.ctaBg}`}>
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_20%,rgba(255,255,255,0.28),transparent_30%),radial-gradient(circle_at_80%_0%,rgba(255,255,255,0.18),transparent_28%)]" />
-            <div className="absolute inset-0 flex items-center justify-center">
-                <div className="rounded-2xl bg-white/16 px-4 py-3 text-center text-white backdrop-blur">
-                    <SchoolIcon sx={{ fontSize: compact ? 34 : 46 }} />
-                    <p className="mt-2 text-xs font-black uppercase tracking-wider">Thumbnail belum tersedia</p>
-                </div>
-            </div>
-        </div>
-    );
-}
+const accessMeta = (item) => {
+    if (item.waiting_for_kloter) {
+        return {
+            key: 'waiting',
+            label: 'Menunggu kloter',
+            icon: HourglassTopIcon,
+            className: 'bg-sky-50 text-sky-700 dark:bg-sky-900/25 dark:text-sky-300',
+        };
+    }
 
-function KelasThumbnail({ item }) {
+    if (item.has_class_access) {
+        return {
+            key: 'active',
+            label: 'Kelas aktif',
+            icon: CheckCircleIcon,
+            className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300',
+        };
+    }
+
+    if (item.payment_plan) {
+        return {
+            key: 'locked',
+            label: 'Perlu akses',
+            icon: LockIcon,
+            className: 'bg-rose-50 text-rose-700 dark:bg-rose-900/25 dark:text-rose-300',
+        };
+    }
+
+    return {
+        key: 'preview',
+        label: 'Preview tersedia',
+        icon: PlayArrowIcon,
+        className: 'bg-amber-50 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300',
+    };
+};
+
+function CourseThumbnail({ item, eager = false, compact = false }) {
     const [imageFailed, setImageFailed] = useState(false);
     const thumbnailUrl = item.thumbnail_url && !imageFailed ? item.thumbnail_url : null;
-    const meta = accessMeta(item);
-    const StatusIcon = meta.icon;
 
     return (
-        <div className="relative aspect-[16/10] overflow-hidden bg-slate-200 dark:bg-gray-800">
+        <div className={`relative overflow-hidden bg-slate-100 dark:bg-gray-800 ${compact ? 'aspect-[4/3] rounded-xl' : 'aspect-[16/9]'}`}>
             {thumbnailUrl ? (
                 <img
                     src={thumbnailUrl}
                     alt={item.title}
-                    className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.04]"
-                    loading="eager"
+                    className="h-full w-full object-cover"
+                    loading={eager ? 'eager' : 'lazy'}
                     onError={() => setImageFailed(true)}
                 />
             ) : (
-                <EmptyThumbnail />
+                <div className={`flex h-full w-full items-center justify-center bg-gradient-to-br ${theme.ctaBg} text-white`}>
+                    <SchoolIcon sx={{ fontSize: compact ? 28 : 42 }} />
+                </div>
             )}
+        </div>
+    );
+}
 
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/86 via-slate-950/20 to-slate-950/5" />
-            <div className="absolute left-4 top-4 flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-white/92 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-900 shadow-sm backdrop-blur">
-                    {item.type || item.level || 'Kelas JLPT N3'}
-                </span>
-                <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] ring-1 ${meta.badge}`}>
-                    <StatusIcon sx={{ fontSize: 13 }} />
-                    {meta.label}
-                </span>
+function ProgressBar({ value }) {
+    const progress = clampProgress(value);
+
+    return (
+        <div>
+            <div className="mb-2 flex items-center justify-between text-xs font-bold text-slate-500 dark:text-gray-400">
+                <span>Progres kelas</span>
+                <span>{progress}%</span>
             </div>
-            <div className="absolute bottom-4 left-4 right-4">
-                <h2 className="line-clamp-2 text-2xl font-black leading-tight text-white drop-shadow-sm">
-                    {item.title}
-                </h2>
+            <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-gray-800">
+                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${progress}%`, backgroundColor: theme.doneColor }} />
             </div>
         </div>
     );
 }
 
-function KelasCard({ item, index, onCheckout, checkoutPlanId }) {
-    const meta = accessMeta(item);
-    const canBuyClass = item.payment_plan && !item.has_class_access;
-    const progress = clampProgress(item.progress);
+function CourseFacts({ item, showProgress = false }) {
+    return (
+        <div className="space-y-2 text-sm text-slate-600 dark:text-gray-300">
+            {item.instructor_name && (
+                <p className="flex items-center gap-2">
+                    <GroupsIcon sx={{ fontSize: 17 }} className="text-slate-400" />
+                    <span className="truncate">{item.instructor_name}</span>
+                </p>
+            )}
+            <p className="flex items-center gap-2">
+                <MenuBookIcon sx={{ fontSize: 17 }} className="text-slate-400" />
+                <span>{item.lessons ?? 0} pelajaran</span>
+                {showProgress && <span className="text-slate-400">- {item.completed_lessons ?? 0} selesai</span>}
+            </p>
+        </div>
+    );
+}
+
+function ResourceSummary({ item }) {
+    const resources = [
+        ['PPT', item.resource_summary?.presentations],
+        ['Kosakata', item.resource_summary?.vocabulary],
+        ['Flashcard', item.resource_summary?.flashcards],
+        ['Kuis', item.resource_summary?.quizzes],
+    ].filter(([, count]) => Number(count) > 0);
+
+    if (resources.length === 0) return null;
 
     return (
-        <motion.article
-            custom={index}
-            variants={cardVariants}
-            initial="hidden"
-            animate="visible"
-            className="group flex min-h-[500px] flex-col overflow-hidden rounded-[1.35rem] border border-white bg-white shadow-[0_18px_55px_rgba(15,23,42,0.08)] ring-1 ring-slate-950/[0.04] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_26px_70px_rgba(190,24,93,0.16)] dark:border-gray-800 dark:bg-gray-900 dark:ring-white/[0.06]"
-        >
-            <KelasThumbnail item={item} />
+        <div className="flex flex-wrap gap-2">
+            {resources.map(([label, count]) => (
+                <span key={label} className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600 dark:bg-gray-800 dark:text-gray-300">
+                    {count} {label}
+                </span>
+            ))}
+        </div>
+    );
+}
 
-            <div className="flex flex-1 flex-col p-5">
-                <div className="space-y-4">
-                    <div className="grid gap-2 text-sm font-semibold text-slate-600 dark:text-gray-300">
-                        {item.instructor_name && (
-                            <div className="flex items-center gap-2">
-                                <GroupsIcon sx={{ fontSize: 18 }} className="text-slate-400" />
-                                <span className="truncate">{item.instructor_name}</span>
-                            </div>
-                        )}
-                        <div className="flex items-center gap-2">
-                            <MenuBookIcon sx={{ fontSize: 18 }} className="text-slate-400" />
-                            <span>{item.lessons ?? 0} pelajaran</span>
-                        </div>
-                        <div className="flex flex-wrap gap-2 text-xs font-black uppercase tracking-[0.12em] text-slate-400">
-                            <span>{item.completed_lessons ?? 0}/{item.lessons ?? 0} selesai</span>
-                            <span>-</span>
-                            <span>{item.accessible_lessons ?? 0} terbuka</span>
-                        </div>
+function OwnedCourseCard({ item }) {
+    const meta = accessMeta(item);
+    const MetaIcon = meta.icon;
+
+    return (
+        <article className="relative grid gap-4 overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:grid-cols-[140px_minmax(0,1fr)_auto] sm:items-center">
+            <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(244,63,94,0.05)_0%,transparent_38%),repeating-linear-gradient(90deg,rgba(190,24,93,0.045)_0_1px,transparent_1px_58px),repeating-linear-gradient(0deg,rgba(190,24,93,0.035)_0_1px,transparent_1px_58px)] dark:bg-[linear-gradient(135deg,rgba(244,63,94,0.1)_0%,transparent_38%),repeating-linear-gradient(90deg,rgba(255,255,255,0.025)_0_1px,transparent_1px_58px),repeating-linear-gradient(0deg,rgba(255,255,255,0.02)_0_1px,transparent_1px_58px)]"
+            />
+            <span aria-hidden="true" className="pointer-events-none absolute -bottom-8 right-4 hidden text-7xl font-black leading-none text-rose-900/[0.055] dark:text-white/[0.035] sm:block">学</span>
+            <div className="relative z-10"><CourseThumbnail item={item} compact /></div>
+            <div className="relative z-10 min-w-0">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${meta.className}`}>
+                        <MetaIcon sx={{ fontSize: 14 }} />
+                        {meta.label}
+                    </span>
+                    <span className="text-xs font-bold text-slate-400">{item.type || item.level || 'Kelas'}</span>
+                </div>
+                <h3 className="truncate text-lg font-black text-slate-950 dark:text-white">{item.title}</h3>
+                {item.waiting_for_kloter ? (
+                    <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-gray-400">
+                        Akses kelas sudah siap. Anda akan dapat melanjutkan roadmap setelah ditempatkan pada kloter belajar.
+                    </p>
+                ) : (
+                    <div className="mt-3 max-w-md">
+                        <ProgressBar value={item.progress} />
                     </div>
+                )}
+                {item.kloter && (
+                    <p className="mt-3 text-xs font-bold text-slate-500 dark:text-gray-400">
+                        {item.kloter.nama} - Minggu {item.kloter.minggu_aktif || 0}
+                    </p>
+                )}
+            </div>
+            {!item.waiting_for_kloter && (
+                <Link
+                    href={item.href}
+                    className={`relative z-10 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-gradient-to-r ${theme.ctaBg} px-4 text-sm font-black text-white shadow-sm transition hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600`}
+                >
+                    Lanjutkan
+                    <PlayArrowIcon sx={{ fontSize: 18 }} />
+                </Link>
+            )}
+        </article>
+    );
+}
 
-                    {item.description && (
-                        <p className="line-clamp-3 text-sm font-medium leading-6 text-slate-500 dark:text-gray-400">
-                            {item.description}
-                        </p>
-                    )}
+function CatalogCourseCard({ item, index, onCheckout, checkoutPlanId }) {
+    const meta = accessMeta(item);
+    const MetaIcon = meta.icon;
+    const canBuyClass = Boolean(item.payment_plan);
 
-                    {item.kloter && (
-                        <div className="rounded-2xl border border-emerald-100 bg-emerald-50/80 p-3.5 dark:border-emerald-900/35 dark:bg-emerald-900/20">
-                            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-300">Kloter aktif</p>
-                            <p className="mt-1 text-sm font-black text-slate-900 dark:text-white">{item.kloter.nama}</p>
-                            <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-gray-400">
-                                Week {item.kloter.minggu_aktif || 0} - mulai {item.kloter.tanggal_mulai_label || '-'}
-                                {item.kloter.admin_name ? ` - ${item.kloter.admin_name}` : ''}
-                            </p>
-                        </div>
-                    )}
+    return (
+        <article className="group flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition duration-200 hover:border-slate-300 hover:shadow-lg dark:border-gray-800 dark:bg-gray-900 dark:hover:border-gray-700">
+            <CourseThumbnail item={item} eager={index === 0} />
+            <div className="flex flex-1 flex-col p-5">
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${meta.className}`}>
+                        <MetaIcon sx={{ fontSize: 14 }} />
+                        {meta.label}
+                    </span>
+                    <span className="text-xs font-bold text-slate-400">{item.type || item.level || 'Kelas'}</span>
+                </div>
+                <h2 className="mt-4 text-xl font-black leading-snug text-slate-950 dark:text-white">{item.title}</h2>
+                {item.description && <p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-500 dark:text-gray-400">{item.description}</p>}
 
-                    {item.waiting_for_kloter && (
-                        <div className="rounded-2xl border border-sky-100 bg-sky-50/80 p-3.5 dark:border-sky-900/35 dark:bg-sky-900/20">
-                            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Menunggu kloter</p>
-                            <p className="mt-1 text-xs font-semibold leading-5 text-slate-500 dark:text-gray-400">
-                                Akses kelas sudah aktif. Superadmin dapat menempatkan akun ini ke kloter belajar.
-                            </p>
-                        </div>
-                    )}
+                <div className="mt-4">
+                    <CourseFacts item={item} />
+                </div>
+                <div className="mt-4">
+                    <ResourceSummary item={item} />
                 </div>
 
-                <div className="mt-auto space-y-4 pt-5">
-                    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3.5 dark:border-gray-800 dark:bg-gray-950/55">
-                        <div className="mb-2 flex items-center justify-between text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
-                            <span>Progress</span>
-                            <span>{progress}%</span>
-                        </div>
-                        <div className="h-2.5 overflow-hidden rounded-full bg-white shadow-inner dark:bg-gray-800">
-                            <div
-                                className="h-full rounded-full transition-all duration-500"
-                                style={{ width: `${progress}%`, backgroundColor: theme.doneColor }}
-                            />
-                        </div>
-                    </div>
-
-                    {canBuyClass && (
-                        <div className="rounded-2xl border border-rose-100 bg-gradient-to-br from-rose-50 to-white p-4 dark:border-rose-900/35 dark:from-rose-950/35 dark:to-gray-950">
-                            <div className="flex items-center justify-between gap-3">
+                <div className="mt-auto pt-5">
+                    {canBuyClass ? (
+                        <div className="border-t border-slate-100 pt-4 dark:border-gray-800">
+                            <div className="flex items-end justify-between gap-4">
                                 <div>
-                                    <p className="text-[11px] font-black uppercase tracking-[0.18em] text-rose-500 dark:text-rose-300">Akses kelas</p>
+                                    <p className="text-xs font-bold text-slate-500 dark:text-gray-400">Akses kelas</p>
                                     <p className="mt-1 text-lg font-black text-slate-950 dark:text-white">{item.payment_plan.price_formatted}</p>
+                                    <p className="mt-1 text-xs text-slate-500 dark:text-gray-400">
+                                        {Number(item.payment_plan.duration_days) > 0
+                                            ? `Aktif selama ${item.payment_plan.duration_days} hari`
+                                            : 'Masa akses mengikuti paket'}
+                                    </p>
                                 </div>
-                                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-rose-500 shadow-sm dark:bg-gray-900 dark:text-rose-300">
-                                    <WorkspacePremiumIcon />
-                                </div>
+                                <WorkspacePremiumIcon className="text-rose-500 dark:text-rose-300" />
+                            </div>
+                            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                <button
+                                    type="button"
+                                    onClick={() => onCheckout(item.payment_plan)}
+                                    disabled={checkoutPlanId === item.payment_plan.id}
+                                    className={`flex h-11 items-center justify-center gap-2 rounded-lg bg-gradient-to-r ${theme.ctaBg} px-4 text-sm font-black text-white shadow-sm transition hover:brightness-95 disabled:cursor-wait disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600`}
+                                >
+                                    {checkoutPlanId === item.payment_plan.id ? 'Membuka pembayaran...' : 'Buka akses'}
+                                </button>
+                                <Link
+                                    href={item.href}
+                                    className="flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                                >
+                                    Lihat preview
+                                </Link>
                             </div>
                         </div>
-                    )}
-
-                    <div className="grid gap-2">
+                    ) : (
                         <Link
                             href={item.href}
-                            className={`flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r ${theme.ctaBg} text-sm font-black text-white shadow-lg shadow-rose-950/10 transition hover:brightness-95`}
+                            className={`flex h-11 items-center justify-center gap-2 rounded-lg bg-gradient-to-r ${theme.ctaBg} px-4 text-sm font-black text-white shadow-sm transition hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600`}
                         >
+                            Lihat preview
                             <PlayArrowIcon sx={{ fontSize: 18 }} />
-                            {meta.key === 'locked' ? 'Lihat Preview' : 'Masuk Roadmap'}
                         </Link>
-
-                        {canBuyClass && (
-                            <button
-                                type="button"
-                                onClick={() => onCheckout(item.payment_plan)}
-                                disabled={checkoutPlanId === item.payment_plan.id}
-                                className="flex h-11 items-center justify-center gap-2 rounded-xl border border-rose-100 bg-white text-sm font-black text-rose-700 transition hover:border-rose-200 hover:bg-rose-50 disabled:cursor-wait disabled:opacity-60 dark:border-rose-900/40 dark:bg-gray-950 dark:text-rose-300 dark:hover:bg-rose-900/20"
-                            >
-                                {checkoutPlanId === item.payment_plan.id ? 'Membuka Midtrans...' : 'Buka Akses Premium'}
-                            </button>
-                        )}
-                    </div>
+                    )}
                 </div>
             </div>
-        </motion.article>
+        </article>
     );
 }
 
@@ -257,12 +276,31 @@ export default function KelasPage({ programs = [] }) {
     const [status, setStatus] = useState('all');
     const [checkoutPlanId, setCheckoutPlanId] = useState(null);
     const [checkoutError, setCheckoutError] = useState('');
-    const kelasItems = programs;
 
-    const filteredKelas = useMemo(() => {
+    const ownedCourses = useMemo(
+        () => programs.filter((item) => item.has_class_access || item.waiting_for_kloter),
+        [programs],
+    );
+    const activeCourses = useMemo(
+        () => ownedCourses.filter((item) => !item.waiting_for_kloter),
+        [ownedCourses],
+    );
+    const waitingCourses = useMemo(
+        () => ownedCourses.filter((item) => item.waiting_for_kloter),
+        [ownedCourses],
+    );
+    const primaryCourse = useMemo(
+        () => [...activeCourses].sort((left, right) => clampProgress(right.progress) - clampProgress(left.progress))[0] ?? null,
+        [activeCourses],
+    );
+    const catalogCourses = useMemo(
+        () => programs.filter((item) => !item.has_class_access),
+        [programs],
+    );
+    const filteredCatalog = useMemo(() => {
         const normalized = keyword.trim().toLowerCase();
 
-        return kelasItems.filter((item) => {
+        return catalogCourses.filter((item) => {
             const title = (item.title ?? '').toLowerCase();
             const instructor = (item.instructor_name ?? '').toLowerCase();
             const matchesKeyword = !normalized || title.includes(normalized) || instructor.includes(normalized);
@@ -270,18 +308,12 @@ export default function KelasPage({ programs = [] }) {
 
             return matchesKeyword && matchesStatus;
         });
-    }, [kelasItems, keyword, status]);
+    }, [catalogCourses, keyword, status]);
 
-    const summary = useMemo(() => {
-        return kelasItems.reduce((total, item) => {
-            const meta = accessMeta(item);
-            total.lessons += Number(item.lessons ?? 0);
-            total.active += meta.key === 'active' ? 1 : 0;
-            total.locked += meta.key === 'locked' ? 1 : 0;
-            total.preview += meta.key === 'preview' ? 1 : 0;
-            return total;
-        }, { lessons: 0, active: 0, locked: 0, preview: 0 });
-    }, [kelasItems]);
+    const resetCatalog = () => {
+        setKeyword('');
+        setStatus('all');
+    };
 
     const startCheckout = async (plan) => {
         setCheckoutError('');
@@ -302,13 +334,9 @@ export default function KelasPage({ programs = [] }) {
             }
 
             window.sessionStorage?.removeItem(storageKey);
-
             window.sessionStorage?.setItem(
                 `midtrans:${transactionCode}`,
-                JSON.stringify({
-                    snapToken: response.data.snap_token,
-                    redirectUrl: response.data.redirect_url,
-                }),
+                JSON.stringify({ snapToken: response.data.snap_token, redirectUrl: response.data.redirect_url }),
             );
 
             window.location.href = route('user.checkout', { transactionCode });
@@ -327,143 +355,121 @@ export default function KelasPage({ programs = [] }) {
         <AuthenticatedLayout header={false}>
             <Head title="Kelas - Japanlingo" />
 
-            <div className="relative min-h-screen overflow-hidden bg-[#eef6f2] text-slate-900 transition-colors duration-300 dark:bg-gray-950 dark:text-white">
-                <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(130deg,rgba(16,185,129,0.14)_0%,transparent_28%),linear-gradient(230deg,rgba(220,38,38,0.09)_0%,transparent_34%),repeating-linear-gradient(90deg,rgba(6,95,70,0.045)_0_1px,transparent_1px_78px),repeating-linear-gradient(0deg,rgba(6,95,70,0.035)_0_1px,transparent_1px_78px)] dark:bg-[linear-gradient(130deg,rgba(16,185,129,0.10)_0%,transparent_28%),linear-gradient(230deg,rgba(220,38,38,0.12)_0%,transparent_34%),repeating-linear-gradient(90deg,rgba(255,255,255,0.032)_0_1px,transparent_1px_78px),repeating-linear-gradient(0deg,rgba(255,255,255,0.026)_0_1px,transparent_1px_78px)]" />
-                <div className="pointer-events-none absolute left-6 top-36 hidden text-[12rem] font-black leading-none text-emerald-900/[0.045] dark:text-white/[0.035] lg:block">学</div>
-                <div className="pointer-events-none absolute right-8 top-[700px] hidden text-[12rem] font-black leading-none text-red-900/[0.04] dark:text-white/[0.03] lg:block">組</div>
-
-                <main className="relative z-10 mx-auto max-w-7xl space-y-7 px-4 py-7 sm:px-6 lg:px-8">
-                    <section className="relative overflow-hidden rounded-[2rem] border border-white/70 bg-white/62 px-5 py-5 shadow-2xl shadow-emerald-900/5 backdrop-blur-md transition-colors duration-300 dark:border-gray-800 dark:bg-gray-900/62 sm:px-7">
-                        <span
-                            aria-hidden="true"
-                            className="pointer-events-none absolute right-6 top-1/2 -translate-y-1/2 select-none text-[130px] font-black leading-none text-rose-900 opacity-[0.035] transition-colors duration-300 dark:text-white dark:opacity-[0.04]"
-                            style={{ fontFamily: 'serif' }}
-                        >
-                            学
-                        </span>
-                        <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-500 via-red-500 to-amber-400" />
-                        <div className="pointer-events-none absolute inset-0 bg-[repeating-linear-gradient(135deg,rgba(15,23,42,0.035)_0_1px,transparent_1px_18px)] dark:bg-[repeating-linear-gradient(135deg,rgba(255,255,255,0.035)_0_1px,transparent_1px_18px)]" />
-                        <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.16)_0_1px,transparent_1px_24px),linear-gradient(45deg,rgba(255,255,255,0.10)_0_1px,transparent_1px_28px)]" />
-                        <div className="relative grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-                            <div className="max-w-3xl">
-                                <p className="text-xs font-black uppercase tracking-[0.28em] text-rose-600 transition-colors duration-300 dark:text-rose-300">Kelas belajar</p>
-                                <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 transition-colors duration-300 dark:text-white sm:text-4xl">
-                                    Pilih kelas N3 dan lanjutkan roadmap mingguan
-                                </h1>
-                                <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-slate-500 transition-colors duration-300 dark:text-gray-400">
-                                    Setiap kelas menjadi pintu masuk ke roadmap berisi PPT, kosakata, flashcard, dan kuis yang saling terhubung.
-                                </p>
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-2 sm:min-w-[360px]">
-                                <div className="min-w-0 rounded-2xl bg-white/75 px-2 py-2.5 text-slate-950 shadow-sm backdrop-blur transition-colors duration-300 sm:px-3 sm:py-3 dark:bg-gray-950/70 dark:text-white">
-                                    <p className="text-xl font-black sm:text-2xl">{kelasItems.length}</p>
-                                    <p className="break-words text-[9px] font-bold uppercase tracking-[0.08em] text-slate-500 sm:text-[11px] sm:tracking-wider dark:text-gray-400">Kelas</p>
+            <main className="relative min-h-screen overflow-hidden bg-slate-50 pb-14 text-slate-900 dark:bg-gray-950 dark:text-white">
+                <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 bg-[linear-gradient(140deg,rgba(245,158,11,0.12)_0%,transparent_28%),linear-gradient(230deg,rgba(244,63,94,0.08)_0%,transparent_34%),repeating-linear-gradient(90deg,rgba(190,24,93,0.035)_0_1px,transparent_1px_74px),repeating-linear-gradient(0deg,rgba(190,24,93,0.028)_0_1px,transparent_1px_74px)] dark:bg-[linear-gradient(140deg,rgba(245,158,11,0.09)_0%,transparent_28%),linear-gradient(230deg,rgba(244,63,94,0.1)_0%,transparent_34%),repeating-linear-gradient(90deg,rgba(255,255,255,0.024)_0_1px,transparent_1px_74px),repeating-linear-gradient(0deg,rgba(255,255,255,0.018)_0_1px,transparent_1px_74px)]"
+                />
+                <span aria-hidden="true" className="pointer-events-none absolute left-8 top-56 hidden text-[11rem] font-black leading-none text-amber-900/[0.045] dark:text-white/[0.03] xl:block">学</span>
+                <span aria-hidden="true" className="pointer-events-none absolute right-8 top-[660px] hidden text-[11rem] font-black leading-none text-rose-900/[0.04] dark:text-white/[0.03] xl:block">習</span>
+                <section className="relative z-10 border-b border-slate-200 bg-white/90 dark:border-gray-800 dark:bg-gray-900/90">
+                    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+                        {primaryCourse ? (
+                            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                                <div className="max-w-3xl">
+                                    <p className="text-xs font-black uppercase tracking-[0.18em] text-rose-600 dark:text-rose-300">Lanjutkan belajar</p>
+                                    <h1 className="mt-3 text-2xl font-black leading-tight text-slate-950 sm:text-4xl dark:text-white">{primaryCourse.title}</h1>
+                                    <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-gray-300">
+                                        {primaryCourse.kloter ? `${primaryCourse.kloter.nama}, minggu ${primaryCourse.kloter.minggu_aktif || 0}. ` : ''}
+                                        {primaryCourse.completed_lessons ?? 0} dari {primaryCourse.lessons ?? 0} pelajaran telah selesai.
+                                    </p>
+                                    <div className="mt-5 max-w-xl"><ProgressBar value={primaryCourse.progress} /></div>
                                 </div>
-                                <div className="min-w-0 rounded-2xl bg-white/75 px-2 py-2.5 text-slate-950 shadow-sm backdrop-blur transition-colors duration-300 sm:px-3 sm:py-3 dark:bg-gray-950/70 dark:text-white">
-                                    <p className="text-xl font-black sm:text-2xl">{summary.lessons}</p>
-                                    <p className="break-words text-[9px] font-bold uppercase tracking-[0.08em] text-slate-500 sm:text-[11px] sm:tracking-wider dark:text-gray-400">Pelajaran</p>
-                                </div>
-                                <div className="min-w-0 rounded-2xl bg-white/75 px-2 py-2.5 text-slate-950 shadow-sm backdrop-blur transition-colors duration-300 sm:px-3 sm:py-3 dark:bg-gray-950/70 dark:text-white">
-                                    <p className="text-xl font-black sm:text-2xl">{summary.active}</p>
-                                    <p className="break-words text-[9px] font-bold uppercase tracking-[0.08em] text-slate-500 sm:text-[11px] sm:tracking-wider dark:text-gray-400">Aktif</p>
-                                </div>
+                                <Link
+                                    href={primaryCourse.href}
+                                    className={`inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-gradient-to-r ${theme.ctaBg} px-5 text-sm font-black text-white shadow-sm transition hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600`}
+                                >
+                                    Lanjutkan belajar
+                                    <PlayArrowIcon sx={{ fontSize: 19 }} />
+                                </Link>
                             </div>
-                        </div>
-                    </section>
-
-                    <section className="rounded-[1.5rem] border border-white/70 bg-white/72 p-4 shadow-2xl shadow-emerald-900/5 backdrop-blur-md transition-colors duration-300 dark:border-gray-800 dark:bg-gray-900/72">
-                        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-                            <label className="flex h-12 items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 transition focus-within:border-rose-200 focus-within:bg-white dark:border-gray-800 dark:bg-gray-950/70 dark:focus-within:border-rose-900/60">
-                                <SearchIcon sx={{ fontSize: 20 }} className="text-slate-400" />
-                                <input
-                                    value={keyword}
-                                    onChange={(event) => setKeyword(event.target.value)}
-                                    className="w-full border-0 bg-transparent text-sm font-bold text-slate-700 outline-none placeholder:text-slate-400 focus:ring-0 dark:text-gray-200"
-                                    placeholder="Cari kelas atau pengajar"
-                                />
-                            </label>
-
-                            <div className="flex flex-wrap items-center gap-2">
-                                <span className="hidden items-center gap-2 rounded-full px-3 py-2 text-xs font-black uppercase tracking-wider text-slate-400 lg:inline-flex">
-                                    <FilterListIcon sx={{ fontSize: 16 }} />
-                                    Filter
-                                </span>
-                                {statusOptions.map((option) => (
-                                    <button
-                                        key={option.value}
-                                        type="button"
-                                        onClick={() => setStatus(option.value)}
-                                        className={`h-10 rounded-full px-4 text-sm font-black transition ${status === option.value
-                                            ? `bg-gradient-to-r ${theme.ctaBg} text-white shadow-sm`
-                                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-                                        }`}
-                                    >
-                                        {option.label}
-                                    </button>
-                                ))}
+                        ) : (
+                            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                                <div className="max-w-3xl">
+                                    <p className="text-xs font-black uppercase tracking-[0.18em] text-rose-600 dark:text-rose-300">Kelas Japanlingo</p>
+                                    <h1 className="mt-3 text-2xl font-black leading-tight text-slate-950 sm:text-4xl dark:text-white">Temukan kelas yang sesuai dengan tujuan belajarmu</h1>
+                                    <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-gray-300">Bandingkan materi, durasi akses, dan pilih kelas untuk mulai mengikuti roadmap belajar.</p>
+                                </div>
+                                <a href="#jelajahi-kelas" className="inline-flex h-12 items-center justify-center rounded-lg border border-slate-300 px-5 text-sm font-black text-slate-700 transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">Jelajahi kelas</a>
                             </div>
-                        </div>
-                    </section>
+                        )}
+                    </div>
+                </section>
+
+                <div className="relative z-10 mx-auto max-w-7xl space-y-10 px-4 py-8 sm:px-6 lg:px-8">
+                    {ownedCourses.length > 0 && (
+                        <section aria-labelledby="kelas-saya-title">
+                            <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+                                <div>
+                                    <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-300">Pembelajaran saya</p>
+                                    <h2 id="kelas-saya-title" className="mt-1 text-2xl font-black text-slate-950 dark:text-white">Kelas Saya</h2>
+                                </div>
+                                <p className="text-sm font-semibold text-slate-500 dark:text-gray-400">{ownedCourses.length} kelas di akun Anda</p>
+                            </div>
+                            <div className="space-y-4">
+                                {activeCourses.map((item) => <OwnedCourseCard key={item.id} item={item} />)}
+                                {waitingCourses.map((item) => <OwnedCourseCard key={item.id} item={item} />)}
+                            </div>
+                        </section>
+                    )}
 
                     {checkoutError && (
-                        <p className="rounded-2xl border border-rose-100 bg-rose-50 px-5 py-4 text-sm font-bold text-rose-600 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-300">
-                            {checkoutError}
-                        </p>
+                        <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-300">{checkoutError}</p>
                     )}
 
-                    {filteredKelas.length > 0 ? (
-                        <section>
-                            <div className="mb-4 flex items-center justify-between gap-4">
-                                <div>
-                                    <h2 className="text-xl font-black text-slate-950 dark:text-white">Daftar kelas</h2>
-                                    <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-gray-400">
-                                        {filteredKelas.length} dari {kelasItems.length} kelas tampil
-                                    </p>
+                    <section id="jelajahi-kelas" aria-labelledby="jelajahi-kelas-title">
+                        <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 dark:border-gray-800 lg:flex-row lg:items-end lg:justify-between">
+                            <div>
+                                <p className="text-xs font-black uppercase tracking-[0.18em] text-rose-600 dark:text-rose-300">Katalog kelas</p>
+                                <h2 id="jelajahi-kelas-title" className="mt-1 text-2xl font-black text-slate-950 dark:text-white">Jelajahi Kelas</h2>
+                                <p className="mt-2 text-sm text-slate-500 dark:text-gray-400">Pilih kelas, lihat materi yang tersedia, lalu buka akses saat siap belajar.</p>
+                            </div>
+                            <p className="text-sm font-semibold text-slate-500 dark:text-gray-400">{filteredCatalog.length} dari {catalogCourses.length} kelas tampil</p>
+                        </div>
+
+                        {catalogCourses.length > 0 && (
+                            <div className="mt-5 border-b border-slate-200 pb-5 dark:border-gray-800">
+                                <label className="flex h-11 items-center gap-3 rounded-lg border border-slate-300 bg-white px-3.5 focus-within:border-rose-400 focus-within:ring-2 focus-within:ring-rose-100 dark:border-gray-700 dark:bg-gray-900 dark:focus-within:border-rose-500 dark:focus-within:ring-rose-950">
+                                    <SearchIcon sx={{ fontSize: 19 }} className="text-slate-400" />
+                                    <input value={keyword} onChange={(event) => setKeyword(event.target.value)} className="w-full border-0 bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400 focus:ring-0 dark:text-gray-200" placeholder="Cari kelas atau pengajar" />
+                                </label>
+                                <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0" aria-label="Filter katalog kelas">
+                                    {catalogFilters.map((option) => (
+                                        <button
+                                            key={option.value}
+                                            type="button"
+                                            aria-pressed={status === option.value}
+                                            onClick={() => setStatus(option.value)}
+                                            className={`h-10 shrink-0 rounded-full px-4 text-sm font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600 ${status === option.value ? `bg-gradient-to-r ${theme.ctaBg} text-white shadow-sm` : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800'}`}
+                                        >
+                                            {option.label}
+                                        </button>
+                                    ))}
                                 </div>
-                                {summary.locked > 0 && (
-                                    <span className="hidden rounded-full bg-rose-50 px-4 py-2 text-xs font-black uppercase tracking-wider text-rose-600 sm:inline-flex dark:bg-rose-900/20 dark:text-rose-300">
-                                        {summary.locked} perlu akses
-                                    </span>
+                                {(keyword || status !== 'all') && (
+                                    <div className="mt-3 flex items-center justify-between gap-3 text-sm text-slate-500 dark:text-gray-400">
+                                        <span>Filter aktif{keyword ? `: “${keyword}”` : ''}</span>
+                                        <button type="button" onClick={resetCatalog} className="inline-flex items-center gap-1 font-bold text-rose-700 hover:text-rose-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600 dark:text-rose-300 dark:hover:text-rose-200"><RestartAltIcon sx={{ fontSize: 17 }} />Reset</button>
+                                    </div>
                                 )}
                             </div>
+                        )}
 
-                            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-                                {filteredKelas.map((item, index) => (
-                                    <KelasCard
-                                        key={item.id}
-                                        item={item}
-                                        index={index}
-                                        onCheckout={startCheckout}
-                                        checkoutPlanId={checkoutPlanId}
-                                    />
-                                ))}
+                        {filteredCatalog.length > 0 ? (
+                            <div className="mt-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+                                {filteredCatalog.map((item, index) => <CatalogCourseCard key={item.id} item={item} index={index} onCheckout={startCheckout} checkoutPlanId={checkoutPlanId} />)}
                             </div>
-                        </section>
-                    ) : (
-                        <section className="rounded-[1.8rem] border border-dashed border-slate-200 bg-white/85 px-6 py-16 text-center shadow-sm shadow-slate-900/5 backdrop-blur dark:border-gray-800 dark:bg-gray-900/75">
-                            <div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br ${theme.ctaBg} text-white shadow-lg`}>
-                                {keyword || status !== 'all' ? <SearchIcon sx={{ fontSize: 36 }} /> : <SchoolIcon sx={{ fontSize: 36 }} />}
+                        ) : (
+                            <div className="mt-6 border border-dashed border-slate-300 bg-white px-6 py-14 text-center dark:border-gray-700 dark:bg-gray-900">
+                                <SearchIcon sx={{ fontSize: 34 }} className="mx-auto text-slate-400" />
+                                <h3 className="mt-4 text-lg font-black text-slate-950 dark:text-white">{catalogCourses.length === 0 ? 'Semua kelas sudah ada di akun Anda' : 'Kelas tidak ditemukan'}</h3>
+                                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500 dark:text-gray-400">{catalogCourses.length === 0 ? 'Lanjutkan kelas aktif Anda atau tunggu kloter belajar dimulai.' : 'Coba gunakan kata kunci atau filter yang berbeda.'}</p>
+                                {catalogCourses.length > 0 && <button type="button" onClick={resetCatalog} className="mt-4 text-sm font-black text-rose-700 hover:text-rose-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600 dark:text-rose-300">Reset pencarian</button>}
                             </div>
-                            <h2 className="mt-5 text-xl font-black">
-                                {keyword || status !== 'all' ? 'Kelas tidak ditemukan' : 'Kelas belum tersedia'}
-                            </h2>
-                            <p className="mx-auto mt-2 max-w-md text-sm font-medium text-slate-500 dark:text-gray-400">
-                                {keyword || status !== 'all'
-                                    ? 'Coba ubah kata kunci atau filter status.'
-                                    : 'Tambahkan program dan modul dari admin agar kelas tampil di sini.'}
-                            </p>
-                        </section>
-                    )}
-
-                    {summary.active > 0 && (
-                        <section className="flex items-center gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-4 text-sm font-bold text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300">
-                            <CheckCircleIcon sx={{ fontSize: 20 }} />
-                            <span>{summary.active} kelas sudah aktif di akun ini.</span>
-                        </section>
-                    )}
-                </main>
-            </div>
+                        )}
+                    </section>
+                </div>
+            </main>
         </AuthenticatedLayout>
     );
 }

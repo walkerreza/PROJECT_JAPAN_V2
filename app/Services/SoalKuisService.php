@@ -128,10 +128,19 @@ class SoalKuisService
         $mode = $filters['mode'] ?? 'word_to_meaning';
         $count = min(50, max(1, (int) ($filters['count'] ?? 10)));
         $status = $filters['status'] ?? 'published';
+        $contentType = $filters['content_type'] ?? 'all';
+        $moduleId = $filters['module_id'] ?? $quiz->module_id;
 
         $query = Kosakata::query()
             ->whereNotNull('word')
             ->where('word', '!=', '')
+            ->when($contentType !== 'all', fn ($query) => $query->where('content_type', $contentType))
+            ->when($moduleId, function ($query) use ($moduleId) {
+                $query->where(function ($query) use ($moduleId) {
+                    $query->where('module_id', $moduleId)
+                        ->orWhereNull('module_id');
+                });
+            })
             ->when(! empty($filters['jlpt_level']) && $filters['jlpt_level'] !== 'all', fn ($query) => $query->where('jlpt_level', $filters['jlpt_level']))
             ->when(! empty($filters['category']) && $filters['category'] !== 'all', fn ($query) => $query->where('category', $filters['category']))
             ->when($status !== 'all', fn ($query) => $query->where('status', $status));
@@ -154,7 +163,7 @@ class SoalKuisService
 
         if ($pool->count() < 2) {
             throw ValidationException::withMessages([
-                'generate' => 'Kosakata belum cukup untuk membuat soal. Minimal butuh 2 kosakata valid.',
+                'generate' => 'Bank Konten N3 belum cukup untuk membuat soal. Minimal butuh 2 item valid.',
             ]);
         }
 
@@ -186,7 +195,7 @@ class SoalKuisService
 
         if ($created === 0) {
             throw ValidationException::withMessages([
-                'generate' => 'Tidak ada kosakata valid yang bisa dijadikan soal.',
+                'generate' => 'Tidak ada konten N3 valid yang bisa dijadikan soal.',
             ]);
         }
 

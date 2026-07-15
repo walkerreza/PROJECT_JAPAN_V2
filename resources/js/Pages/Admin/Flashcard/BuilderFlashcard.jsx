@@ -33,6 +33,7 @@ export default function BuilderFlashcard({ set, vocabulary = {}, filters = {}, q
     const [cards, setCards] = useState(set.flashcards || []);
     const [search, setSearch] = useState(filters.search || '');
     const [status, setStatus] = useState(filters.status || 'all');
+    const [contentType, setContentType] = useState(filters.content_type || 'all');
     const [setRecordStatus, setSetRecordStatus] = useState(set.status || 'draft');
     const [showTemplateMenu, setShowTemplateMenu] = useState(false);
     const generateForm = useForm({ quiz_id: '', mode: 'word_to_meaning', count: 10 });
@@ -70,7 +71,7 @@ export default function BuilderFlashcard({ set, vocabulary = {}, filters = {}, q
 
     const submitFilters = (event) => {
         event.preventDefault();
-        router.get(route('admin.flashcards.builder', set.id), { search, status }, { preserveState: true, replace: true });
+        router.get(route('admin.flashcards.builder', set.id), { search, status, content_type: contentType }, { preserveState: true, replace: true });
     };
 
     const saveCards = () => {
@@ -230,9 +231,15 @@ export default function BuilderFlashcard({ set, vocabulary = {}, filters = {}, q
 
                     <aside className="space-y-4 xl:sticky xl:top-6 xl:self-start">
                         <Card>
-                            <h2 className="text-sm font-black uppercase tracking-[0.2em] text-gray-900 dark:text-white">Vocabulary Bank</h2>
+                            <h2 className="text-sm font-black uppercase tracking-[0.2em] text-gray-900 dark:text-white">Bank Konten N3</h2>
                             <form onSubmit={submitFilters} className="mt-4 space-y-3">
-                                <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari kosakata..." className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
+                                <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari kosakata, kanji, bunpo..." className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
+                                <select value={contentType} onChange={(event) => setContentType(event.target.value)} className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white">
+                                    <option value="all">Semua Tipe</option>
+                                    <option value="kosakata">Kosakata</option>
+                                    <option value="kanji">Kanji</option>
+                                    <option value="bunpo">Bunpo</option>
+                                </select>
                                 <div className="grid grid-cols-[1fr_auto] gap-2">
                                     <select value={status} onChange={(event) => setStatus(event.target.value)} className="h-11 rounded-xl border border-gray-200 bg-white px-4 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white">
                                         <option value="all">Semua</option>

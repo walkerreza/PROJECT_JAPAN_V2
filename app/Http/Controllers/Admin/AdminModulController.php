@@ -166,9 +166,12 @@ class AdminModulController extends Controller
             'quizzes' => $module->quizzes,
             'presentations' => $module->presentationDecks,
             'vocabularyStats' => [
-                'total' => Kosakata::count(),
-                'published' => Kosakata::where('status', 'published')->count(),
-                'n3' => Kosakata::where('jlpt_level', 'N3')->count(),
+                'total' => Kosakata::where('module_id', $module->id)->orWhereNull('module_id')->count(),
+                'published' => Kosakata::where('status', 'published')->where(fn ($query) => $query->where('module_id', $module->id)->orWhereNull('module_id'))->count(),
+                'n3' => Kosakata::where('jlpt_level', 'N3')->where(fn ($query) => $query->where('module_id', $module->id)->orWhereNull('module_id'))->count(),
+                'kosakata' => Kosakata::where('content_type', Kosakata::TYPE_KOSAKATA)->where(fn ($query) => $query->where('module_id', $module->id)->orWhereNull('module_id'))->count(),
+                'kanji' => Kosakata::where('content_type', Kosakata::TYPE_KANJI)->where(fn ($query) => $query->where('module_id', $module->id)->orWhereNull('module_id'))->count(),
+                'bunpo' => Kosakata::where('content_type', Kosakata::TYPE_BUNPO)->where(fn ($query) => $query->where('module_id', $module->id)->orWhereNull('module_id'))->count(),
             ],
         ]);
     }

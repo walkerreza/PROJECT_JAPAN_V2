@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { HitodamaIcon, KabutoIcon, ScrollIcon } from '@/Components/JapaneseIcons';
 import { MascotGuide } from '@/Components/User/UserVisuals';
@@ -17,8 +17,6 @@ import SearchIcon from '@mui/icons-material/Search';
 import SlideshowIcon from '@mui/icons-material/Slideshow';
 import StyleIcon from '@mui/icons-material/Style';
 import TranslateIcon from '@mui/icons-material/Translate';
-
-const firstModuleFromLevel = (level) => level?.modules?.[0] || null;
 
 function StatBubble({ icon, label, value }) {
     return (
@@ -56,7 +54,7 @@ function SectionHeader({ eyebrow, title, actionHref, actionLabel }) {
 export default function BerandaUser({
     user = {},
     recentProgress = [],
-    availableLevels = [],
+    learningDashboard = { programs: [], resources: [] },
     rewardHistory = [],
     news = [],
     activeSubscription = null,
@@ -65,154 +63,103 @@ export default function BerandaUser({
 }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [isSearchOpen, setIsSearchOpen] = useState(false);
+    const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
 
     const authUser = usePage().props.auth?.user || {};
     const accessStatus = authUser.access_status || user.access_status || {};
     const isPremium = user.subscription_status === 'premium' || accessStatus.is_premium;
 
-    const filteredLevels = useMemo(() => {
-        if (!searchQuery.trim()) return availableLevels;
-
-        const query = searchQuery.toLowerCase();
-
-        return availableLevels.filter((level) => {
-            const matchLevel = level.level_name?.toLowerCase().includes(query);
-            const matchModule = level.modules?.some((module) => (
-                module.title?.toLowerCase().includes(query)
-                || module.category?.toLowerCase().includes(query)
-            ));
-
-            return matchLevel || matchModule;
-        });
-    }, [availableLevels, searchQuery]);
-
-    const activeLevel = availableLevels.find((level) => level.modules?.length > 0) || availableLevels[0] || null;
-    const activeModule = firstModuleFromLevel(activeLevel);
-    const totalModules = availableLevels.reduce((total, level) => total + Number(level.modules?.length || 0), 0);
+    const ownedPrograms = learningDashboard?.programs || [];
+    const activeLearning = learningDashboard?.next_module || null;
+    const totalModules = ownedPrograms.reduce((total, program) => total + Number(program.total_modules || 0), 0);
     const recentActivities = recentProgress.length > 0 ? recentProgress.slice(0, 4) : rewardHistory.slice(0, 4);
-    const quickQuizUrl = quickQuiz?.url || lastCompletedQuiz?.url || route('user.kelas.index');
+    const quickQuizUrl = quickQuiz?.url || lastCompletedQuiz?.url || activeLearning?.roadmap_url || route('user.kelas.index');
     const quickQuizTitle = quickQuiz?.title || lastCompletedQuiz?.title || 'Masuk ke kelas aktif';
 
+    const resourceVisuals = {
+        presentasi: { icon: SlideshowIcon, tone: 'from-red-500 to-rose-600' },
+        kosakata: { icon: TranslateIcon, tone: 'from-emerald-500 to-teal-600' },
+        flashcard: { icon: StyleIcon, tone: 'from-amber-500 to-orange-600' },
+        kuis: { icon: QuizIcon, tone: 'from-indigo-500 to-violet-600' },
+    };
+    const resourceCards = (learningDashboard?.resources || []).map((item) => ({
+        ...item,
+        icon: resourceVisuals[item.category]?.icon || AutoStoriesIcon,
+        tone: resourceVisuals[item.category]?.tone || theme.ctaBg,
+    }));
+    const resourceByCategory = Object.fromEntries(resourceCards.map((item) => [item.category, item]));
     const quickLinks = [
-        { label: 'Kelas Saya', href: route('user.kelas.index'), icon: SchoolIcon },
-        { label: 'PPT', href: route('user.kelas.index'), icon: SlideshowIcon },
-        { label: 'Kosakata', href: route('user.kelas.index'), icon: TranslateIcon },
-        { label: 'Flashcard', href: route('user.kelas.index'), icon: StyleIcon },
-        { label: 'Kuis', href: quickQuizUrl, icon: QuizIcon },
+        { label: 'Kelas Saya', href: activeLearning?.roadmap_url || route('user.kelas.index'), icon: SchoolIcon },
+        { label: 'PPT', href: resourceByCategory.presentasi?.href || activeLearning?.roadmap_url || route('user.kelas.index'), icon: SlideshowIcon },
+        { label: 'Kosakata', href: resourceByCategory.kosakata?.href || activeLearning?.roadmap_url || route('user.kelas.index'), icon: TranslateIcon },
+        { label: 'Flashcard', href: resourceByCategory.flashcard?.href || activeLearning?.roadmap_url || route('user.kelas.index'), icon: StyleIcon },
+        { label: 'Kuis', href: resourceByCategory.kuis?.href || quickQuizUrl, icon: QuizIcon },
     ];
 
-    const resourceCards = [
-        {
-            category: 'ppt',
-            title: 'PPT Kelas',
-            desc: 'Buka materi presentasi yang dibagikan admin di dalam kelas.',
-            href: route('user.kelas.index'),
-            icon: SlideshowIcon,
-            tone: 'from-red-500 to-rose-600',
-        },
-        {
-            category: 'kosakata',
-            title: 'Kosakata N3',
-            desc: 'Review kosakata inti yang menjadi bahan flashcard dan kuis.',
-            href: route('user.kelas.index'),
-            icon: TranslateIcon,
-            tone: 'from-emerald-500 to-teal-600',
-        },
-        {
-            category: 'flashcard',
-            title: 'Flashcard',
-            desc: 'Latihan repetisi sebelum masuk ke kuis evaluasi.',
-            href: route('user.kelas.index'),
-            icon: StyleIcon,
-            tone: 'from-amber-500 to-orange-600',
-        },
-        {
-            category: 'kuis',
-            title: 'Kuis Cepat',
-            desc: 'Langsung masuk ke latihan kuis dan kumpulkan XP.',
-            href: quickQuizUrl,
-            icon: QuizIcon,
-            tone: 'from-indigo-500 to-violet-600',
-        },
-    ];
-
-    const searchSuggestions = useMemo(() => {
+    const searchResults = useMemo(() => {
         const query = searchQuery.trim().toLowerCase();
 
-        const levelSuggestions = availableLevels.map((level) => ({
-            type: 'Kelas',
-            title: `JLPT ${level.level_name || 'N3'}`,
-            subtitle: `${level.modules?.length || 0} modul tersedia`,
-            href: route('user.kelas.index'),
-            icon: SchoolIcon,
-            searchText: `kelas jlpt ${level.level_name || ''} ${level.modules?.map((module) => module.title).join(' ') || ''}`,
-        }));
+        if (query.length < 2) return [];
 
-        const moduleSuggestions = availableLevels.flatMap((level) => (
-            (level.modules || []).map((module) => ({
+        const items = [
+            ...ownedPrograms.map((program) => ({
+                id: `program-${program.id}`,
+                type: 'Kelas',
+                title: program.title,
+                subtitle: program.waiting_for_kloter
+                    ? 'Menunggu jadwal kloter'
+                    : (program.next_module ? `Week ${program.next_module.week_number} - ${program.next_module.title}` : 'Roadmap kelas'),
+                href: program.roadmap_url,
+                icon: SchoolIcon,
+                searchText: `${program.title} ${program.level || ''} ${program.next_module?.title || ''}`,
+            })),
+            ...(activeLearning ? [{
+                id: `module-${activeLearning.id}`,
                 type: 'Modul',
-                title: module.title || `Modul ${level.level_name || 'N3'}`,
-                subtitle: module.category || `JLPT ${level.level_name || 'N3'}`,
-                href: route('user.kelas.index'),
+                title: activeLearning.title,
+                subtitle: `${activeLearning.program_title} - Week ${activeLearning.week_number}`,
+                href: activeLearning.roadmap_url,
                 icon: AutoStoriesIcon,
-                searchText: `modul ${module.title || ''} ${module.category || ''} ${level.level_name || ''}`,
-            }))
-        ));
-
-        const resourceSuggestions = resourceCards.map((item) => ({
-            type: item.category === 'ppt' ? 'PPT' : item.category.charAt(0).toUpperCase() + item.category.slice(1),
-            title: item.title,
-            subtitle: item.desc,
-            href: item.href,
-            icon: item.icon,
-            searchText: `${item.category} ${item.title} ${item.desc}`,
-        }));
-
-        const quizSuggestions = lastCompletedQuiz
-            ? [{
+                searchText: `${activeLearning.title} ${activeLearning.program_title} week ${activeLearning.week_number}`,
+            }] : []),
+            ...resourceCards
+                .filter((item) => item.available && item.href)
+                .map((item) => ({
+                    id: `resource-${item.category}`,
+                    type: item.category === 'presentasi' ? 'PPT' : item.category.charAt(0).toUpperCase() + item.category.slice(1),
+                    title: item.title,
+                    subtitle: item.description,
+                    href: item.href,
+                    icon: item.icon,
+                    searchText: `${item.category} ${item.title} ${item.description}`,
+                })),
+            ...(quickQuiz ? [{
+                id: `quiz-${quickQuiz.id}`,
                 type: 'Kuis',
-                title: quickQuizTitle,
-                subtitle: quickQuiz ? 'Lanjutkan kuis aktif' : `Skor terakhir ${lastCompletedQuiz.score ?? 0}`,
-                href: quickQuizUrl,
+                title: quickQuiz.title,
+                subtitle: 'Kuis aktif',
+                href: quickQuiz.url,
                 icon: QuizIcon,
-                searchText: `kuis quiz ${quickQuizTitle || ''}`,
-            }]
-            : [{
-                type: 'Kuis',
-                title: quickQuizTitle,
-                subtitle: quickQuiz ? 'Lanjutkan kuis aktif' : 'Pilih kelas untuk membuka kuis mingguan',
-                href: quickQuizUrl,
-                icon: QuizIcon,
-                searchText: 'kuis quiz latihan daftar soal',
-            }];
-
-        const suggestions = [
-            ...levelSuggestions,
-            ...moduleSuggestions,
-            ...resourceSuggestions,
-            ...quizSuggestions,
+                searchText: `kuis ${quickQuiz.title}`,
+            }] : []),
         ];
 
-        if (!query) return suggestions.slice(0, 8);
-
-        return suggestions
+        return items
             .filter((item) => item.searchText.toLowerCase().includes(query))
-            .slice(0, 8);
-    }, [availableLevels, lastCompletedQuiz, quickQuiz, quickQuizTitle, quickQuizUrl, resourceCards, searchQuery]);
+            .filter((item, index, list) => list.findIndex((candidate) => candidate.href === item.href) === index)
+            .slice(0, 6);
+    }, [activeLearning, ownedPrograms, quickQuiz, resourceCards, searchQuery]);
 
-    const filteredResourceCards = useMemo(() => {
-        const query = searchQuery.trim().toLowerCase();
-
-        return resourceCards.filter((item) => (
-            !query
-            || item.category.toLowerCase().includes(query)
-            || item.title.toLowerCase().includes(query)
-            || item.desc.toLowerCase().includes(query)
-        ));
-    }, [resourceCards, searchQuery]);
+    const isSearchReady = searchQuery.trim().length >= 2;
 
     const handleSearch = (event) => {
         event.preventDefault();
+
+        const result = searchResults[activeSuggestionIndex] || searchResults[0];
+
+        if (result) {
+            router.visit(result.href);
+        }
     };
 
     return (
@@ -239,82 +186,86 @@ export default function BerandaUser({
                             Mau lanjut belajar apa hari ini?
                         </h1>
 
-                        <form onSubmit={handleSearch} className="relative mb-4 w-full max-w-3xl">
-                            <div className="relative rounded-full border border-white/70 bg-white shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] transition-all dark:border-gray-800 dark:bg-gray-900">
-                                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-5 text-gray-400 dark:text-gray-500">
-                                    <SearchIcon sx={{ fontSize: 24 }} />
+                        <form onSubmit={handleSearch} className="relative mb-4 w-full max-w-2xl">
+                            <div className="relative rounded-full border border-white/70 bg-white/95 shadow-sm dark:border-gray-800 dark:bg-gray-900/95">
+                                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400 dark:text-gray-500">
+                                    <SearchIcon sx={{ fontSize: 21 }} />
                                 </div>
                                 <input
-                                    type="text"
+                                    type="search"
                                     role="combobox"
-                                    aria-expanded={isSearchOpen}
-                                    aria-controls="dashboard-search-suggestions"
+                                    aria-autocomplete="list"
+                                    aria-expanded={isSearchOpen && isSearchReady}
+                                    aria-controls="dashboard-search-results"
                                     value={searchQuery}
                                     onFocus={() => setIsSearchOpen(true)}
                                     onChange={(event) => {
                                         setSearchQuery(event.target.value);
+                                        setActiveSuggestionIndex(0);
                                         setIsSearchOpen(true);
                                     }}
                                     onKeyDown={(event) => {
-                                        if (event.key === 'Escape') setIsSearchOpen(false);
+                                        if (event.key === 'Escape') {
+                                            setIsSearchOpen(false);
+                                        }
+
+                                        if (event.key === 'ArrowDown' && searchResults.length > 0) {
+                                            event.preventDefault();
+                                            setActiveSuggestionIndex((index) => Math.min(index + 1, searchResults.length - 1));
+                                        }
+
+                                        if (event.key === 'ArrowUp' && searchResults.length > 0) {
+                                            event.preventDefault();
+                                            setActiveSuggestionIndex((index) => Math.max(index - 1, 0));
+                                        }
                                     }}
-                                    className="h-14 w-full rounded-full border-0 bg-transparent py-4 pl-14 pr-24 text-sm text-gray-700 outline-none transition placeholder:text-gray-400 focus:ring-2 focus:ring-red-100 dark:text-gray-200 dark:placeholder:text-gray-500 dark:focus:ring-red-900/50 md:text-base"
-                                    placeholder="Cari kelas, modul, PPT, kosakata, flashcard, atau kuis..."
+                                    className="h-12 w-full rounded-full border-0 bg-transparent py-3 pl-12 pr-20 text-sm text-gray-700 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-red-100 dark:text-gray-200 dark:placeholder:text-gray-500 dark:focus:ring-red-900/50"
+                                    placeholder="Cari materi di kelas aktif..."
                                 />
                                 {searchQuery && (
                                     <button
                                         type="button"
                                         onClick={() => {
                                             setSearchQuery('');
-                                            setIsSearchOpen(true);
+                                            setActiveSuggestionIndex(0);
                                         }}
-                                        className="absolute inset-y-0 right-14 my-auto h-8 rounded-full px-3 text-xs font-black text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+                                        className="absolute inset-y-0 right-11 my-auto h-8 px-2 text-xs font-black text-gray-400 transition hover:text-gray-700 dark:hover:text-gray-200"
                                     >
                                         Hapus
                                     </button>
                                 )}
-                                <button type="submit" className="absolute inset-y-0 right-0 flex items-center pr-5 text-gray-400 transition hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300">
-                                    <SearchIcon sx={{ fontSize: 22 }} />
+                                <button type="submit" aria-label="Buka hasil pencarian" className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-gray-400 transition hover:text-red-600 dark:text-gray-500 dark:hover:text-red-300">
+                                    <ArrowRightAltIcon sx={{ fontSize: 22 }} />
                                 </button>
                             </div>
 
-                            {isSearchOpen && (
-                                <div
-                                    id="dashboard-search-suggestions"
-                                    className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-30 overflow-hidden rounded-[1.5rem] border border-white/80 bg-white/96 p-2 text-left shadow-2xl shadow-red-950/10 backdrop-blur dark:border-gray-800 dark:bg-gray-900/96"
-                                >
-                                    <div className="max-h-80 overflow-y-auto">
-                                        {searchSuggestions.length > 0 ? searchSuggestions.map((item, index) => {
-                                            const Icon = item.icon;
+                            {isSearchOpen && isSearchReady && (
+                                <div id="dashboard-search-results" role="listbox" className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-30 overflow-hidden rounded-xl border border-white/80 bg-white/95 p-1.5 text-left shadow-xl shadow-red-950/10 backdrop-blur dark:border-gray-800 dark:bg-gray-900/95">
+                                    {searchResults.length > 0 ? searchResults.map((item, index) => {
+                                        const Icon = item.icon;
+                                        const isActive = index === activeSuggestionIndex;
 
-                                            return (
-                                                <Link
-                                                    key={`${item.type}-${item.title}-${index}`}
-                                                    href={item.href}
-                                                    onMouseDown={() => setIsSearchOpen(false)}
-                                                    className="flex items-center gap-3 rounded-2xl px-3 py-3 transition hover:bg-red-50 dark:hover:bg-red-950/30"
-                                                >
-                                                    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${theme.ctaBg} text-white shadow-sm`}>
-                                                        <Icon sx={{ fontSize: 22 }} />
-                                                    </div>
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-gray-500 dark:bg-gray-800 dark:text-gray-300">
-                                                                {item.type}
-                                                            </span>
-                                                            <p className="truncate text-sm font-black text-gray-900 dark:text-white">{item.title}</p>
-                                                        </div>
-                                                        <p className="mt-1 truncate text-xs font-medium text-gray-500 dark:text-gray-400">{item.subtitle}</p>
-                                                    </div>
-                                                    <ArrowRightAltIcon sx={{ fontSize: 20 }} className="text-gray-300" />
-                                                </Link>
-                                            );
-                                        }) : (
-                                            <div className="rounded-2xl px-4 py-5 text-sm font-bold text-gray-500 dark:text-gray-400">
-                                                Tidak ada saran yang cocok. Coba kata kunci lain.
-                                            </div>
-                                        )}
-                                    </div>
+                                        return (
+                                            <Link
+                                                key={item.id}
+                                                href={item.href}
+                                                role="option"
+                                                aria-selected={isActive}
+                                                onMouseEnter={() => setActiveSuggestionIndex(index)}
+                                                onClick={() => setIsSearchOpen(false)}
+                                                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 transition ${isActive ? 'bg-red-50 dark:bg-red-950/30' : 'hover:bg-gray-50 dark:hover:bg-gray-800/70'}`}
+                                            >
+                                                <Icon sx={{ fontSize: 20 }} className="shrink-0 text-red-600 dark:text-red-300" />
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="truncate text-sm font-black text-gray-900 dark:text-white">{item.title}</p>
+                                                    <p className="truncate text-xs text-gray-500 dark:text-gray-400">{item.subtitle}</p>
+                                                </div>
+                                                <span className="shrink-0 text-[10px] font-black uppercase tracking-wide text-gray-400">{item.type}</span>
+                                            </Link>
+                                        );
+                                    }) : (
+                                        <p className="px-3 py-4 text-sm font-medium text-gray-500 dark:text-gray-400">Tidak ada materi yang bisa dibuka dengan kata kunci ini.</p>
+                                    )}
                                 </div>
                             )}
                         </form>
@@ -388,19 +339,19 @@ export default function BerandaUser({
                                         Lanjutkan Belajar
                                     </p>
                                     <h2 className="text-xl font-black text-gray-900 sm:text-2xl dark:text-white">
-                                        {activeModule ? activeModule.title : 'Masuk ke kelas aktifmu'}
+                                        {activeLearning ? activeLearning.title : 'Belum ada kelas aktif'}
                                     </h2>
                                     <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-600 dark:text-gray-300">
-                                        {activeModule
-                                            ? `Lanjutkan roadmap ${activeLevel?.level_name || 'N3'} dari modul yang tersedia.`
-                                            : 'Pilih kelas terlebih dahulu untuk membuka roadmap, PPT, kosakata, flashcard, dan kuis.'}
+                                        {activeLearning
+                                            ? `${activeLearning.program_title} - Week ${activeLearning.week_number}. Lanjutkan dari materi yang tersedia.`
+                                            : 'Pilih kelas untuk memulai roadmap belajar dan membuka materi mingguan.'}
                                     </p>
                                     <div className="mt-3 flex flex-wrap gap-2 text-xs font-black sm:mt-4">
                                         <span className="rounded-full bg-red-50 px-3 py-1.5 text-red-700 dark:bg-red-950/40 dark:text-red-300">
-                                            {totalModules} modul tersedia
+                                            {totalModules} modul di kelas saya
                                         </span>
                                         <span className="rounded-full bg-amber-50 px-3 py-1.5 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-                                            {availableLevels.length} kelas/level
+                                            {ownedPrograms.length} kelas aktif
                                         </span>
                                         <span className="rounded-full bg-gray-100 px-3 py-1.5 text-gray-600 dark:bg-gray-900 dark:text-gray-300">
                                             {isPremium ? 'Akses premium aktif' : 'Preview tersedia'}
@@ -411,10 +362,10 @@ export default function BerandaUser({
 
                             <div className="grid gap-2">
                                 <Link
-                                    href={route('user.kelas.index')}
+                                    href={activeLearning?.roadmap_url || route('user.kelas.index')}
                                     className={`inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r ${theme.ctaBg} px-6 py-3 text-sm font-black text-white shadow-lg shadow-red-900/15 transition lg:hover:-translate-y-0.5 lg:hover:brightness-95`}
                                 >
-                                    Masuk Kelas
+                                    {activeLearning ? 'Lanjutkan Belajar' : 'Jelajahi Kelas'}
                                     <ArrowRightAltIcon sx={{ fontSize: 22 }} />
                                 </Link>
                                 <Link
@@ -429,84 +380,142 @@ export default function BerandaUser({
 
                     <section className="rounded-[1.5rem] border border-white/70 bg-white/55 p-4 shadow-xl shadow-red-900/5 backdrop-blur-md sm:rounded-[2rem] sm:p-7 dark:border-gray-800 dark:bg-gray-900/55">
                         <SectionHeader
-                            eyebrow="Kelas Saya"
-                            title="Pilih kelas dan masuk ke roadmap"
+                            eyebrow="Kelas Aktif"
+                            title="Lanjutkan roadmap belajarmu"
                             actionHref={route('user.kelas.index')}
-                            actionLabel="Lihat semua kelas"
+                            actionLabel="Jelajahi kelas"
                         />
 
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-5 lg:grid-cols-4">
-                            {filteredLevels.map((level, index) => {
-                                const module = firstModuleFromLevel(level);
-
-                                return (
-                                    <Link
-                                        href={route('user.kelas.index')}
-                                        key={`${level.level_name || 'level'}-${index}`}
-                                        className="group flex min-h-[104px] items-center gap-3 rounded-2xl border border-red-100/80 bg-white/85 p-3 shadow-sm transition-all duration-300 sm:block sm:min-h-0 sm:rounded-[1.5rem] lg:hover:-translate-y-1 lg:hover:shadow-xl lg:hover:shadow-red-900/10 dark:border-gray-800 dark:bg-gray-950/80"
-                                    >
-                                        <div className="relative mb-0 h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-red-100/80 bg-gradient-to-br from-red-100 via-amber-50 to-white transition-all duration-300 sm:mb-4 sm:h-auto sm:w-full sm:rounded-2xl sm:aspect-[4/3] lg:group-hover:shadow-md dark:border-gray-800 dark:from-red-950/40 dark:via-gray-900 dark:to-gray-950">
-                                            <div className="absolute -right-8 -top-8 hidden h-28 w-28 rounded-full bg-red-300/30 blur-2xl sm:block" />
-                                            <div className="absolute -bottom-8 left-4 hidden h-24 w-24 rounded-full bg-amber-300/30 blur-2xl sm:block" />
-                                            <div className="absolute bottom-3 left-3 text-5xl font-black text-red-900/10 dark:text-white/10">週</div>
-                                            {level.is_premium && (
-                                                <div className="absolute right-1.5 top-1.5 z-10 flex items-center justify-center gap-1 rounded-full bg-gradient-to-r from-amber-500 to-yellow-500 px-1.5 py-1 text-[8px] font-black tracking-wider text-white shadow-md sm:right-3 sm:top-3 sm:gap-1.5 sm:px-3 sm:text-[10px] sm:tracking-widest">
-                                                    <KabutoIcon className="h-3 w-3" /> PREMIUM
+                        <div className="space-y-3">
+                            {ownedPrograms.map((program) => {
+                                const cardClass = 'relative grid grid-cols-[72px_minmax(0,1fr)] gap-3 overflow-hidden rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition sm:grid-cols-[96px_minmax(0,1fr)_auto] sm:items-center sm:gap-4 sm:p-4 dark:border-gray-800 dark:bg-gray-950';
+                                const content = (
+                                    <>
+                                        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(220,38,38,0.15),transparent_48%),repeating-linear-gradient(90deg,rgba(153,27,27,0.09)_0_1px,transparent_1px_42px),repeating-linear-gradient(0deg,rgba(153,27,27,0.07)_0_1px,transparent_1px_42px)] dark:bg-[linear-gradient(135deg,rgba(248,113,113,0.14),transparent_48%),repeating-linear-gradient(90deg,rgba(255,255,255,0.06)_0_1px,transparent_1px_42px),repeating-linear-gradient(0deg,rgba(255,255,255,0.045)_0_1px,transparent_1px_42px)]" />
+                                        <span aria-hidden="true" className="pointer-events-none absolute -bottom-5 right-2 text-5xl font-black leading-none text-red-900/[0.14] sm:-bottom-7 sm:right-3 sm:text-7xl dark:text-white/[0.11]">学</span>
+                                        <span aria-hidden="true" className="pointer-events-none absolute -top-3 right-16 text-3xl font-black leading-none text-amber-700/[0.12] sm:right-28 sm:text-4xl dark:text-amber-200/[0.09]">語</span>
+                                        <div className="relative z-10 h-16 w-[72px] overflow-hidden rounded-lg bg-slate-100 sm:h-[72px] sm:w-24 dark:bg-gray-800">
+                                            <div className="flex h-full items-center justify-center bg-gradient-to-br from-red-500 to-rose-600 text-white">
+                                                <SchoolIcon sx={{ fontSize: 26 }} />
+                                            </div>
+                                            {program.thumbnail_url && (
+                                                <img
+                                                    src={program.thumbnail_url}
+                                                    alt=""
+                                                    className="absolute inset-0 h-full w-full object-cover"
+                                                    loading="lazy"
+                                                    onError={(event) => event.currentTarget.classList.add('hidden')}
+                                                />
+                                            )}
+                                        </div>
+                                        <div className="relative z-10 min-w-0">
+                                            <div className="mb-2 flex items-center gap-2">
+                                                <span className={`rounded-full px-2.5 py-1 text-[11px] font-black ${program.waiting_for_kloter
+                                                    ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+                                                    : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'}`}>
+                                                    {program.waiting_for_kloter ? 'Menunggu kloter' : 'Kelas aktif'}
+                                                </span>
+                                                {!program.waiting_for_kloter && <span className="text-xs font-bold text-slate-400">{program.total_modules || 0} modul</span>}
+                                            </div>
+                                            <h3 className="truncate text-base font-black text-slate-950 sm:text-lg dark:text-white">{program.title}</h3>
+                                            <p className="mt-1 truncate text-sm text-slate-500 dark:text-gray-400">
+                                                {program.waiting_for_kloter
+                                                    ? 'Roadmap tersedia setelah jadwal kloter dimulai.'
+                                                    : (program.next_module ? `Berikutnya: Week ${program.next_module.week_number} - ${program.next_module.title}` : 'Semua modul yang tersedia telah selesai.')}
+                                            </p>
+                                            {!program.waiting_for_kloter && (
+                                                <div className="mt-3 flex items-center gap-3">
+                                                    <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-gray-800">
+                                                        <div className="h-full rounded-full bg-red-600" style={{ width: `${program.progress}%` }} />
+                                                    </div>
+                                                    <span className="shrink-0 text-xs font-black text-slate-500 dark:text-gray-400">{program.progress}%</span>
                                                 </div>
                                             )}
-                                            <div className="relative z-10 flex h-full flex-col items-center justify-center">
-                                                <span className="text-xs font-bold tracking-wide text-gray-800 sm:text-lg sm:tracking-widest dark:text-gray-200">JLPT {level.level_name}</span>
-                                                <span className="mt-1 hidden text-[10px] font-bold uppercase tracking-widest text-red-500 sm:block">{level.modules?.length || 0} modul tersedia</span>
-                                                <div className="mt-1 h-0.5 w-6 bg-red-500 sm:mt-2 sm:w-8" />
-                                            </div>
                                         </div>
+                                        <span className={`relative z-10 col-span-2 inline-flex min-h-10 items-center justify-center gap-1 rounded-lg px-4 text-sm font-black sm:col-auto sm:min-h-11 ${program.waiting_for_kloter
+                                            ? 'bg-slate-100 text-slate-500 dark:bg-gray-800 dark:text-gray-400'
+                                            : 'bg-red-600 text-white lg:group-hover:bg-red-700'}`}>
+                                            {program.waiting_for_kloter ? 'Menunggu jadwal' : 'Lanjutkan'}
+                                            {!program.waiting_for_kloter && <ArrowRightAltIcon sx={{ fontSize: 20 }} />}
+                                        </span>
+                                    </>
+                                );
 
-                                        <div className="min-w-0 flex-1">
-                                            <h3 className="mb-1 line-clamp-2 text-sm font-bold leading-snug text-gray-900 transition-colors sm:mb-2 sm:text-base lg:group-hover:text-red-500 dark:text-white">
-                                                {module?.title || `Kelas JLPT ${level.level_name || 'N3'}`}
-                                            </h3>
-                                            <div className="flex items-center gap-2 text-[11px] font-medium text-gray-400">
-                                                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
-                                                <span className="truncate">{module?.category || 'Roadmap mingguan'}</span>
-                                            </div>
-                                        </div>
+                                return program.waiting_for_kloter ? (
+                                    <article key={program.id} className={cardClass}>{content}</article>
+                                ) : (
+                                    <Link key={program.id} href={program.roadmap_url} className={`group ${cardClass} hover:border-red-200 hover:shadow-md lg:dark:hover:border-red-900/60`}>
+                                        {content}
                                     </Link>
                                 );
                             })}
-                            {filteredLevels.length === 0 && (
-                                <p className="text-sm text-gray-500 dark:text-gray-400">Belum ada kelas yang sesuai dengan pencarian.</p>
+                            {ownedPrograms.length === 0 && (
+                                <div className="rounded-2xl border border-dashed border-gray-300 bg-white/70 px-5 py-8 text-center dark:border-gray-700 dark:bg-gray-950/70">
+                                    <SchoolIcon sx={{ fontSize: 30 }} className="mb-2 text-red-500" />
+                                    <p className="font-black text-gray-900 dark:text-white">Belum ada kelas aktif</p>
+                                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Pilih kelas untuk memulai roadmap belajar.</p>
+                                    <Link href={route('user.kelas.index')} className="mt-4 inline-flex min-h-11 items-center gap-1 text-sm font-black text-red-600 dark:text-red-400">
+                                        Jelajahi kelas <ArrowRightAltIcon sx={{ fontSize: 20 }} />
+                                    </Link>
+                                </div>
                             )}
                         </div>
                     </section>
 
                     <section className="rounded-[1.5rem] border border-white/70 bg-white/55 p-4 shadow-xl shadow-amber-900/5 backdrop-blur-md sm:rounded-[2rem] sm:p-7 dark:border-gray-800 dark:bg-gray-900/55">
-                        <SectionHeader eyebrow="Resource Belajar" title="Buka materi pendukung kelas" />
+                        <SectionHeader
+                            eyebrow="Materi Minggu Ini"
+                            title={activeLearning ? `Week ${activeLearning.week_number} - ${activeLearning.program_title}` : 'Materi mengikuti kelas aktif'}
+                            actionHref={activeLearning?.roadmap_url}
+                            actionLabel="Lihat roadmap"
+                        />
 
-                        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-                            {filteredResourceCards.map((item) => {
+                        {activeLearning ? <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+                            {resourceCards.map((item) => {
                                 const Icon = item.icon;
-
-                                return (
-                                    <Link
-                                        key={item.title}
-                                        href={item.href}
-                                        className="group flex min-h-[132px] flex-col rounded-2xl border border-white/70 bg-white/85 p-3 shadow-sm transition-all sm:min-h-0 sm:rounded-[1.5rem] sm:p-5 lg:hover:-translate-y-1 lg:hover:shadow-xl dark:border-gray-800 dark:bg-gray-950/80"
-                                    >
+                                const cardClass = `group flex min-h-[132px] flex-col rounded-2xl border p-3 shadow-sm transition-all sm:min-h-0 sm:rounded-[1.5rem] sm:p-5 ${item.available
+                                    ? 'border-white/70 bg-white/85 lg:hover:-translate-y-0.5 lg:hover:shadow-lg dark:border-gray-800 dark:bg-gray-950/80'
+                                    : 'cursor-not-allowed border-gray-200 bg-gray-100/70 opacity-75 dark:border-gray-800 dark:bg-gray-950/50'}`;
+                                const content = (
+                                    <>
                                         <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${item.tone} text-white shadow-lg sm:mb-4 sm:h-12 sm:w-12 sm:rounded-2xl`}>
                                             <Icon sx={{ fontSize: 22 }} className="sm:hidden" />
                                             <Icon sx={{ fontSize: 26 }} className="hidden sm:block" />
                                         </div>
                                         <h3 className="text-sm font-black text-gray-900 transition sm:text-base lg:group-hover:text-red-600 dark:text-white lg:dark:group-hover:text-red-300">{item.title}</h3>
-                                        <p className="mt-2 hidden text-sm font-medium leading-6 text-gray-500 sm:block dark:text-gray-400">{item.desc}</p>
+                                        <p className="mt-2 hidden text-sm font-medium leading-6 text-gray-500 sm:block dark:text-gray-400">{item.available ? item.description : item.message}</p>
+                                        <span className={`mt-auto pt-3 text-xs font-black ${item.available ? 'text-red-600 dark:text-red-300' : 'text-gray-400'}`}>
+                                            {item.available ? 'Buka materi' : 'Belum terbuka'}
+                                        </span>
+                                    </>
+                                );
+
+                                return item.available ? (
+                                    <Link
+                                        key={item.category}
+                                        href={item.href}
+                                        className={cardClass}
+                                    >
+                                        {content}
                                     </Link>
+                                ) : (
+                                    <div key={item.category} className={cardClass} aria-disabled="true">
+                                        {content}
+                                    </div>
                                 );
                             })}
-                            {filteredResourceCards.length === 0 && (
+                            {resourceCards.length === 0 && (
                                 <div className="rounded-[1.5rem] border border-dashed border-gray-200 bg-white/70 p-6 text-sm font-bold text-gray-500 dark:border-gray-800 dark:bg-gray-950/70 dark:text-gray-400 sm:col-span-2 lg:col-span-4">
-                                    Tidak ada resource yang cocok dengan kategori dan kata kunci ini.
+                                    Materi belum tersedia untuk minggu ini.
                                 </div>
                             )}
-                        </div>
+                        </div> : (
+                            <div className="rounded-2xl border border-dashed border-gray-300 bg-white/70 px-5 py-8 text-center dark:border-gray-700 dark:bg-gray-950/70">
+                                <AutoStoriesIcon sx={{ fontSize: 30 }} className="mb-2 text-amber-500" />
+                                <p className="font-black text-gray-900 dark:text-white">Materi akan muncul setelah kelas aktif</p>
+                                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Pilih kelas untuk membuka materi mingguan sesuai roadmap.</p>
+                            </div>
+                        )}
                     </section>
 
                     <section className="overflow-hidden rounded-[1.5rem] border border-red-100/80 bg-white/72 p-4 shadow-xl shadow-red-900/5 backdrop-blur-md sm:rounded-[2rem] sm:p-7 dark:border-gray-800 dark:bg-gray-900/72">

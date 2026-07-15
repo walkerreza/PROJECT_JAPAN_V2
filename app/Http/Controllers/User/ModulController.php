@@ -198,6 +198,10 @@ class ModulController extends Controller
             $query->where('jlpt_level', $request->jlpt_level);
         }
 
+        if ($request->filled('content_type') && $request->content_type !== 'all') {
+            $query->where('content_type', $request->content_type);
+        }
+
         $categories = $this->vocabularyQueryForModules($queryModuleIds)
             ->whereNotNull('category')
             ->distinct()
@@ -223,7 +227,7 @@ class ModulController extends Controller
                 ->orderBy('word')
                 ->paginate(18)
                 ->withQueryString(),
-            'filters' => $request->only('search', 'category', 'jlpt_level', 'module'),
+            'filters' => $request->only('search', 'category', 'jlpt_level', 'module', 'content_type'),
             'categories' => $categories,
         ]);
     }
@@ -478,9 +482,12 @@ class ModulController extends Controller
         return Kosakata::query()
             ->select('vocabulary_bank.*')
             ->where('status', 'published')
-            ->whereHas('flashcards.set', fn ($query) => $query
-                ->whereIn('module_id', $moduleIds)
-                ->where('status', 'published'))
+            ->where(function ($query) use ($moduleIds) {
+                $query->whereIn('module_id', $moduleIds)
+                    ->orWhereHas('flashcards.set', fn ($query) => $query
+                        ->whereIn('module_id', $moduleIds)
+                        ->where('status', 'published'));
+            })
             ->distinct();
     }
 

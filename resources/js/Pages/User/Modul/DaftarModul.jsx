@@ -74,7 +74,7 @@ function WeekTooltip({ week, onStart, placement = 'right' }) {
                 </button>
             )}
             {week.status === 'active' && hasContent && !hasStudyContent && (
-                <span className="text-gray-500 text-xs font-bold">Buka detail untuk memilih PPT atau kosakata.</span>
+                <span className="text-gray-500 text-xs font-bold">Buka detail untuk memilih PPT atau Konten N3.</span>
             )}
             {week.status === 'active' && !hasContent && (
                 <span className="text-gray-500 text-xs font-bold">Konten belum tersedia.</span>
@@ -124,7 +124,7 @@ function ModulDetailPanel({ week, onClose }) {
             tone: 'border-sky-100 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/25 dark:text-sky-300',
         },
         {
-            label: 'Kosakata',
+            label: 'Konten N3',
             count: week.vocabulary_count ?? 0,
             href: week.vocabulary_url,
             icon: <TranslateIcon sx={{ fontSize: 22 }} />,
@@ -236,7 +236,7 @@ function ResourceBar({ resources = {} }) {
             tone: 'from-sky-500 to-cyan-600',
         },
         {
-            label: 'Kosakata',
+            label: 'Konten N3',
             count: resources.vocabulary_count ?? 0,
             href: resources.vocabulary_url,
             icon: <TranslateIcon sx={{ fontSize: 22 }} />,
@@ -363,7 +363,7 @@ export default function DaftarModul({ weeks = [], userProgress = {}, program = n
                             {program?.title ? `Peta ${program.title}` : 'Peta Perjalanan Mingguan'}
                         </h1>
                         <p className="text-gray-500 dark:text-gray-400 text-sm lg:text-base leading-relaxed">
-                            Setiap minggu berisi <strong>PPT/Kosakata</strong> sebagai penunjang, lalu <strong>Flashcard</strong> dan <strong>Kuis</strong> sebagai jalur utama. Selesaikan satu minggu untuk membuka minggu berikutnya.
+                            Setiap minggu berisi <strong>PPT/Konten N3</strong> sebagai penunjang, lalu <strong>Flashcard</strong> dan <strong>Kuis</strong> sebagai jalur utama. Selesaikan satu minggu untuk membuka minggu berikutnya.
                         </p>
 
                         {/* Stats mini */}

@@ -97,7 +97,7 @@ export default function BuilderMateri({
                                         <p className="text-xs font-black uppercase tracking-[0.28em] text-[#E64A19]">Workflow Modul Mingguan</p>
                                         <h1 className="mt-1 text-2xl font-black text-gray-900 dark:text-white">{module.title}</h1>
                                         <p className="mt-2 text-sm font-semibold text-gray-500 dark:text-gray-400">
-                                            {programTitle} - Week {module.week_number || '-'} - {module.description || 'Kelola PPT, kosakata, flashcard, dan kuis dalam satu tempat.'}
+                                            {programTitle} - Week {module.week_number || '-'} - {module.description || 'Kelola PPT, Bank Konten N3, flashcard, dan kuis dalam satu tempat.'}
                                         </p>
                                     </div>
                                 </div>
@@ -115,7 +115,7 @@ export default function BuilderMateri({
                                     <p className="mt-1 text-2xl font-black text-gray-900 dark:text-white">{presentations.length}</p>
                                 </div>
                                 <div className="rounded-2xl bg-white/80 p-4 shadow-sm dark:bg-gray-900/70">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Kosakata N3</p>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Konten N3</p>
                                     <p className="mt-1 text-2xl font-black text-gray-900 dark:text-white">{vocabularyStats.n3 || 0}</p>
                                 </div>
                                 <div className="rounded-2xl bg-white/80 p-4 shadow-sm dark:bg-gray-900/70">
@@ -164,12 +164,12 @@ export default function BuilderMateri({
                             tone="blue"
                             icon={<LibraryBooksIcon sx={{ fontSize: 26 }} />}
                             eyebrow="Library"
-                            title="Kosakata N3"
-                            description="Bank kosakata dipakai untuk flashcard dan generate soal kuis."
+                            title="Bank Konten N3"
+                            description="Kosakata, kanji, dan bunpo dipakai untuk flashcard dan generate soal kuis."
                             count={vocabularyStats.published || 0}
                             countLabel="published"
                             actionHref={route('admin.vocabulary.index')}
-                            actionLabel="Buka Kosakata"
+                            actionLabel="Buka Bank Konten"
                         >
                             <div className="grid grid-cols-3 gap-3">
                                 <div className="rounded-2xl bg-gray-50 p-4 text-center dark:bg-gray-950/40">
@@ -186,7 +186,7 @@ export default function BuilderMateri({
                                 </div>
                             </div>
                             <p className="mt-4 text-xs font-semibold text-gray-500 dark:text-gray-400">
-                                Catatan: kosakata saat ini masih library global, belum dikunci per modul.
+                                Konten dapat dibuat global atau dikunci ke modul ini. Filter module di Bank Konten N3 untuk input cepat.
                             </p>
                         </ContentCard>
 

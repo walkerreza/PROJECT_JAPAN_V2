@@ -78,7 +78,12 @@ class AdminFlashcardController extends Controller
     {
         $flashcardSet->load(['level:id,level_name', 'module:id,title,week_number', 'flashcards.vocabulary']);
 
-        $vocabularyQuery = Kosakata::query()->orderBy('word');
+        $vocabularyQuery = Kosakata::query()
+            ->where(function ($query) use ($flashcardSet) {
+                $query->whereNull('module_id')
+                    ->orWhere('module_id', $flashcardSet->module_id);
+            })
+            ->orderBy('word');
 
         if ($request->filled('search')) {
             $search = $request->string('search')->toString();
@@ -94,10 +99,14 @@ class AdminFlashcardController extends Controller
             $vocabularyQuery->where('status', $request->status);
         }
 
+        if ($request->filled('content_type') && $request->content_type !== 'all') {
+            $vocabularyQuery->where('content_type', $request->content_type);
+        }
+
         return Inertia::render('Admin/Flashcard/BuilderFlashcard', [
             'set' => $flashcardSet,
             'vocabulary' => $vocabularyQuery->paginate(12)->withQueryString(),
-            'filters' => $request->only('search', 'status'),
+            'filters' => $request->only('search', 'status', 'content_type'),
             'quizzes' => Kuis::with('module:id,title,week_number')->orderByDesc('id')->get(['id', 'module_id', 'type', 'status']),
         ]);
     }

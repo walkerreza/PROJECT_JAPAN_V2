@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\KuisRequest;
+use App\Models\Kosakata;
 use App\Models\Kuis;
 use App\Models\Modul;
 use App\Services\ImportSpreadsheetService;
@@ -261,11 +262,13 @@ class AdminKuisController extends Controller
             'count' => ['required', 'integer', 'min:1', 'max:50'],
             'mode' => ['required', Rule::in(['word_to_meaning', 'meaning_to_word', 'reading_to_word'])],
             'status' => ['required', Rule::in(['published', 'draft', 'all'])],
+            'content_type' => ['nullable', Rule::in([...Kosakata::contentTypes(), 'all'])],
+            'module_id' => ['nullable', 'integer', 'exists:modules,id'],
         ]);
 
         $created = $questions->generateFromVocabulary($quiz, $validated);
 
-        return redirect()->back()->with('success', "{$created} soal berhasil dibuat dari kosakata.");
+        return redirect()->back()->with('success', "{$created} soal berhasil dibuat dari Bank Konten N3.");
     }
 
     private function kirimNotifikasiKuisTerbit(Kuis $quiz, NotifikasiPenggunaService $notifikasi): void

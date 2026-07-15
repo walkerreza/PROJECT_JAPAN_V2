@@ -48,6 +48,7 @@ export default function QuizBuilder({ quiz, questions: initialQuestions = [] }) 
 
     const { data, setData, post, processing, recentlySuccessful, errors, clearErrors } = useForm(initialForm);
     const vocabularyForm = useForm({
+        content_type: 'all',
         jlpt_level: 'N3',
         category: 'all',
         count: 10,
@@ -876,11 +877,20 @@ export default function QuizBuilder({ quiz, questions: initialQuestions = [] }) 
                 <div className="fixed inset-0 z-[70] flex items-center justify-center bg-gray-950/50 p-4 backdrop-blur-sm">
                     <form onSubmit={handleGenerateVocabularyQuestions} className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl dark:bg-gray-900">
                         <div className="mb-5">
-                            <p className="text-xs font-black uppercase tracking-[0.25em] text-orange-600">Kosakata Library</p>
-                            <h2 className="text-xl font-black text-gray-900 dark:text-white">Generate Soal dari Kosakata</h2>
+                            <p className="text-xs font-black uppercase tracking-[0.25em] text-orange-600">Bank Konten N3</p>
+                            <h2 className="text-xl font-black text-gray-900 dark:text-white">Generate Soal dari Konten N3</h2>
                             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Soal baru akan ditambahkan ke akhir quiz ini.</p>
                         </div>
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <label className="space-y-1 sm:col-span-2">
+                                <span className="text-xs font-black text-gray-500 dark:text-gray-400">Tipe Konten</span>
+                                <select value={vocabularyForm.data.content_type} onChange={(e) => vocabularyForm.setData('content_type', e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white">
+                                    <option value="all">Semua tipe</option>
+                                    <option value="kosakata">Kosakata</option>
+                                    <option value="kanji">Kanji</option>
+                                    <option value="bunpo">Bunpo</option>
+                                </select>
+                            </label>
                             <label className="space-y-1">
                                 <span className="text-xs font-black text-gray-500 dark:text-gray-400">JLPT</span>
                                 <select value={vocabularyForm.data.jlpt_level} onChange={(e) => vocabularyForm.setData('jlpt_level', e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white">

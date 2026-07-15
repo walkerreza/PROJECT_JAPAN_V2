@@ -10,6 +10,12 @@ import SearchIcon from '@mui/icons-material/Search';
 import TranslateIcon from '@mui/icons-material/Translate';
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
 
+const typeLabels = {
+    kosakata: 'Kosakata',
+    kanji: 'Kanji',
+    bunpo: 'Bunpo',
+};
+
 const cardVariants = {
     hidden: { opacity: 0, y: 18 },
     visible: (index) => ({ opacity: 1, y: 0, transition: { delay: index * 0.035, duration: 0.28, ease: 'easeOut' } }),
@@ -20,6 +26,7 @@ export default function KosakataPage({ program = {}, vocabulary = {}, filters = 
     const [search, setSearch] = useState(filters.search || '');
     const [category, setCategory] = useState(filters.category || 'all');
     const [jlptLevel, setJlptLevel] = useState(filters.jlpt_level || 'all');
+    const [contentType, setContentType] = useState(filters.content_type || 'all');
     const [moduleFilter, setModuleFilter] = useState(selected_module_id || filters.module || 'all');
 
     const stats = useMemo(() => ({
@@ -34,6 +41,7 @@ export default function KosakataPage({ program = {}, vocabulary = {}, filters = 
             search,
             category,
             jlpt_level: jlptLevel,
+            content_type: contentType,
             module: moduleFilter,
         }, {
             preserveState: true,
@@ -43,7 +51,7 @@ export default function KosakataPage({ program = {}, vocabulary = {}, filters = 
 
     return (
         <AuthenticatedLayout header={false}>
-            <Head title={`Kosakata ${program.title || 'Kelas'} - Japanlingo`} />
+            <Head title={`Konten N3 ${program.title || 'Kelas'} - Japanlingo`} />
 
             <div className="relative min-h-screen overflow-hidden bg-[#f5eadb] text-slate-900 dark:bg-gray-950 dark:text-white">
                 <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(140deg,rgba(16,185,129,0.14)_0%,transparent_32%),linear-gradient(230deg,rgba(245,158,11,0.14)_0%,transparent_34%),repeating-linear-gradient(90deg,rgba(120,53,15,0.045)_0_1px,transparent_1px_78px),repeating-linear-gradient(0deg,rgba(120,53,15,0.035)_0_1px,transparent_1px_78px)] dark:bg-[linear-gradient(140deg,rgba(16,185,129,0.10)_0%,transparent_32%),linear-gradient(230deg,rgba(245,158,11,0.10)_0%,transparent_34%)]" />
@@ -60,17 +68,17 @@ export default function KosakataPage({ program = {}, vocabulary = {}, filters = 
                                     <ArrowBackIcon sx={{ fontSize: 16 }} />
                                     Kembali ke Roadmap
                                 </Link>
-                                <p className="text-xs font-black uppercase tracking-[0.28em] text-white/75">Kamus Kosakata Kelas</p>
-                                <h1 className="mt-3 text-3xl font-black tracking-tight sm:text-5xl">{program.title || 'Kosakata JLPT'}</h1>
+                                <p className="text-xs font-black uppercase tracking-[0.28em] text-white/75">Bank Konten N3 Kelas</p>
+                                <h1 className="mt-3 text-3xl font-black tracking-tight sm:text-5xl">{program.title || 'Konten JLPT'}</h1>
                                 <p className="mt-3 max-w-2xl text-sm font-semibold leading-relaxed text-white/85">
-                                    Kosakata ini tersambung dari input admin, lalu dipakai lagi oleh flashcard dan kuis pada roadmap kelas.
+                                    Kosakata, kanji, dan bunpo ini tersambung dari input admin, lalu dipakai lagi oleh flashcard dan kuis pada roadmap kelas.
                                 </p>
                             </div>
 
                             <div className="grid grid-cols-3 gap-2 sm:gap-3">
                                 <div className="min-w-0 rounded-2xl bg-white/15 px-2 py-3 backdrop-blur sm:px-4 sm:py-4">
                                     <p className="text-2xl font-black sm:text-3xl">{stats.total}</p>
-                                    <p className="break-words text-[9px] font-bold uppercase tracking-[0.08em] text-white/70 sm:text-xs sm:tracking-wider">Kosakata</p>
+                                    <p className="break-words text-[9px] font-bold uppercase tracking-[0.08em] text-white/70 sm:text-xs sm:tracking-wider">Konten</p>
                                 </div>
                                 <div className="min-w-0 rounded-2xl bg-white/15 px-2 py-3 backdrop-blur sm:px-4 sm:py-4">
                                     <p className="text-2xl font-black sm:text-3xl">{stats.categories}</p>
@@ -84,7 +92,7 @@ export default function KosakataPage({ program = {}, vocabulary = {}, filters = 
                         </div>
                     </section>
 
-                    <form onSubmit={submitFilters} className="grid gap-3 rounded-[1.4rem] border border-white/75 bg-white/75 p-4 shadow-xl shadow-amber-900/5 backdrop-blur dark:border-gray-800 dark:bg-gray-900/75 md:grid-cols-[1fr_190px_180px_160px_auto]">
+                    <form onSubmit={submitFilters} className="grid gap-3 rounded-[1.4rem] border border-white/75 bg-white/75 p-4 shadow-xl shadow-amber-900/5 backdrop-blur dark:border-gray-800 dark:bg-gray-900/75 xl:grid-cols-[1fr_170px_190px_180px_160px_auto]">
                         <label className="flex h-12 items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 dark:border-gray-700 dark:bg-gray-950">
                             <SearchIcon sx={{ fontSize: 20 }} className="text-gray-400" />
                             <input
@@ -94,6 +102,12 @@ export default function KosakataPage({ program = {}, vocabulary = {}, filters = 
                                 placeholder="Cari kata, reading, arti..."
                             />
                         </label>
+                        <select value={contentType} onChange={(event) => setContentType(event.target.value)} className="h-12 rounded-2xl border border-gray-200 bg-white px-4 text-sm font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
+                            <option value="all">Semua Tipe</option>
+                            <option value="kosakata">Kosakata</option>
+                            <option value="kanji">Kanji</option>
+                            <option value="bunpo">Bunpo</option>
+                        </select>
                         <select value={category} onChange={(event) => setCategory(event.target.value)} className="h-12 rounded-2xl border border-gray-200 bg-white px-4 text-sm font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
                             <option value="all">Semua Kategori</option>
                             {categories.map((item) => (
@@ -133,6 +147,7 @@ export default function KosakataPage({ program = {}, vocabulary = {}, filters = 
                                         <div className="min-w-0">
                                             <div className="flex flex-wrap gap-2">
                                                 <span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">{item.jlpt_level || 'N3'}</span>
+                                                <span className="rounded-full bg-sky-50 px-3 py-1 text-[10px] font-black text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">{typeLabels[item.content_type || 'kosakata'] || 'Konten'}</span>
                                                 {item.category && (
                                                     <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-[10px] font-black text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
                                                         <CategoryIcon sx={{ fontSize: 12 }} />
@@ -176,9 +191,9 @@ export default function KosakataPage({ program = {}, vocabulary = {}, filters = 
                             <div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br ${theme.ctaBg} text-white shadow-lg`}>
                                 <TranslateIcon sx={{ fontSize: 36 }} />
                             </div>
-                            <h2 className="mt-5 text-xl font-black">Kosakata belum tersedia</h2>
+                            <h2 className="mt-5 text-xl font-black">Konten N3 belum tersedia</h2>
                             <p className="mx-auto mt-2 max-w-md text-sm font-medium text-gray-500 dark:text-gray-400">
-                                Admin perlu publish kosakata dan menghubungkannya ke flashcard kelas ini agar tampil di kamus.
+                                Admin perlu publish konten N3 dan menghubungkannya ke modul kelas ini agar tampil di halaman user.
                             </p>
                         </section>
                     )}

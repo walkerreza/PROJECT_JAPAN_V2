@@ -3,17 +3,22 @@
 namespace App\Http\Controllers\User;
 
 use App\Http\Controllers\Controller;
-use App\Models\LevelPembelajaran;
 use App\Models\Modul;
 use App\Models\Berita;
+use App\Models\DeckPresentasi;
+use App\Models\Kosakata;
 use App\Models\LogReward;
 use App\Models\KodeAkses;
 use App\Models\Kuis;
 use App\Models\PenukaranKodeAkses;
+use App\Models\ProgramPembelajaran;
+use App\Models\SetFlashcard;
 use App\Models\LogAktivitas;
 use App\Models\PengerjaanKuis;
 use App\Services\AksesLanggananService;
 use App\Services\AksesKuisPenggunaService;
+use App\Services\AksesPremiumService;
+use App\Services\KloterBelajarService;
 use App\Services\NotifikasiPenggunaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -22,7 +27,11 @@ use Inertia\Inertia;
 
 class BerandaController extends Controller
 {
-    public function index(AksesKuisPenggunaService $aksesKuis)
+    public function index(
+        AksesKuisPenggunaService $aksesKuis,
+        AksesPremiumService $aksesPremium,
+        KloterBelajarService $kloterBelajar
+    )
     {
         $user = Auth::user();
         
@@ -64,7 +73,7 @@ class BerandaController extends Controller
         return Inertia::render('User/Beranda', [
             'user' => $user,
             'recentProgress' => $user->progress()->with('module')->latest()->take(5)->get(),
-            'availableLevels' => LevelPembelajaran::with('modules')->get(),
+            'learningDashboard' => $this->learningDashboardPayload($user, $aksesPremium, $aksesKuis, $kloterBelajar),
             'rewardHistory' => LogReward::where('user_id', $user->id)->latest()->take(10)->get(),
             'news' => $news,
             'activeSubscription' => $user->subscriptions()
@@ -75,6 +84,174 @@ class BerandaController extends Controller
             'quickQuiz' => $this->quickQuizPayload($user, $aksesKuis),
             'lastCompletedQuiz' => $this->lastCompletedQuizPayload($user->id),
         ]);
+    }
+
+    private function learningDashboardPayload($user, AksesPremiumService $aksesPremium, AksesKuisPenggunaService $aksesKuis, KloterBelajarService $kloterBelajar): array
+    {
+        $programs = ProgramPembelajaran::query()
+            ->with([
+                'level:id,level_name',
+                'modules' => fn ($query) => $query
+                    ->where('status', 'published')
+                    ->orderBy('week_number')
+                    ->orderBy('id'),
+            ])
+            ->where('status', 'published')
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get()
+            ->filter(fn (ProgramPembelajaran $program) => $aksesPremium->punyaAksesKelas($user, $program->id))
+            ->values();
+
+        $moduleIds = $programs->flatMap(fn (ProgramPembelajaran $program) => $program->modules->pluck('id'));
+        $completedModuleIds = $moduleIds->isEmpty()
+            ? collect()
+            : $user->progress()
+                ->whereIn('module_id', $moduleIds)
+                ->whereNotNull('completed_at')
+                ->pluck('module_id')
+                ->unique();
+
+        $activePrograms = $programs->map(function (ProgramPembelajaran $program) use ($user, $aksesPremium, $kloterBelajar, $completedModuleIds) {
+            $kloter = $kloterBelajar->kloterAktifUser($user, $program->id);
+            $waitingForKloter = ! $kloter;
+            $modules = $waitingForKloter
+                ? collect()
+                : $program->modules
+                    ->filter(fn (Modul $module) => $aksesPremium->bolehAksesModul($user, $module))
+                    ->values();
+            $nextModule = $modules->first(fn (Modul $module) => ! $completedModuleIds->contains($module->id))
+                ?? $modules->first();
+            $completedCount = $program->modules->filter(fn (Modul $module) => $completedModuleIds->contains($module->id))->count();
+
+            return [
+                'id' => $program->id,
+                'title' => $program->title,
+                'slug' => $program->slug,
+                'level' => $program->level?->level_name,
+                'thumbnail_url' => $this->thumbnailProgramUrl($program->thumbnail_url),
+                'total_modules' => $program->modules->count(),
+                'completed_modules' => $completedCount,
+                'progress' => $program->modules->isEmpty() ? 0 : (int) round(($completedCount / $program->modules->count()) * 100),
+                'waiting_for_kloter' => $waitingForKloter,
+                'kloter_name' => $kloter?->nama,
+                'roadmap_url' => route('user.modul.program', $program->slug),
+                'next_module' => $nextModule ? [
+                    'id' => $nextModule->id,
+                    'title' => $nextModule->title,
+                    'week_number' => $nextModule->week_number,
+                ] : null,
+            ];
+        });
+
+        $primaryProgram = $activePrograms->first(fn (array $program) => $program['next_module'] !== null)
+            ?? $activePrograms->first();
+
+        $primaryModule = $primaryProgram['next_module'] ?? null;
+
+        return [
+            'programs' => $activePrograms,
+            'next_module' => $primaryModule ? [
+                ...$primaryModule,
+                'program_title' => $primaryProgram['title'],
+                'roadmap_url' => $primaryProgram['roadmap_url'],
+            ] : null,
+            'resources' => $primaryModule
+                ? $this->moduleResourcePayload($user, $primaryProgram, $primaryModule['id'], $aksesKuis)
+                : [],
+        ];
+    }
+
+    private function thumbnailProgramUrl(?string $thumbnailUrl): ?string
+    {
+        if (! $thumbnailUrl) {
+            return null;
+        }
+
+        if (str_starts_with($thumbnailUrl, 'http://') || str_starts_with($thumbnailUrl, 'https://')) {
+            return $thumbnailUrl;
+        }
+
+        $relativePath = '/' . ltrim($thumbnailUrl, '/');
+        $publicFile = public_path(ltrim($relativePath, '/'));
+
+        return is_file($publicFile)
+            ? $relativePath . '?v=' . filemtime($publicFile)
+            : $relativePath;
+    }
+
+    private function moduleResourcePayload($user, array $program, int $moduleId, AksesKuisPenggunaService $aksesKuis): array
+    {
+        $module = Modul::query()->where('status', 'published')->find($moduleId);
+
+        if (! $module) {
+            return [];
+        }
+
+        $presentationExists = DeckPresentasi::query()
+            ->where('module_id', $module->id)
+            ->where('status', 'published')
+            ->whereHas('slides')
+            ->exists();
+        $vocabularyExists = Kosakata::query()
+            ->where('status', 'published')
+            ->where(function ($query) use ($module) {
+                $query->where('module_id', $module->id)
+                    ->orWhereHas('flashcards.set', fn ($sets) => $sets
+                        ->where('module_id', $module->id)
+                        ->where('status', 'published'));
+            })
+            ->exists();
+        $flashcardSet = SetFlashcard::query()
+            ->where('module_id', $module->id)
+            ->where('status', 'published')
+            ->whereHas('flashcards')
+            ->orderBy('id')
+            ->first();
+        $quiz = Kuis::query()
+            ->where('module_id', $module->id)
+            ->where('status', 'published')
+            ->whereHas('questions')
+            ->orderBy('id')
+            ->first();
+        $quizAccess = $quiz ? $aksesKuis->status($user, $quiz) : null;
+
+        return [
+            [
+                'category' => 'presentasi',
+                'title' => 'Presentasi',
+                'description' => 'Materi visual untuk Week '.$module->week_number.'.',
+                'available' => $presentationExists,
+                'href' => $presentationExists ? route('user.modul.program.presentasi', ['program' => $program['slug'], 'module' => $module->id]) : null,
+                'message' => $presentationExists ? null : 'Presentasi belum tersedia untuk minggu ini.',
+            ],
+            [
+                'category' => 'kosakata',
+                'title' => 'Kosakata',
+                'description' => 'Review kata dan makna dari Week '.$module->week_number.'.',
+                'available' => $vocabularyExists,
+                'href' => $vocabularyExists ? route('user.modul.program.kosakata', ['program' => $program['slug'], 'module' => $module->id]) : null,
+                'message' => $vocabularyExists ? null : 'Kosakata belum tersedia untuk minggu ini.',
+            ],
+            [
+                'category' => 'flashcard',
+                'title' => 'Flashcard',
+                'description' => 'Latihan kartu sebelum mengerjakan kuis.',
+                'available' => $flashcardSet !== null,
+                'href' => $flashcardSet ? route('user.modul.lesson', $module->id) : null,
+                'message' => $flashcardSet ? null : 'Flashcard belum tersedia untuk minggu ini.',
+            ],
+            [
+                'category' => 'kuis',
+                'title' => 'Kuis',
+                'description' => 'Evaluasi pemahaman setelah materi selesai.',
+                'available' => (bool) ($quizAccess['allowed'] ?? false),
+                'href' => ($quizAccess['allowed'] ?? false) ? route('user.modul.quiz', $module->id) : null,
+                'message' => $quiz
+                    ? ($quizAccess['message'] ?? 'Kuis belum dapat dibuka.')
+                    : 'Kuis belum tersedia untuk minggu ini.',
+            ],
+        ];
     }
 
     private function quickQuizPayload($user, AksesKuisPenggunaService $aksesKuis): ?array
