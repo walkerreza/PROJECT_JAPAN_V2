@@ -7,12 +7,12 @@ import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 function NewsCard({ item, featured = false }) {
     return (
         <Link
-            href={route('user.news.show', item.id)}
+            href={route('user.news.show', item.slug || item.id)}
             className={`group block overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm transition-all hover:-translate-y-1 hover:shadow-xl dark:border-gray-800 dark:bg-gray-900 ${featured ? 'lg:grid lg:grid-cols-[1.15fr_0.85fr]' : ''}`}
         >
             <div className={`relative bg-gray-100 dark:bg-gray-800 ${featured ? 'min-h-[320px]' : 'aspect-[16/10]'}`}>
                 {item.thumbnail_url || item.cover_url ? (
-                    <img src={item.thumbnail_url || item.cover_url} alt={item.title} className="h-full w-full object-cover" />
+                    <img src={item.thumbnail_url || item.cover_url} alt={item.cover_image_alt || item.title} className="h-full w-full object-cover" />
                 ) : (
                     <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-red-50 to-gray-100 text-4xl font-black text-red-200 dark:from-gray-800 dark:to-gray-900 dark:text-gray-700">
                         JP
@@ -26,8 +26,11 @@ function NewsCard({ item, featured = false }) {
             </div>
             <div className={`flex flex-col ${featured ? 'p-8 lg:p-10' : 'p-5'}`}>
                 <div className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-gray-400">
+                    <span className="rounded-full bg-red-50 px-2.5 py-1 text-red-700 dark:bg-red-900/20 dark:text-red-300">{item.category?.replaceAll('-', ' ') || 'platform'}</span>
                     <AccessTimeIcon sx={{ fontSize: 15 }} />
                     {item.published_label || 'Japanlingo News'}
+                    <span aria-hidden="true">·</span>
+                    <span>{item.reading_time_minutes || 1} menit</span>
                 </div>
                 <h2 className={`${featured ? 'text-3xl' : 'text-lg'} font-black leading-tight text-gray-900 transition-colors group-hover:text-red-600 dark:text-white dark:group-hover:text-red-400`}>
                     {item.title}
@@ -47,6 +50,7 @@ function NewsCard({ item, featured = false }) {
 export default function NewsIndex({ featured = null, news = { data: [], links: [] } }) {
     const items = news?.data || [];
     const listItems = featured ? items.filter((item) => item.id !== featured.id) : items;
+    const topics = [...new Set(items.map((item) => item.category).filter(Boolean))];
 
     return (
         <AuthenticatedLayout>
@@ -100,8 +104,8 @@ export default function NewsIndex({ featured = null, news = { data: [], links: [
                             <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
                                 <h3 className="text-sm font-black uppercase tracking-wider text-gray-900 dark:text-white">Topik</h3>
                                 <div className="mt-4 flex flex-wrap gap-2">
-                                    {['JLPT N3', 'Kanji', 'Grammar', 'Platform Update'].map((item) => (
-                                        <span key={item} className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600 dark:bg-gray-800 dark:text-gray-300">{item}</span>
+                                    {(topics.length ? topics : ['platform']).map((item) => (
+                                        <span key={item} className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600 dark:bg-gray-800 dark:text-gray-300">{item.replaceAll('-', ' ')}</span>
                                     ))}
                                 </div>
                             </div>

@@ -29,6 +29,9 @@ class BerandaController extends Controller
         $news = Berita::query()
             ->with('attachments')
             ->where('status', 'published')
+            ->where(function ($query) {
+                $query->whereNull('published_at')->orWhere('published_at', '<=', now());
+            })
             ->whereIn('audience', ['all', 'students'])
             ->where(function ($query) {
                 $query->whereNull('starts_at')->orWhere('starts_at', '<=', now());
@@ -38,20 +41,23 @@ class BerandaController extends Controller
             })
             ->orderByDesc('is_pinned')
             ->orderByDesc('published_at')
-            ->take(3)
+            ->take(6)
             ->get()
             ->map(function (Berita $news) {
                 $thumbnailUrl = $news->thumbnailUrl();
 
                 return [
                     'id' => $news->id,
+                    'slug' => $news->slug,
                     'title' => $news->title,
                     'excerpt' => $news->excerpt,
                     'body' => $news->body,
+                    'category' => $news->category,
                     'is_pinned' => $news->is_pinned,
                     'published_at' => optional($news->published_at)->toIso8601String(),
                     'thumbnail_url' => $thumbnailUrl,
                     'cover_url' => $thumbnailUrl,
+                    'cover_image_alt' => $news->cover_image_alt,
                 ];
             });
 

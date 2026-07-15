@@ -11,11 +11,11 @@ class BeritaController extends Controller
     public function index()
     {
         $featured = $this->publishedNews()
-            ->with('attachments')
+            ->with(['attachments', 'creator:id,username'])
             ->first();
 
         $news = $this->publishedNews()
-            ->with('attachments')
+            ->with(['attachments', 'creator:id,username'])
             ->paginate(9)
             ->withQueryString()
             ->through(fn (Berita $news) => $this->mapNews($news));
@@ -31,13 +31,15 @@ class BeritaController extends Controller
         abort_unless($this->isVisibleToStudent($news), 404);
 
         $related = $this->publishedNews()
+            ->with(['attachments', 'creator:id,username'])
             ->whereKeyNot($news->id)
+            ->when($news->category, fn ($query, $category) => $query->where('category', $category))
             ->take(4)
             ->get()
             ->map(fn (Berita $item) => $this->mapNews($item));
 
         return Inertia::render('User/Berita/DetailBerita', [
-            'newsItem' => $this->mapNews($news->load('attachments')),
+            'newsItem' => $this->mapNews($news->load(['attachments', 'creator:id,username'])),
             'relatedNews' => $related,
         ]);
     }
@@ -46,6 +48,9 @@ class BeritaController extends Controller
     {
         return Berita::query()
             ->where('status', 'published')
+            ->where(function ($query) {
+                $query->whereNull('published_at')->orWhere('published_at', '<=', now());
+            })
             ->whereIn('audience', ['all', 'students'])
             ->where(function ($query) {
                 $query->whereNull('starts_at')->orWhere('starts_at', '<=', now());
@@ -62,6 +67,7 @@ class BeritaController extends Controller
     {
         return $news->status === 'published'
             && in_array($news->audience, ['all', 'students'], true)
+            && (! $news->published_at || $news->published_at->lte(now()))
             && (! $news->starts_at || $news->starts_at->lte(now()))
             && (! $news->ends_at || $news->ends_at->gte(now()));
     }
@@ -72,14 +78,22 @@ class BeritaController extends Controller
 
         return [
             'id' => $news->id,
+            'slug' => $news->slug,
             'title' => $news->title,
             'excerpt' => $news->excerpt,
             'body' => $news->body,
+            'category' => $news->category,
             'is_pinned' => $news->is_pinned,
             'published_at' => optional($news->published_at)->toIso8601String(),
             'published_label' => optional($news->published_at)->translatedFormat('d F Y'),
             'thumbnail_url' => $thumbnailUrl,
             'cover_url' => $thumbnailUrl,
+            'cover_image_alt' => $news->cover_image_alt,
+            'cover_image_caption' => $news->cover_image_caption,
+            'author_name' => $news->creator?->username ?? 'Japanlingo',
+            'reading_time_minutes' => $news->readingTimeMinutes(),
+            'seo_title' => $news->seo_title,
+            'seo_description' => $news->seo_description,
             'attachments' => $news->attachments->map(fn ($attachment) => [
                 'id' => $attachment->id,
                 'file_name' => $attachment->file_name,

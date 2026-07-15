@@ -22,7 +22,7 @@ const firstModuleFromLevel = (level) => level?.modules?.[0] || null;
 
 function StatBubble({ icon, label, value }) {
     return (
-        <div className="flex items-center gap-3 rounded-2xl border border-white/70 bg-white/90 px-5 py-3 shadow-sm backdrop-blur-sm transition-colors duration-300 dark:border-gray-800 dark:bg-gray-900/90">
+        <div className="flex min-h-11 items-center gap-2.5 rounded-2xl border border-white/70 bg-white/90 px-3 py-2 shadow-sm backdrop-blur-sm transition-colors duration-300 sm:gap-3 sm:px-5 sm:py-3 dark:border-gray-800 dark:bg-gray-900/90">
             {icon}
             <div className="text-left leading-tight">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">{label}</p>
@@ -44,7 +44,7 @@ function SectionHeader({ eyebrow, title, actionHref, actionLabel }) {
                 <h2 className="text-xl font-black text-gray-900 dark:text-white md:text-2xl">{title}</h2>
             </div>
             {actionHref && (
-                <Link href={actionHref} className="inline-flex items-center gap-1 text-sm font-black text-red-600 transition hover:text-red-700 dark:text-red-400 dark:hover:text-red-300">
+                <Link href={actionHref} className="inline-flex min-h-11 items-center gap-1 text-sm font-black text-red-600 transition lg:hover:text-red-700 dark:text-red-400 lg:dark:hover:text-red-300">
                     {actionLabel}
                     <ArrowRightAltIcon sx={{ fontSize: 20 }} />
                 </Link>
@@ -225,7 +225,7 @@ export default function BerandaUser({
                 <div className="pointer-events-none absolute right-10 top-[860px] hidden text-[10rem] font-black leading-none text-amber-900/[0.05] dark:text-white/[0.03] lg:block">語</div>
 
                 <div
-                    className="relative w-full overflow-hidden bg-cover bg-center pb-24 pt-16"
+                    className="relative w-full overflow-hidden bg-cover bg-center pb-20 pt-12 sm:pb-24 sm:pt-16"
                     style={{ backgroundImage: `url(${MountFujiBg})` }}
                 >
                     <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.18)_0%,rgba(255,255,255,0.54)_52%,rgba(246,240,232,0.92)_86%,#f6f0e8_100%)] transition-colors duration-300 dark:bg-[linear-gradient(180deg,rgba(3,7,18,0.20)_0%,rgba(3,7,18,0.55)_56%,rgba(3,7,18,0.92)_88%,#030712_100%)]" />
@@ -377,8 +377,8 @@ export default function BerandaUser({
                         message="Fokus hari ini cukup satu langkah: pilih kelas aktif, review resource, lalu selesaikan kuis. Streak dan XP akan mengikuti."
                     />
 
-                    <section className="overflow-hidden rounded-[2rem] border border-red-100/80 bg-gradient-to-br from-red-600 via-rose-600 to-amber-500 p-1 shadow-2xl shadow-red-900/12 dark:border-red-900/50">
-                        <div className="grid gap-6 rounded-[1.8rem] bg-white/92 p-5 backdrop-blur dark:bg-gray-950/88 sm:p-7 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-center">
+                    <section className="overflow-hidden rounded-[1.5rem] border border-red-100/80 bg-gradient-to-br from-red-600 via-rose-600 to-amber-500 p-1 shadow-2xl shadow-red-900/12 sm:rounded-[2rem] dark:border-red-900/50">
+                        <div className="grid gap-5 rounded-[1.4rem] bg-white/92 p-4 backdrop-blur sm:gap-6 sm:rounded-[1.8rem] sm:p-7 dark:bg-gray-950/88 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-center">
                             <div className="flex items-start gap-4">
                                 <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-red-600 text-white shadow-lg shadow-red-600/25">
                                     <DashboardIcon sx={{ fontSize: 28 }} />
@@ -387,7 +387,7 @@ export default function BerandaUser({
                                     <p className="mb-1 text-xs font-black uppercase tracking-[0.18em] text-red-600 dark:text-red-400">
                                         Lanjutkan Belajar
                                     </p>
-                                    <h2 className="text-2xl font-black text-gray-900 dark:text-white">
+                                    <h2 className="text-xl font-black text-gray-900 sm:text-2xl dark:text-white">
                                         {activeModule ? activeModule.title : 'Masuk ke kelas aktifmu'}
                                     </h2>
                                     <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-600 dark:text-gray-300">
@@ -395,7 +395,7 @@ export default function BerandaUser({
                                             ? `Lanjutkan roadmap ${activeLevel?.level_name || 'N3'} dari modul yang tersedia.`
                                             : 'Pilih kelas terlebih dahulu untuk membuka roadmap, PPT, kosakata, flashcard, dan kuis.'}
                                     </p>
-                                    <div className="mt-4 flex flex-wrap gap-2 text-xs font-black">
+                                    <div className="mt-3 flex flex-wrap gap-2 text-xs font-black sm:mt-4">
                                         <span className="rounded-full bg-red-50 px-3 py-1.5 text-red-700 dark:bg-red-950/40 dark:text-red-300">
                                             {totalModules} modul tersedia
                                         </span>
@@ -412,14 +412,14 @@ export default function BerandaUser({
                             <div className="grid gap-2">
                                 <Link
                                     href={route('user.kelas.index')}
-                                    className={`inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r ${theme.ctaBg} px-6 py-3 text-sm font-black text-white shadow-lg shadow-red-900/15 transition hover:-translate-y-0.5 hover:brightness-95`}
+                                    className={`inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r ${theme.ctaBg} px-6 py-3 text-sm font-black text-white shadow-lg shadow-red-900/15 transition lg:hover:-translate-y-0.5 lg:hover:brightness-95`}
                                 >
                                     Masuk Kelas
                                     <ArrowRightAltIcon sx={{ fontSize: 22 }} />
                                 </Link>
                                 <Link
                                     href={route('user.progress')}
-                                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-100 bg-white px-6 py-3 text-sm font-black text-red-700 transition hover:bg-red-50 dark:border-red-900/40 dark:bg-gray-950 dark:text-red-300 dark:hover:bg-red-950/30"
+                                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-red-100 bg-white px-6 py-3 text-sm font-black text-red-700 transition lg:hover:bg-red-50 dark:border-red-900/40 dark:bg-gray-950 dark:text-red-300 lg:dark:hover:bg-red-950/30"
                                 >
                                     Lihat Progress
                                 </Link>
@@ -427,7 +427,7 @@ export default function BerandaUser({
                         </div>
                     </section>
 
-                    <section className="rounded-[2rem] border border-white/70 bg-white/55 p-5 shadow-xl shadow-red-900/5 backdrop-blur-md dark:border-gray-800 dark:bg-gray-900/55 sm:p-7">
+                    <section className="rounded-[1.5rem] border border-white/70 bg-white/55 p-4 shadow-xl shadow-red-900/5 backdrop-blur-md sm:rounded-[2rem] sm:p-7 dark:border-gray-800 dark:bg-gray-900/55">
                         <SectionHeader
                             eyebrow="Kelas Saya"
                             title="Pilih kelas dan masuk ke roadmap"
@@ -435,7 +435,7 @@ export default function BerandaUser({
                             actionLabel="Lihat semua kelas"
                         />
 
-                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-5 lg:grid-cols-4">
                             {filteredLevels.map((level, index) => {
                                 const module = firstModuleFromLevel(level);
 
@@ -443,30 +443,32 @@ export default function BerandaUser({
                                     <Link
                                         href={route('user.kelas.index')}
                                         key={`${level.level_name || 'level'}-${index}`}
-                                        className="group block rounded-[1.5rem] border border-red-100/80 bg-white/85 p-3 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-red-900/10 dark:border-gray-800 dark:bg-gray-950/80"
+                                        className="group flex min-h-[104px] items-center gap-3 rounded-2xl border border-red-100/80 bg-white/85 p-3 shadow-sm transition-all duration-300 sm:block sm:min-h-0 sm:rounded-[1.5rem] lg:hover:-translate-y-1 lg:hover:shadow-xl lg:hover:shadow-red-900/10 dark:border-gray-800 dark:bg-gray-950/80"
                                     >
-                                        <div className="relative mb-4 aspect-[4/3] overflow-hidden rounded-2xl border border-red-100/80 bg-gradient-to-br from-red-100 via-amber-50 to-white transition-all duration-300 group-hover:shadow-md dark:border-gray-800 dark:from-red-950/40 dark:via-gray-900 dark:to-gray-950">
-                                            <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full bg-red-300/30 blur-2xl" />
-                                            <div className="absolute -bottom-8 left-4 h-24 w-24 rounded-full bg-amber-300/30 blur-2xl" />
+                                        <div className="relative mb-0 h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-red-100/80 bg-gradient-to-br from-red-100 via-amber-50 to-white transition-all duration-300 sm:mb-4 sm:h-auto sm:w-full sm:rounded-2xl sm:aspect-[4/3] lg:group-hover:shadow-md dark:border-gray-800 dark:from-red-950/40 dark:via-gray-900 dark:to-gray-950">
+                                            <div className="absolute -right-8 -top-8 hidden h-28 w-28 rounded-full bg-red-300/30 blur-2xl sm:block" />
+                                            <div className="absolute -bottom-8 left-4 hidden h-24 w-24 rounded-full bg-amber-300/30 blur-2xl sm:block" />
                                             <div className="absolute bottom-3 left-3 text-5xl font-black text-red-900/10 dark:text-white/10">週</div>
                                             {level.is_premium && (
-                                                <div className="absolute right-3 top-3 z-10 flex items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-500 px-3 py-1 text-[10px] font-black tracking-widest text-white shadow-md">
+                                                <div className="absolute right-1.5 top-1.5 z-10 flex items-center justify-center gap-1 rounded-full bg-gradient-to-r from-amber-500 to-yellow-500 px-1.5 py-1 text-[8px] font-black tracking-wider text-white shadow-md sm:right-3 sm:top-3 sm:gap-1.5 sm:px-3 sm:text-[10px] sm:tracking-widest">
                                                     <KabutoIcon className="h-3 w-3" /> PREMIUM
                                                 </div>
                                             )}
                                             <div className="relative z-10 flex h-full flex-col items-center justify-center">
-                                                <span className="text-lg font-bold tracking-widest text-gray-800 dark:text-gray-200">JLPT {level.level_name}</span>
-                                                <span className="mt-1 text-[10px] font-bold uppercase tracking-widest text-red-500">{level.modules?.length || 0} modul tersedia</span>
-                                                <div className="mt-2 h-0.5 w-8 bg-red-500" />
+                                                <span className="text-xs font-bold tracking-wide text-gray-800 sm:text-lg sm:tracking-widest dark:text-gray-200">JLPT {level.level_name}</span>
+                                                <span className="mt-1 hidden text-[10px] font-bold uppercase tracking-widest text-red-500 sm:block">{level.modules?.length || 0} modul tersedia</span>
+                                                <div className="mt-1 h-0.5 w-6 bg-red-500 sm:mt-2 sm:w-8" />
                                             </div>
                                         </div>
 
-                                        <h3 className="mb-2 line-clamp-2 font-bold leading-snug text-gray-900 transition-colors group-hover:text-red-500 dark:text-white">
-                                            {module?.title || `Kelas JLPT ${level.level_name || 'N3'}`}
-                                        </h3>
-                                        <div className="flex items-center gap-2 text-[11px] font-medium text-gray-400">
-                                            <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-                                            {module?.category || 'Roadmap mingguan'}
+                                        <div className="min-w-0 flex-1">
+                                            <h3 className="mb-1 line-clamp-2 text-sm font-bold leading-snug text-gray-900 transition-colors sm:mb-2 sm:text-base lg:group-hover:text-red-500 dark:text-white">
+                                                {module?.title || `Kelas JLPT ${level.level_name || 'N3'}`}
+                                            </h3>
+                                            <div className="flex items-center gap-2 text-[11px] font-medium text-gray-400">
+                                                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
+                                                <span className="truncate">{module?.category || 'Roadmap mingguan'}</span>
+                                            </div>
                                         </div>
                                     </Link>
                                 );
@@ -477,10 +479,10 @@ export default function BerandaUser({
                         </div>
                     </section>
 
-                    <section className="rounded-[2rem] border border-white/70 bg-white/55 p-5 shadow-xl shadow-amber-900/5 backdrop-blur-md dark:border-gray-800 dark:bg-gray-900/55 sm:p-7">
+                    <section className="rounded-[1.5rem] border border-white/70 bg-white/55 p-4 shadow-xl shadow-amber-900/5 backdrop-blur-md sm:rounded-[2rem] sm:p-7 dark:border-gray-800 dark:bg-gray-900/55">
                         <SectionHeader eyebrow="Resource Belajar" title="Buka materi pendukung kelas" />
 
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
                             {filteredResourceCards.map((item) => {
                                 const Icon = item.icon;
 
@@ -488,13 +490,14 @@ export default function BerandaUser({
                                     <Link
                                         key={item.title}
                                         href={item.href}
-                                        className="group rounded-[1.5rem] border border-white/70 bg-white/85 p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-xl dark:border-gray-800 dark:bg-gray-950/80"
+                                        className="group flex min-h-[132px] flex-col rounded-2xl border border-white/70 bg-white/85 p-3 shadow-sm transition-all sm:min-h-0 sm:rounded-[1.5rem] sm:p-5 lg:hover:-translate-y-1 lg:hover:shadow-xl dark:border-gray-800 dark:bg-gray-950/80"
                                     >
-                                        <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${item.tone} text-white shadow-lg`}>
-                                            <Icon sx={{ fontSize: 26 }} />
+                                        <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${item.tone} text-white shadow-lg sm:mb-4 sm:h-12 sm:w-12 sm:rounded-2xl`}>
+                                            <Icon sx={{ fontSize: 22 }} className="sm:hidden" />
+                                            <Icon sx={{ fontSize: 26 }} className="hidden sm:block" />
                                         </div>
-                                        <h3 className="font-black text-gray-900 transition group-hover:text-red-600 dark:text-white dark:group-hover:text-red-300">{item.title}</h3>
-                                        <p className="mt-2 text-sm font-medium leading-6 text-gray-500 dark:text-gray-400">{item.desc}</p>
+                                        <h3 className="text-sm font-black text-gray-900 transition sm:text-base lg:group-hover:text-red-600 dark:text-white lg:dark:group-hover:text-red-300">{item.title}</h3>
+                                        <p className="mt-2 hidden text-sm font-medium leading-6 text-gray-500 sm:block dark:text-gray-400">{item.desc}</p>
                                     </Link>
                                 );
                             })}
@@ -506,8 +509,8 @@ export default function BerandaUser({
                         </div>
                     </section>
 
-                    <section className="overflow-hidden rounded-[2rem] border border-red-100/80 bg-white/72 p-5 shadow-xl shadow-red-900/5 backdrop-blur-md dark:border-gray-800 dark:bg-gray-900/72 sm:p-7">
-                        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                    <section className="overflow-hidden rounded-[1.5rem] border border-red-100/80 bg-white/72 p-4 shadow-xl shadow-red-900/5 backdrop-blur-md sm:rounded-[2rem] sm:p-7 dark:border-gray-800 dark:bg-gray-900/72">
+                        <div className="flex flex-col gap-4 sm:gap-5 lg:flex-row lg:items-center lg:justify-between">
                             <div className="flex items-start gap-4">
                                 <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-red-600 text-white shadow-lg shadow-red-600/25">
                                     <QuizIcon sx={{ fontSize: 28 }} />
@@ -546,7 +549,7 @@ export default function BerandaUser({
 
                             <Link
                                 href={quickQuizUrl}
-                                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-gray-900 px-6 py-3 text-sm font-black text-white shadow-lg shadow-gray-900/15 transition-all hover:-translate-y-0.5 hover:bg-red-700 dark:bg-white dark:text-gray-950 dark:hover:bg-red-100"
+                                className="inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-2xl bg-gray-900 px-6 py-3 text-sm font-black text-white shadow-lg shadow-gray-900/15 transition-all sm:w-auto lg:hover:-translate-y-0.5 lg:hover:bg-red-700 dark:bg-white dark:text-gray-950 lg:dark:hover:bg-red-100"
                             >
                                 {quickQuiz ? 'Mulai Kuis' : (lastCompletedQuiz ? 'Quick Quiz' : 'Masuk Kelas')}
                                 <ArrowRightAltIcon sx={{ fontSize: 22 }} />
@@ -554,7 +557,7 @@ export default function BerandaUser({
                         </div>
                     </section>
 
-                    <section className="rounded-[2rem] border border-white/70 bg-white/55 p-5 shadow-xl shadow-red-900/5 backdrop-blur-md dark:border-gray-800 dark:bg-gray-900/55 sm:p-7">
+                    <section className="rounded-[1.5rem] border border-white/70 bg-white/55 p-4 shadow-xl shadow-red-900/5 backdrop-blur-md sm:rounded-[2rem] sm:p-7 dark:border-gray-800 dark:bg-gray-900/55">
                         <SectionHeader
                             eyebrow="Progress Mingguan"
                             title="Aktivitas belajar terbaru"
@@ -563,8 +566,8 @@ export default function BerandaUser({
                         />
 
                         <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-                            <div className="rounded-[1.5rem] border border-red-100/80 bg-white/85 p-5 dark:border-gray-800 dark:bg-gray-950/80">
-                                <div className="mb-4 flex items-center gap-3">
+                            <div className="rounded-2xl border border-red-100/80 bg-white/85 p-4 sm:rounded-[1.5rem] sm:p-5 dark:border-gray-800 dark:bg-gray-950/80">
+                                <div className="mb-3 flex items-center gap-3 sm:mb-4">
                                     <div className={`flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br ${theme.ctaBg} text-white`}>
                                         <CheckCircleIcon />
                                     </div>
@@ -574,27 +577,27 @@ export default function BerandaUser({
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-3 gap-2 text-center">
-                                    <div className="rounded-2xl bg-red-50 px-3 py-3 dark:bg-red-950/30">
+                                    <div className="rounded-xl bg-red-50 px-2 py-2.5 sm:rounded-2xl sm:px-3 sm:py-3 dark:bg-red-950/30">
                                         <p className="text-xl font-black text-red-600 dark:text-red-300">{user.xp || 0}</p>
                                         <p className="text-[10px] font-bold uppercase text-gray-500 dark:text-gray-400">XP</p>
                                     </div>
-                                    <div className="rounded-2xl bg-amber-50 px-3 py-3 dark:bg-amber-950/30">
+                                    <div className="rounded-xl bg-amber-50 px-2 py-2.5 sm:rounded-2xl sm:px-3 sm:py-3 dark:bg-amber-950/30">
                                         <p className="text-xl font-black text-amber-600 dark:text-amber-300">{user.streak_count || 0}</p>
                                         <p className="text-[10px] font-bold uppercase text-gray-500 dark:text-gray-400">Streak</p>
                                     </div>
-                                    <div className="rounded-2xl bg-emerald-50 px-3 py-3 dark:bg-emerald-950/30">
+                                    <div className="rounded-xl bg-emerald-50 px-2 py-2.5 sm:rounded-2xl sm:px-3 sm:py-3 dark:bg-emerald-950/30">
                                         <p className="text-xl font-black text-emerald-600 dark:text-emerald-300">{rewardHistory.length}</p>
                                         <p className="text-[10px] font-bold uppercase text-gray-500 dark:text-gray-400">Log</p>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="overflow-hidden rounded-[1.5rem] border border-red-100/70 bg-white/85 dark:border-gray-800 dark:bg-gray-950/80">
+                            <div className="overflow-hidden rounded-2xl border border-red-100/70 bg-white/85 sm:rounded-[1.5rem] dark:border-gray-800 dark:bg-gray-950/80">
                                 {recentActivities.length > 0 ? (
                                     <div className="divide-y divide-gray-50 dark:divide-gray-800">
                                         {recentActivities.map((activity, index) => (
-                                            <div key={activity.id || index} className="flex items-center justify-between gap-4 px-5 py-4 transition hover:bg-gray-50 dark:hover:bg-gray-900">
-                                                <div className="flex min-w-0 items-center gap-4">
+                                            <div key={activity.id || index} className="flex items-center justify-between gap-3 px-4 py-3 transition sm:gap-4 sm:px-5 sm:py-4 lg:hover:bg-gray-50 lg:dark:hover:bg-gray-900">
+                                                <div className="flex min-w-0 items-center gap-3 sm:gap-4">
                                                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300">
                                                         {activity.source_type === 'quiz' ? <QuizIcon sx={{ fontSize: 18 }} /> : <AutoStoriesIcon sx={{ fontSize: 18 }} />}
                                                     </div>
@@ -608,7 +611,7 @@ export default function BerandaUser({
                                                     </div>
                                                 </div>
                                                 {activity.xp_amount !== undefined && (
-                                                    <span className="shrink-0 rounded-lg bg-green-50 px-3 py-1 text-sm font-black text-green-600 dark:bg-green-900/30 dark:text-green-300">
+                                                    <span className="shrink-0 rounded-lg bg-green-50 px-2 py-1 text-xs font-black text-green-600 sm:px-3 sm:text-sm dark:bg-green-900/30 dark:text-green-300">
                                                         +{activity.xp_amount} XP
                                                     </span>
                                                 )}
@@ -624,7 +627,7 @@ export default function BerandaUser({
                         </div>
                     </section>
 
-                    <section className="rounded-[2rem] border border-white/70 bg-white/45 p-5 shadow-xl shadow-amber-900/5 backdrop-blur-md dark:border-gray-800 dark:bg-gray-900/45 sm:p-7">
+                    <section className="rounded-[1.5rem] border border-white/70 bg-white/45 p-4 shadow-xl shadow-amber-900/5 backdrop-blur-md sm:rounded-[2rem] sm:p-7 dark:border-gray-800 dark:bg-gray-900/45">
                         <SectionHeader
                             eyebrow="Update"
                             title="Berita Terkini Jepang"
@@ -632,23 +635,23 @@ export default function BerandaUser({
                             actionLabel="Lihat semua berita"
                         />
 
-                        <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
+                        <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-4 pb-2 touch-pan-x md:mx-0 md:grid md:grid-cols-2 md:gap-6 md:overflow-visible md:px-0 md:pb-0 lg:grid-cols-3 lg:gap-8">
                             {news && news.length > 0 ? news.map((item, index) => (
                                 <Link
-                                    href={route('user.news.show', item.id)}
+                                    href={route('user.news.show', item.slug || item.id)}
                                     key={item.id || index}
-                                    className="group flex h-full flex-col overflow-hidden rounded-3xl border border-amber-100/80 bg-white/90 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.08)] transition-all duration-300 hover:shadow-[0_12px_36px_-16px_rgba(120,53,15,0.28)] dark:border-gray-800 dark:bg-gray-950/90 dark:shadow-none dark:hover:border-gray-700"
+                                    className="group flex h-full w-[78vw] max-w-[19rem] shrink-0 snap-start flex-col overflow-hidden rounded-2xl border border-amber-100/80 bg-white/90 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.08)] transition-all duration-300 sm:rounded-3xl md:w-auto md:max-w-none md:shrink lg:hover:shadow-[0_12px_36px_-16px_rgba(120,53,15,0.28)] dark:border-gray-800 dark:bg-gray-950/90 dark:shadow-none lg:dark:hover:border-gray-700"
                                 >
                                     <div className="aspect-[16/9] overflow-hidden bg-gray-100 dark:bg-gray-800">
                                         {item.thumbnail_url || item.cover_url ? (
-                                            <img src={item.thumbnail_url || item.cover_url} alt={item.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                                            <img src={item.thumbnail_url || item.cover_url} alt={item.cover_image_alt || item.title} className="h-full w-full object-cover transition-transform duration-500 lg:group-hover:scale-105" />
                                         ) : (
                                             <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-red-50 to-gray-100 text-3xl font-black text-red-200 dark:from-gray-800 dark:to-gray-900 dark:text-gray-700">
                                                 JP
                                             </div>
                                         )}
                                     </div>
-                                    <div className="flex flex-grow flex-col p-6">
+                                    <div className="flex flex-grow flex-col p-4 sm:p-6">
                                         {item.is_pinned && (
                                             <div className="mb-3">
                                                 <span className="rounded-md bg-red-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-red-600 dark:bg-red-900/30 dark:text-red-400">
@@ -657,15 +660,16 @@ export default function BerandaUser({
                                             </div>
                                         )}
                                         <div className="mb-3 flex items-center gap-1.5 text-xs font-medium text-gray-400">
+                                            <span className="rounded-full bg-red-50 px-2 py-0.5 font-bold text-red-700 dark:bg-red-900/20 dark:text-red-300">{item.category?.replaceAll('-', ' ') || 'platform'}</span>
                                             <AccessTimeIcon sx={{ fontSize: 14 }} />
                                             {item.published_at
                                                 ? new Date(item.published_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
                                                 : 'Japanlingo News'}
                                         </div>
-                                        <h3 className="mb-3 text-lg font-extrabold leading-snug text-gray-900 transition-colors group-hover:text-red-600 dark:text-white dark:group-hover:text-red-400">
+                                        <h3 className="mb-2 text-lg font-extrabold leading-snug text-gray-900 transition-colors sm:mb-3 lg:group-hover:text-red-600 dark:text-white lg:dark:group-hover:text-red-400">
                                             {item.title}
                                         </h3>
-                                        <p className="mb-6 line-clamp-3 flex-grow text-sm leading-relaxed text-gray-500 dark:text-gray-400">
+                                        <p className="mb-4 line-clamp-2 flex-grow text-sm leading-relaxed text-gray-500 sm:mb-6 sm:line-clamp-3 dark:text-gray-400">
                                             {item.excerpt || (item.body ? `${item.body.replace(/<[^>]*>/g, '').substring(0, 100)}...` : 'Baca update terbaru dari Japanlingo.')}
                                         </p>
                                         <div className="mt-auto flex items-center gap-2 text-sm font-black text-red-600 dark:text-red-400">
@@ -675,7 +679,7 @@ export default function BerandaUser({
                                     </div>
                                 </Link>
                             )) : (
-                                <p className="col-span-3 text-sm text-gray-500 dark:text-gray-400">Belum ada berita terbaru.</p>
+                                <p className="w-full text-sm text-gray-500 md:col-span-2 lg:col-span-3 dark:text-gray-400">Belum ada berita terbaru.</p>
                             )}
                         </div>
                     </section>

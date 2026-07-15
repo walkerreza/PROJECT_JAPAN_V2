@@ -4,6 +4,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
+import ArticleBody from '@/Components/Features/News/ArticleBody';
 
 export default function NewsShow({ newsItem, relatedNews = [] }) {
     const images = newsItem.attachments.filter((item) => item.file_type === 'image');
@@ -13,7 +14,9 @@ export default function NewsShow({ newsItem, relatedNews = [] }) {
 
     return (
         <AuthenticatedLayout>
-            <Head title={`${newsItem.title} - Japanlingo News`} />
+            <Head title={newsItem.seo_title || `${newsItem.title} - Japanlingo News`}>
+                <meta name="description" content={newsItem.seo_description || newsItem.excerpt || 'Berita terbaru dari Japanlingo.'} />
+            </Head>
 
             <main className="min-h-screen bg-transparent pb-16 dark:bg-gray-950">
                 <article>
@@ -24,8 +27,11 @@ export default function NewsShow({ newsItem, relatedNews = [] }) {
                                 Kembali ke Portal Berita
                             </Link>
                             <div className="mt-8 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-gray-400">
+                                <span className="rounded-full bg-red-50 px-3 py-1 text-red-700 dark:bg-red-900/20 dark:text-red-300">{newsItem.category?.replaceAll('-', ' ') || 'platform'}</span>
                                 <AccessTimeIcon sx={{ fontSize: 15 }} />
                                 {newsItem.published_label || 'Japanlingo News'}
+                                <span aria-hidden="true">·</span>
+                                <span>{newsItem.reading_time_minutes || 1} menit baca</span>
                             </div>
                             <h1 className="mt-4 max-w-4xl text-3xl font-black leading-tight text-gray-900 dark:text-white md:text-5xl">
                                 {newsItem.title}
@@ -40,16 +46,16 @@ export default function NewsShow({ newsItem, relatedNews = [] }) {
 
                     {cover && (
                         <div className="mx-auto max-w-6xl px-4 pt-8 sm:px-6 lg:px-8">
-                            <img src={cover} alt={newsItem.title} className="max-h-[520px] w-full rounded-3xl object-cover shadow-sm" />
+                            <figure>
+                                <img src={cover} alt={newsItem.cover_image_alt || newsItem.title} className="max-h-[520px] w-full rounded-3xl object-cover shadow-sm" />
+                                {newsItem.cover_image_caption && <figcaption className="mt-3 text-sm text-gray-500 dark:text-gray-400">{newsItem.cover_image_caption}</figcaption>}
+                            </figure>
                         </div>
                     )}
 
                     <div className="mx-auto grid max-w-6xl grid-cols-1 gap-10 px-4 py-10 sm:px-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-8">
                         <div className="min-w-0">
-                            <div
-                                className="prose prose-gray max-w-none dark:prose-invert prose-headings:font-black prose-a:text-red-600 prose-img:rounded-2xl"
-                                dangerouslySetInnerHTML={{ __html: newsItem.body || '<p>Belum ada isi berita.</p>' }}
-                            />
+                            <ArticleBody html={newsItem.body} />
 
                             {images.length > 1 && (
                                 <section className="mt-10">
@@ -90,10 +96,16 @@ export default function NewsShow({ newsItem, relatedNews = [] }) {
                             )}
 
                             <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                                <h2 className="text-sm font-black uppercase tracking-wider text-gray-900 dark:text-white">Ditulis oleh</h2>
+                                <p className="mt-3 text-sm font-bold text-gray-700 dark:text-gray-300">{newsItem.author_name || 'Japanlingo'}</p>
+                                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{newsItem.reading_time_minutes || 1} menit waktu baca</p>
+                            </div>
+
+                            <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
                                 <h2 className="text-sm font-black uppercase tracking-wider text-gray-900 dark:text-white">Berita Lainnya</h2>
                                 <div className="mt-4 space-y-4">
                                     {relatedNews.map((item) => (
-                                        <Link key={item.id} href={route('user.news.show', item.id)} className="block border-b border-gray-100 pb-4 last:border-0 last:pb-0 dark:border-gray-800">
+                                        <Link key={item.id} href={route('user.news.show', item.slug || item.id)} className="block border-b border-gray-100 pb-4 last:border-0 last:pb-0 dark:border-gray-800">
                                             <p className="text-sm font-black leading-snug text-gray-900 hover:text-red-600 dark:text-white dark:hover:text-red-400">{item.title}</p>
                                             <p className="mt-1 text-xs font-bold text-gray-400">{item.published_label}</p>
                                         </Link>

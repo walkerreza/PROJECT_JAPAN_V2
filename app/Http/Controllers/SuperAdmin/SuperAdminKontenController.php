@@ -11,6 +11,7 @@ use App\Models\Kuis;
 use App\Services\HtmlSanitizerService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class SuperAdminKontenController extends SuperAdminDasarController
@@ -42,6 +43,7 @@ class SuperAdminKontenController extends SuperAdminDasarController
                 $this->stat('Berita Aktif', number_format(Berita::where('status', 'published')->count()), 'N'),
             ],
             'news' => $news,
+            'categories' => $this->categories(),
             'filters' => $filters,
             'updates' => LogAktivitas::with('actor:id,username')
                 ->whereIn('target_type', ['module', 'lesson', 'quiz', 'news'])
@@ -61,13 +63,12 @@ class SuperAdminKontenController extends SuperAdminDasarController
     public function store(Request $request)
     {
         $validated = $this->validateNews($request);
-
-        if ($validated['status'] === 'published' && empty($validated['published_at'])) {
-            $validated['published_at'] = now();
-        }
+        $coverImagePath = $this->storeCover($request);
 
         $news = Berita::create([
-            ...$validated,
+            ...$this->prepareNewsAttributes($validated),
+            'slug' => $this->uniqueSlug($validated['slug'] ?: $validated['title']),
+            'cover_image_path' => $coverImagePath,
             'created_by' => $request->user()->id,
             'updated_by' => $request->user()->id,
         ]);
@@ -80,13 +81,12 @@ class SuperAdminKontenController extends SuperAdminDasarController
     public function update(Request $request, Berita $news)
     {
         $validated = $this->validateNews($request);
-
-        if ($validated['status'] === 'published' && empty($validated['published_at'])) {
-            $validated['published_at'] = $news->published_at ?? now();
-        }
+        $coverImagePath = $this->storeCover($request, $news);
 
         $news->update([
-            ...$validated,
+            ...$this->prepareNewsAttributes($validated, $news),
+            'slug' => $this->uniqueSlug($validated['slug'] ?: $validated['title'], $news),
+            'cover_image_path' => $coverImagePath,
             'updated_by' => $request->user()->id,
         ]);
 
@@ -97,6 +97,10 @@ class SuperAdminKontenController extends SuperAdminDasarController
 
     public function destroy(Request $request, Berita $news)
     {
+        if ($news->cover_image_path) {
+            Storage::disk('public')->delete($news->cover_image_path);
+        }
+
         foreach ($news->attachments as $attachment) {
             if ($attachment->file_path) {
                 Storage::disk('public')->delete($attachment->file_path);
@@ -188,14 +192,21 @@ class SuperAdminKontenController extends SuperAdminDasarController
     {
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
+            'slug' => ['nullable', 'string', 'max:255'],
             'excerpt' => ['nullable', 'string', 'max:500'],
             'body' => ['nullable', 'string'],
-            'status' => ['required', 'in:draft,pending,published,archived'],
+            'status' => ['required', 'in:draft,scheduled,published,archived'],
             'audience' => ['required', 'in:students,admins,all'],
+            'category' => ['required', 'in:'.implode(',', $this->categories())],
             'is_pinned' => ['boolean'],
-            'published_at' => ['nullable', 'date'],
+            'scheduled_at' => ['nullable', 'required_if:status,scheduled', 'date', 'after:now'],
             'starts_at' => ['nullable', 'date'],
             'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
+            'cover_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
+            'cover_image_alt' => ['nullable', 'string', 'max:160', 'required_with:cover_image'],
+            'cover_image_caption' => ['nullable', 'string', 'max:255'],
+            'seo_title' => ['nullable', 'string', 'max:70'],
+            'seo_description' => ['nullable', 'string', 'max:160'],
         ]);
 
         $validated['body'] = app(HtmlSanitizerService::class)->clean($validated['body'] ?? '');
@@ -203,20 +214,83 @@ class SuperAdminKontenController extends SuperAdminDasarController
         return $validated;
     }
 
+    private function prepareNewsAttributes(array $validated, ?Berita $news = null): array
+    {
+        unset($validated['cover_image']);
+
+        if ($validated['status'] === 'scheduled') {
+            $validated['published_at'] = null;
+        } elseif ($validated['status'] === 'published') {
+            $validated['published_at'] = $news?->published_at ?? now();
+            $validated['scheduled_at'] = null;
+        } else {
+            $validated['scheduled_at'] = null;
+
+            if ($validated['status'] !== 'published') {
+                $validated['published_at'] = null;
+            }
+        }
+
+        return $validated;
+    }
+
+    private function storeCover(Request $request, ?Berita $news = null): ?string
+    {
+        if (! $request->hasFile('cover_image')) {
+            return $news?->cover_image_path;
+        }
+
+        if ($news?->cover_image_path) {
+            Storage::disk('public')->delete($news->cover_image_path);
+        }
+
+        return $request->file('cover_image')->store('uploads/news/covers', 'public');
+    }
+
+    private function uniqueSlug(string $value, ?Berita $news = null): string
+    {
+        $base = Str::slug($value) ?: 'news';
+        $slug = $base;
+        $suffix = 2;
+
+        while (Berita::query()
+            ->where('slug', $slug)
+            ->when($news, fn ($query) => $query->whereKeyNot($news->id))
+            ->exists()) {
+            $slug = "{$base}-{$suffix}";
+            $suffix++;
+        }
+
+        return $slug;
+    }
+
+    private function categories(): array
+    {
+        return ['platform', 'materi-belajar', 'tips-belajar', 'budaya-jepang', 'pengumuman'];
+    }
+
     private function mapNews(Berita $news): array
     {
         return [
             'id' => $news->id,
             'title' => $news->title,
+            'slug' => $news->slug,
             'excerpt' => $news->excerpt,
             'body' => $news->body,
             'raw_status' => $news->status,
             'raw_audience' => $news->audience,
+            'category' => $news->category,
             'is_pinned' => $news->is_pinned,
             'thumbnail_url' => $news->thumbnailUrl(),
+            'cover_url' => $news->thumbnailUrl(),
+            'cover_image_alt' => $news->cover_image_alt,
+            'cover_image_caption' => $news->cover_image_caption,
             'published_at' => optional($news->published_at)->format('Y-m-d\TH:i'),
+            'scheduled_at' => optional($news->scheduled_at)->format('Y-m-d\TH:i'),
             'starts_at' => optional($news->starts_at)->format('Y-m-d\TH:i'),
             'ends_at' => optional($news->ends_at)->format('Y-m-d\TH:i'),
+            'seo_title' => $news->seo_title,
+            'seo_description' => $news->seo_description,
             'status' => $news->is_pinned ? 'Pinned' : ucfirst($news->status),
             'audience' => ucfirst($news->audience),
             'schedule' => $news->published_at ? $news->published_at->diffForHumans() : 'Belum publish',

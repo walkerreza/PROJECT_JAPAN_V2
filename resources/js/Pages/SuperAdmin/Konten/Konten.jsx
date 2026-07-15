@@ -1,29 +1,36 @@
-import React, { lazy, Suspense, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import Card from '@/Components/UI/Card';
 import StatCard from '@/Components/Features/Dashboard/StatCard';
 import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
-
-const QuillEditor = lazy(() => import('@/Components/Features/Editor/QuillEditor'));
+import NewsEditor from '@/Components/Features/Editor/NewsEditor';
+import ArticleBody from '@/Components/Features/News/ArticleBody';
 
 const emptyNews = {
     title: '',
     excerpt: '',
     body: '',
+    slug: '',
+    category: 'platform',
     status: 'draft',
     audience: 'students',
     is_pinned: false,
-    published_at: '',
+    scheduled_at: '',
     starts_at: '',
     ends_at: '',
+    cover_image: null,
+    cover_image_alt: '',
+    cover_image_caption: '',
+    seo_title: '',
+    seo_description: '',
 };
 
 function statusClass(status) {
     if (status === 'Pinned') return 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400';
     if (status === 'Published') return 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400';
-    if (status === 'Pending') return 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400';
+    if (status === 'Scheduled') return 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400';
     if (status === 'Archived') return 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400';
     return 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400';
 }
@@ -31,6 +38,7 @@ function statusClass(status) {
 export default function Konten({
     stats = [],
     news = { data: [], links: [] },
+    categories = [],
     updates = [],
     filters = {},
 }) {
@@ -45,7 +53,7 @@ export default function Konten({
 
     const items = news?.data || [];
 
-    const { data, setData, post, put, processing, errors, reset } = useForm({ ...emptyNews });
+    const { data, setData, post, processing, errors, reset, transform } = useForm({ ...emptyNews });
     const filterForm = useForm({
         search: filters.search || '',
         status: filters.status || 'all',
@@ -57,6 +65,7 @@ export default function Konten({
 
     const openCreate = () => {
         setEditingNews(null);
+        transform((values) => values);
         reset();
         setShowForm(true);
         setAttachmentFile(null);
@@ -66,16 +75,24 @@ export default function Konten({
 
     const openEdit = (item) => {
         setEditingNews(item);
+        transform((values) => values);
         setData({
             title: item.title || '',
             excerpt: item.excerpt || '',
             body: item.body || '',
+            slug: item.slug || '',
+            category: item.category || 'platform',
             status: item.raw_status || 'draft',
             audience: item.raw_audience || 'students',
             is_pinned: Boolean(item.is_pinned),
-            published_at: item.published_at || '',
+            scheduled_at: item.scheduled_at || '',
             starts_at: item.starts_at || '',
             ends_at: item.ends_at || '',
+            cover_image: null,
+            cover_image_alt: item.cover_image_alt || '',
+            cover_image_caption: item.cover_image_caption || '',
+            seo_title: item.seo_title || '',
+            seo_description: item.seo_description || '',
         });
         setShowForm(true);
         setAttachmentFile(null);
@@ -85,6 +102,7 @@ export default function Konten({
     const closeForm = () => {
         setShowForm(false);
         setEditingNews(null);
+        transform((values) => values);
         reset();
         setAttachmentFile(null);
         setVideoEmbedUrl('');
@@ -94,15 +112,21 @@ export default function Konten({
         e.preventDefault();
 
         if (editingNews) {
-            put(route('superadmin.content.news.update', editingNews.id), {
+            transform((values) => ({ ...values, _method: 'put' }));
+            post(route('superadmin.content.news.update', editingNews.id), {
                 preserveScroll: true,
-                onSuccess: closeForm,
+                forceFormData: true,
+                onSuccess: () => {
+                    transform((values) => values);
+                    closeForm();
+                },
             });
             return;
         }
 
         post(route('superadmin.content.news.store'), {
             preserveScroll: true,
+            forceFormData: true,
             onSuccess: closeForm,
         });
     };
@@ -192,7 +216,7 @@ export default function Konten({
                         <div className="flex flex-col gap-4">
                             <div>
                                 <h2 className="text-lg font-black text-gray-900 dark:text-white">News Maker</h2>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">Draft, pending review, publish, dan arsipkan berita platform.</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Simpan draf, jadwalkan, terbitkan, dan arsipkan berita platform.</p>
                             </div>
 
                             <form onSubmit={submitFilters} className="grid grid-cols-1 gap-3 md:grid-cols-4">
@@ -205,7 +229,7 @@ export default function Konten({
                                 <select value={filterForm.data.status} onChange={(e) => filterForm.setData('status', e.target.value)} className="h-11 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 text-sm font-bold text-gray-900 dark:text-white">
                                     <option value="all">Semua status</option>
                                     <option value="draft">Draft</option>
-                                    <option value="pending">Pending</option>
+                                    <option value="scheduled">Terjadwal</option>
                                     <option value="published">Published</option>
                                     <option value="archived">Archived</option>
                                 </select>
@@ -238,7 +262,7 @@ export default function Konten({
                                     <div className="flex flex-col gap-4 sm:flex-row">
                                         <div className="h-28 w-full overflow-hidden rounded-2xl bg-gray-100 dark:bg-gray-800 sm:w-40 sm:shrink-0">
                                             {item.thumbnail_url ? (
-                                                <img src={item.thumbnail_url} alt={item.title} className="h-full w-full object-cover" />
+                                            <img src={item.thumbnail_url} alt={item.cover_image_alt || item.title} className="h-full w-full object-cover" />
                                             ) : (
                                                 <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-red-50 to-gray-100 text-2xl font-black text-red-200 dark:from-gray-800 dark:to-gray-900 dark:text-gray-700">
                                                     JP
@@ -256,6 +280,7 @@ export default function Konten({
                                         </span>
                                             </div>
                                             <div className="mt-3 flex flex-wrap gap-2">
+                                                <span className="rounded-full bg-red-50 px-3 py-1 text-[11px] font-bold text-red-700 dark:bg-red-900/20 dark:text-red-300">{item.category?.replaceAll('-', ' ')}</span>
                                                 <span className="rounded-full bg-gray-100 dark:bg-gray-800 px-3 py-1 text-[11px] font-bold text-gray-600 dark:text-gray-400">{item.audience}</span>
                                                 <span className="rounded-full bg-gray-100 dark:bg-gray-800 px-3 py-1 text-[11px] font-bold text-gray-600 dark:text-gray-400">{item.attachments.length} attachment</span>
                                             </div>
@@ -301,9 +326,9 @@ export default function Konten({
                             <h2 className="text-lg font-black text-gray-900 dark:text-white">Status Konten</h2>
                             <div className="mt-4 space-y-3">
                                 {[
-                                    'Status pending dipakai untuk review sebelum publish.',
-                                    'Upload file mendukung image dan dokumen dasar.',
-                                    'Video v1 menggunakan embed URL, bukan upload file video.',
+                                    'Draf tidak terlihat oleh user sampai diterbitkan.',
+                                    'Berita terjadwal akan dipublikasikan otomatis oleh scheduler server.',
+                                    'Gambar utama memakai alt text agar lebih ramah aksesibilitas.',
                                 ].map((item) => (
                                     <div key={item} className="rounded-2xl border border-amber-100 dark:border-amber-900/30 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-sm font-medium text-amber-700 dark:text-amber-400">
                                         {item}
@@ -359,29 +384,32 @@ export default function Konten({
                                     </div>
                                     <div>
                                         <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Isi Berita</label>
-                                        <div className="min-h-[520px] rounded-2xl border border-gray-100 bg-white p-2 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-                                            <Suspense fallback={<div className="h-[520px] animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />}>
-                                                <QuillEditor
-                                                    value={data.body}
-                                                    onChange={(value) => setData('body', value)}
-                                                    placeholder="Tulis isi berita..."
-                                                    editorMinHeight="52vh"
-                                                    uploadImageUrl={route('superadmin.content.news.editor-images.store')}
-                                                />
-                                            </Suspense>
-                                        </div>
+                                        <NewsEditor
+                                            value={data.body}
+                                            onChange={(value) => setData('body', value)}
+                                            uploadImageUrl={route('superadmin.content.news.editor-images.store')}
+                                        />
                                         {errors.body && <p className="mt-1 text-xs font-bold text-red-500">{errors.body}</p>}
                                     </div>
                                 </div>
 
                                 <div className="min-h-0 space-y-4 overflow-y-auto border-t border-gray-100 bg-gray-50/70 p-4 dark:border-gray-800 dark:bg-gray-900/40 sm:p-6 xl:border-l xl:border-t-0">
                                     <div>
+                                        <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Kategori</label>
+                                        <select value={data.category} onChange={(e) => setData('category', e.target.value)} className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm font-bold text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white">
+                                            {categories.map((category) => (
+                                                <option key={category} value={category}>{category.replaceAll('-', ' ')}</option>
+                                            ))}
+                                        </select>
+                                        {errors.category && <p className="mt-1 text-xs font-bold text-red-500">{errors.category}</p>}
+                                    </div>
+                                    <div>
                                         <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Status</label>
                                         <select value={data.status} onChange={(e) => setData('status', e.target.value)} className="h-11 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 text-sm font-bold text-gray-900 dark:text-white">
                                             <option value="draft">Draft</option>
-                                            <option value="pending">Pending</option>
-                                            <option value="published">Published</option>
-                                            <option value="archived">Archived</option>
+                                            <option value="scheduled">Terjadwal</option>
+                                            <option value="published">Terbitkan sekarang</option>
+                                            <option value="archived">Arsip</option>
                                         </select>
                                     </div>
                                     <div>
@@ -392,16 +420,53 @@ export default function Konten({
                                             <option value="all">All</option>
                                         </select>
                                     </div>
-                                    <div>
-                                        <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Publish At</label>
-                                        <input type="datetime-local" value={data.published_at} onChange={(e) => setData('published_at', e.target.value)} className="h-11 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 text-sm text-gray-900 dark:text-white" />
+                                    {data.status === 'scheduled' && (
+                                        <div>
+                                            <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Jadwalkan Terbit</label>
+                                            <input type="datetime-local" value={data.scheduled_at} onChange={(e) => setData('scheduled_at', e.target.value)} className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white" />
+                                            {errors.scheduled_at && <p className="mt-1 text-xs font-bold text-red-500">{errors.scheduled_at}</p>}
+                                        </div>
+                                    )}
+                                    <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
+                                        <div>
+                                            <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Gambar Utama</label>
+                                            {editingNews?.cover_url && !data.cover_image && (
+                                                <img src={editingNews.cover_url} alt={editingNews.cover_image_alt || editingNews.title} className="mb-3 aspect-[16/9] w-full rounded-lg object-cover" />
+                                            )}
+                                            <input type="file" accept=".jpg,.jpeg,.png,.webp" onChange={(e) => setData('cover_image', e.target.files?.[0] || null)} className="block w-full text-xs text-gray-600 dark:text-gray-300 file:mr-3 file:rounded-lg file:border-0 file:bg-red-50 file:px-3 file:py-2 file:font-bold file:text-red-700 dark:file:bg-red-900/30 dark:file:text-red-300" />
+                                            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">JPG, PNG, atau WebP. Maksimum 4 MB.</p>
+                                        </div>
+                                        <div>
+                                            <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Alt gambar</label>
+                                            <input value={data.cover_image_alt} onChange={(e) => setData('cover_image_alt', e.target.value)} placeholder="Deskripsi gambar untuk aksesibilitas" className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
+                                            {errors.cover_image_alt && <p className="mt-1 text-xs font-bold text-red-500">{errors.cover_image_alt}</p>}
+                                        </div>
+                                        <div>
+                                            <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Keterangan gambar</label>
+                                            <input value={data.cover_image_caption} onChange={(e) => setData('cover_image_caption', e.target.value)} placeholder="Opsional" className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
+                                        <p className="text-sm font-black text-gray-900 dark:text-white">URL & pencarian</p>
+                                        <div>
+                                            <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Slug URL</label>
+                                            <input value={data.slug} onChange={(e) => setData('slug', e.target.value)} placeholder="Dibuat otomatis dari judul" className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
+                                        </div>
+                                        <div>
+                                            <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Judul SEO</label>
+                                            <input value={data.seo_title} onChange={(e) => setData('seo_title', e.target.value)} maxLength={70} placeholder="Opsional, maksimal 70 karakter" className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
+                                        </div>
+                                        <div>
+                                            <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Deskripsi SEO</label>
+                                            <textarea value={data.seo_description} onChange={(e) => setData('seo_description', e.target.value)} maxLength={160} rows={3} placeholder="Opsional, maksimal 160 karakter" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
+                                        </div>
                                     </div>
                                     <div>
-                                        <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Starts At</label>
+                                        <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Mulai tampil</label>
                                         <input type="datetime-local" value={data.starts_at} onChange={(e) => setData('starts_at', e.target.value)} className="h-11 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 text-sm text-gray-900 dark:text-white" />
                                     </div>
                                     <div>
-                                        <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Ends At</label>
+                                        <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Berhenti tampil</label>
                                         <input type="datetime-local" value={data.ends_at} onChange={(e) => setData('ends_at', e.target.value)} className="h-11 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 text-sm text-gray-900 dark:text-white" />
                                     </div>
                                     <label className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-3 text-sm font-bold text-gray-700 dark:text-gray-300">
@@ -478,7 +543,8 @@ export default function Konten({
                         <article>
                             <header className="bg-gray-50 px-5 py-8 dark:bg-gray-900/40 sm:px-8">
                                 <div className="flex flex-wrap gap-2 text-xs font-black uppercase tracking-wider">
-                                    <span className="rounded-full bg-red-50 px-3 py-1 text-red-600 dark:bg-red-900/20 dark:text-red-300">{data.status || 'draft'}</span>
+                                    <span className="rounded-full bg-red-50 px-3 py-1 text-red-600 dark:bg-red-900/20 dark:text-red-300">{data.category?.replaceAll('-', ' ') || 'platform'}</span>
+                                    <span className="rounded-full bg-gray-100 px-3 py-1 text-gray-600 dark:bg-gray-800 dark:text-gray-300">{data.status || 'draft'}</span>
                                     <span className="rounded-full bg-gray-100 px-3 py-1 text-gray-600 dark:bg-gray-800 dark:text-gray-300">{data.audience || 'students'}</span>
                                     {data.is_pinned && <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">Pinned</span>}
                                 </div>
@@ -493,10 +559,7 @@ export default function Konten({
                             </header>
 
                             <div className="px-5 py-8 sm:px-8">
-                                <div
-                                    className="prose prose-lg max-w-none prose-headings:font-black prose-a:text-red-600 prose-img:rounded-3xl dark:prose-invert"
-                                    dangerouslySetInnerHTML={{ __html: data.body || '<p>Belum ada isi berita.</p>' }}
-                                />
+                                <ArticleBody html={data.body} className="prose-lg" />
                             </div>
                         </article>
                     </div>

@@ -73,6 +73,7 @@ export default function AuthenticatedLayout({ children }) {
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const menuRef = useRef(null);
+    const mobileMenuButtonRef = useRef(null);
 
     const [toastAchievements, setToastAchievements] = useState([]);
 
@@ -135,12 +136,39 @@ export default function AuthenticatedLayout({ children }) {
         const handleResize = () => {
             if (window.innerWidth < 1024) {
                 setIsExpanded(true);
+                return;
             }
+
+            setMobileOpen(false);
+            setProfileMenuOpen(false);
+            setNotificationOpen(false);
         };
         window.addEventListener('resize', handleResize);
         handleResize();
         return () => window.removeEventListener('resize', handleResize);
     }, []);
+
+    useEffect(() => {
+        if (!mobileOpen) {
+            return undefined;
+        }
+
+        const previousOverflow = document.body.style.overflow;
+        const closeOnEscape = (event) => {
+            if (event.key === 'Escape') {
+                setMobileOpen(false);
+            }
+        };
+
+        document.body.style.overflow = 'hidden';
+        document.addEventListener('keydown', closeOnEscape);
+
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            document.removeEventListener('keydown', closeOnEscape);
+            mobileMenuButtonRef.current?.focus();
+        };
+    }, [mobileOpen]);
 
     const handleMarkAsRead = (id, url = null) => {
         router.post(route('notifications.read', id), {}, {
@@ -276,6 +304,7 @@ export default function AuthenticatedLayout({ children }) {
 
     const isSuperadmin = user?.role === 'superadmin';
     const isAdmin = user?.role === 'admin' || isSuperadmin;
+    const isUser = user?.role === 'user';
     const activeMenu = isSuperadmin ? superadminMenu : (isAdmin ? adminMenu : userMenu);
     const isActivePath = (href) => typeof window !== 'undefined' && window.location.pathname.startsWith(href);
     const toggleMenuGroup = (key) => {
@@ -288,6 +317,12 @@ export default function AuthenticatedLayout({ children }) {
             [key]: !current[key],
         }));
     };
+    const closeMobileMenu = () => {
+        setMobileOpen(false);
+        setProfileMenuOpen(false);
+        setNotificationOpen(false);
+    };
+    const desktopPopoverPosition = isExpanded ? 'lg:left-[248px]' : 'lg:left-[96px]';
     const renderAdminGroup = (item) => {
         const groupActive = item.items.some((child) => isActivePath(child.href));
         const isOpen = openMenuGroups[item.key] || groupActive;
@@ -300,7 +335,7 @@ export default function AuthenticatedLayout({ children }) {
                         event.stopPropagation();
                         toggleMenuGroup(item.key);
                     }}
-                    className={`flex h-[52px] w-full ${isExpanded ? 'flex-row items-center justify-start px-4' : 'flex-col items-center justify-center px-1'} rounded-2xl py-3 transition-all ${
+                    className={`flex min-h-[52px] w-full ${isExpanded ? 'flex-row items-center justify-start px-4' : 'flex-col items-center justify-center px-1'} rounded-2xl py-3 transition-all ${
                         groupActive
                             ? 'bg-red-50 text-red-700'
                             : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
@@ -349,7 +384,7 @@ export default function AuthenticatedLayout({ children }) {
                     href={item.href}
                     preserveState
                     title="Upgrade Premium"
-                    className={`group relative mb-2 flex h-[56px] items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-amber-400 via-orange-500 to-red-600 text-white shadow-lg shadow-orange-500/25 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:shadow-orange-500/35 ${active ? 'ring-2 ring-orange-200' : ''}`}
+                    className={`group relative mb-2 flex h-[56px] items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-amber-400 via-orange-500 to-red-600 text-white shadow-lg shadow-orange-500/25 transition-all lg:hover:-translate-y-0.5 lg:hover:shadow-xl lg:hover:shadow-orange-500/35 ${active ? 'ring-2 ring-orange-200' : ''}`}
                 >
                     <span className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.35),transparent_28%)]" />
                     <span className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-white/20 backdrop-blur transition-transform group-hover:scale-110">
@@ -364,7 +399,7 @@ export default function AuthenticatedLayout({ children }) {
                 key={item.href}
                 href={item.href}
                 preserveState
-                className={`group relative mb-2 block overflow-hidden rounded-2xl bg-gradient-to-br from-amber-400 via-orange-500 to-red-600 p-[1px] shadow-lg shadow-orange-500/25 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:shadow-orange-500/35 ${active ? 'ring-2 ring-orange-200' : ''}`}
+                className={`group relative mb-2 block overflow-hidden rounded-2xl bg-gradient-to-br from-amber-400 via-orange-500 to-red-600 p-[1px] shadow-lg shadow-orange-500/25 transition-all lg:hover:-translate-y-0.5 lg:hover:shadow-xl lg:hover:shadow-orange-500/35 ${active ? 'ring-2 ring-orange-200' : ''}`}
             >
                 <span className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(255,255,255,0.45),transparent_24%)] opacity-90" />
                 <span className="relative flex min-h-[74px] items-center gap-3 rounded-2xl bg-gradient-to-br from-orange-500/20 to-red-900/20 px-4 py-3 text-white">
@@ -390,14 +425,14 @@ export default function AuthenticatedLayout({ children }) {
         <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 flex flex-col lg:flex-row w-full overflow-x-clip transition-colors duration-300">
             
             {/* ====== HEADER MOBILE ====== */}
-            <div className="lg:hidden flex items-center justify-between bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 p-3 sticky top-0 z-30 shadow-sm transition-colors duration-300">
+            <div className="lg:hidden flex min-h-[64px] items-center justify-between bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-3 py-2 sticky top-0 z-30 shadow-sm transition-colors duration-300">
                 <div className="flex items-center gap-3">
-                    <button type="button" onClick={() => setMobileOpen(true)} className="p-1 text-gray-500 hover:text-gray-900 focus:outline-none transition-colors rounded-lg hover:bg-gray-100">
+                    <button ref={mobileMenuButtonRef} type="button" onClick={() => setMobileOpen(true)} aria-label="Buka navigasi" aria-controls="main-sidebar" aria-expanded={mobileOpen} className="flex h-11 w-11 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:hover:bg-gray-800 dark:hover:text-white">
                         <MenuIcon sx={{ fontSize: 26 }} />
                     </button>
                     <span className="font-black text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-red-400 text-lg tracking-tight">Japanlingo</span>
                 </div>
-                <button type="button" onClick={() => setMobileOpen(true)} className="w-[34px] h-[34px] rounded-full bg-red-600 text-white font-black text-sm flex items-center justify-center shadow-md overflow-hidden">
+                <button type="button" onClick={() => setMobileOpen(true)} aria-label="Buka menu akun dan navigasi" className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-red-600 text-sm font-black text-white shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2">
                     {user?.avatar ? (
                         <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                     ) : (
@@ -408,28 +443,39 @@ export default function AuthenticatedLayout({ children }) {
 
             {/* ====== OVERLAY MOBILE ====== */}
             {mobileOpen && (
-                <div 
-                    className="fixed inset-0 bg-gray-900/40 backdrop-blur-[2px] z-40 lg:hidden transition-opacity"
-                    onClick={() => setMobileOpen(false)}
-                ></div>
+                <button
+                    type="button"
+                    aria-label="Tutup navigasi"
+                    className="fixed inset-0 z-40 border-0 bg-gray-900/40 backdrop-blur-[2px] transition-opacity lg:hidden"
+                    onClick={closeMobileMenu}
+                />
             )}
 
             {/* ====== SIDEBAR VERTIKAL ====== */}
-            <aside className={`flex flex-col bg-gray-100 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 fixed inset-y-0 left-0 z-[80] transform transition-all duration-300 ease-in-out ${isExpanded ? 'w-[240px]' : 'w-[88px]'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+            <aside id="main-sidebar" aria-label="Navigasi utama" className={`fixed inset-y-0 left-0 z-[80] flex w-[calc(100vw-3rem)] max-w-[20rem] flex-col border-r border-gray-200 bg-gray-100 transition-[transform,width] duration-300 ease-in-out dark:border-gray-800 dark:bg-gray-900 ${isExpanded ? 'lg:w-[240px]' : 'lg:w-[88px]'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
                 
-                <div className="p-3 flex flex-col items-center justify-center border-b border-gray-100 dark:border-gray-800 mb-4 gap-3">
-                    <button 
-                        type="button"
-                        onClick={() => setMobileOpen(false)}
-                        className="lg:hidden w-10 h-10 bg-red-50 rounded-full flex items-center justify-center shadow-sm text-red-600 border border-red-100 transition-colors mt-2"
-                    >
-                        <CloseIcon sx={{ fontSize: 22 }} />
-                    </button>
-                    <div 
+                <div className="mb-4 border-b border-gray-100 dark:border-gray-800">
+                    <div className="flex h-14 items-center justify-between px-3 lg:hidden">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                            <img src="/logo.png" alt="Japanlingo" className="h-9 w-9 shrink-0 object-contain" />
+                            <span className="truncate text-lg font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-red-400">
+                                Japanlingo
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={closeMobileMenu}
+                            aria-label="Tutup navigasi"
+                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
+                        >
+                            <CloseIcon sx={{ fontSize: 22 }} />
+                        </button>
+                    </div>
+                    <div
                         onClick={() => setIsExpanded(!isExpanded)}
-                        className={`flex items-center hover:bg-white dark:hover:bg-gray-800 cursor-pointer transition-all hidden lg:flex ${isExpanded ? 'w-full py-2 px-1 gap-3 rounded-lg' : 'justify-center w-10 h-10 rounded-lg'}`}
+                        className={`hidden cursor-pointer items-center p-3 transition-all hover:bg-white dark:hover:bg-gray-800 lg:flex ${isExpanded ? 'w-full gap-3 rounded-lg' : 'h-16 justify-center'}`}
                     >
-                        <img src="/logo.png" alt="Logo" className={`${isExpanded ? 'w-10 h-10' : 'w-8 h-8'} object-contain transition-all duration-300`} />
+                        <img src="/logo.png" alt="Logo" className={`${isExpanded ? 'h-10 w-10' : 'h-8 w-8'} object-contain transition-all duration-300`} />
                         {isExpanded && (
                             <span className="font-black text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-red-400 text-lg tracking-tight animate-in fade-in slide-in-from-left-2 duration-300">
                                 Japanlingo
@@ -438,7 +484,7 @@ export default function AuthenticatedLayout({ children }) {
                     </div>
                 </div>
 
-                <nav className="flex-1 px-3 space-y-2 overflow-y-auto hide-scrollbar" onClick={() => setMobileOpen(false)}>
+                <nav className="hide-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3 pb-3" onClick={closeMobileMenu}>
                     {activeMenu.map((item, idx) => (
                         item.variant === 'upgrade' ? renderUpgradeLink(item) : item.type === 'group' ? renderAdminGroup(item) : (
                             <SidebarLink 
@@ -456,9 +502,10 @@ export default function AuthenticatedLayout({ children }) {
 
                 <div className={`p-3 flex flex-col ${isExpanded ? 'gap-2 px-4' : 'items-center'} mt-auto border-t border-gray-200/60 dark:border-gray-800 relative`} ref={menuRef}>
                     {/* Lonceng Notifikasi */}
-                    <button 
+                    <button
+                        type="button"
                         onClick={() => { setNotificationOpen(!notificationOpen); setProfileMenuOpen(false); }}
-                        className={`w-full flex items-center ${isExpanded ? 'px-3 justify-start' : 'justify-center'} h-10 rounded-xl text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800 hover:text-gray-800 dark:hover:text-gray-200 transition-colors mb-2 relative group`}
+                        className={`relative mb-2 flex min-h-11 w-full items-center ${isExpanded ? 'justify-start px-3' : 'justify-center'} rounded-xl text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200`}
                     >
                         <NotificationsOutlinedIcon sx={{ fontSize: 24 }} />
                         {isExpanded && <span className="ml-3 text-sm font-bold animate-in fade-in slide-in-from-left-2">Notifikasi</span>}
@@ -469,14 +516,14 @@ export default function AuthenticatedLayout({ children }) {
 
                     {/* Popup Notifikasi */}
                     {notificationOpen && (
-                        <div className="absolute bottom-[110px] left-3 right-3 w-auto bg-white dark:bg-gray-900 rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.25)] border border-gray-100 dark:border-gray-800 overflow-hidden transform origin-bottom-left animate-in fade-in slide-in-from-bottom-5 duration-200 text-left lg:left-[96px] lg:right-auto lg:w-[320px] z-50">
+                        <div className={`absolute bottom-[110px] left-3 right-3 z-50 w-auto max-h-[60dvh] overflow-hidden rounded-2xl border border-gray-100 bg-white text-left shadow-[0_10px_40px_-10px_rgba(0,0,0,0.25)] transform origin-bottom-left animate-in fade-in slide-in-from-bottom-5 duration-200 dark:border-gray-800 dark:bg-gray-900 ${desktopPopoverPosition} lg:right-auto lg:w-[320px] lg:max-h-[360px]`}>
                             <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
                                 <h3 className="font-black text-gray-900 dark:text-white">Notifikasi</h3>
                                 {unreadCount > 0 && (
                                     <span onClick={handleMarkAllAsRead} className="text-[10px] text-red-600 font-bold bg-red-50 dark:bg-red-900/30 px-2 py-1 rounded-md cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors">Tandai semua dibaca</span>
                                 )}
                             </div>
-                            <div className="max-h-[300px] overflow-y-auto">
+                            <div className="max-h-[calc(60dvh-74px)] overflow-y-auto lg:max-h-[300px]">
                                 {unreadCount === 0 ? (
                                     <div className="p-6 text-center text-gray-400 dark:text-gray-500 text-xs">
                                         Tidak ada notifikasi baru.
@@ -499,9 +546,10 @@ export default function AuthenticatedLayout({ children }) {
                     )}
 
                     {/* Avatar Pemicu Popup */}
-                    <button 
+                    <button
+                        type="button"
                         onClick={() => { setProfileMenuOpen(!profileMenuOpen); setNotificationOpen(false); }}
-                        className={`w-full flex items-center ${isExpanded ? 'px-2 py-1.5 gap-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm' : 'justify-center h-[42px]'} rounded-2xl transition-all relative overflow-hidden ring-2 ${profileMenuOpen ? 'ring-gray-300 dark:ring-gray-600 ring-offset-2 dark:ring-offset-gray-900' : 'ring-transparent'}`}
+                        className={`relative flex min-h-11 w-full items-center overflow-hidden rounded-2xl ring-2 transition-all focus:outline-none focus-visible:ring-red-500 ${isExpanded ? 'gap-3 border border-gray-200 bg-white px-2 py-1.5 shadow-sm dark:border-gray-700 dark:bg-gray-800' : 'justify-center'} ${profileMenuOpen ? 'ring-gray-300 ring-offset-2 dark:ring-gray-600 dark:ring-offset-gray-900' : 'ring-transparent'}`}
                     >
                         <div className={`relative shrink-0 ${isExpanded ? 'w-8 h-8 text-sm' : 'w-[42px] h-[42px] text-xl'} rounded-full bg-red-600 text-white font-black flex items-center justify-center shadow-sm transition-all overflow-hidden`}>
                             {user?.avatar ? (
@@ -524,7 +572,7 @@ export default function AuthenticatedLayout({ children }) {
                     </button>
 
                     {profileMenuOpen && (
-                        <div className="absolute bottom-16 left-3 right-3 w-auto bg-white dark:bg-gray-900 rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.25)] border border-gray-100 dark:border-gray-800 overflow-hidden transform origin-bottom-left animate-in fade-in slide-in-from-bottom-5 duration-200 text-left lg:left-[96px] lg:right-auto lg:w-[300px]">
+                        <div className={`absolute bottom-16 left-3 right-3 z-50 w-auto max-h-[60dvh] overflow-y-auto rounded-2xl border border-gray-100 bg-white text-left shadow-[0_10px_40px_-10px_rgba(0,0,0,0.25)] transform origin-bottom-left animate-in fade-in slide-in-from-bottom-5 duration-200 dark:border-gray-800 dark:bg-gray-900 ${desktopPopoverPosition} lg:right-auto lg:w-[300px] lg:max-h-[360px]`}>
                             
                             <div className="p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer flex items-center justify-between group">
                                 <div className="flex items-center gap-3">
@@ -582,19 +630,29 @@ export default function AuthenticatedLayout({ children }) {
                 <main className="min-h-screen bg-slate-50 dark:bg-[#0b1121] text-slate-900 dark:text-slate-100 shadow-[-5px_0_30px_-10px_rgba(0,0,0,0.05)] relative z-0 transition-colors duration-300">
                     {children}
                 </main>
+                {isUser && (
+                    <footer className="border-t border-gray-200/80 bg-white px-4 py-2 text-xs text-gray-500 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-400">
+                        <div className="mx-auto flex max-w-7xl flex-col items-center justify-center gap-1 text-center sm:flex-row sm:justify-between sm:gap-4 sm:text-left">
+                            <span>© {new Date().getFullYear()} Japanlingo</span>
+                            <Link href={route('about')} className="inline-flex min-h-11 items-center px-2 font-semibold text-gray-600 transition-colors hover:text-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 dark:text-gray-300 dark:hover:text-red-400 dark:focus-visible:ring-offset-gray-950">
+                                Tentang Japanlingo
+                            </Link>
+                        </div>
+                    </footer>
+                )}
             </div>
 
             {toastAchievements.length > 0 && (
-                <div className="fixed top-6 right-6 z-[100] flex flex-col gap-3 animate-in">
+                <div className="fixed inset-x-3 top-3 z-[100] flex flex-col gap-3 animate-in sm:inset-x-auto sm:right-6 sm:top-6">
                     {toastAchievements.map((ach, i) => (
-                        <div key={i} className="bg-white rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.25)] border-2 border-amber-300 p-5 flex items-center gap-4 min-w-[320px]" style={{ animation: `fade-in-slide-up 0.4s ${i * 0.15}s both` }}>
-                            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-3xl shadow-lg shadow-amber-400/30 shrink-0">
+                        <div key={i} className="flex w-full min-w-0 items-center gap-3 rounded-2xl border-2 border-amber-300 bg-white p-4 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.25)] sm:w-[320px] sm:gap-4 sm:p-5" style={{ animation: `fade-in-slide-up 0.4s ${i * 0.15}s both` }}>
+                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 text-2xl shadow-lg shadow-amber-400/30 sm:h-14 sm:w-14 sm:text-3xl">
                                 {ach.icon || '<KabutoIcon className="w-5 h-5 inline-block text-yellow-500" />'}
                             </div>
-                            <div className="flex-1">
+                            <div className="min-w-0 flex-1">
                                 <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Lencana Terbuka!</p>
-                                <p className="font-black text-gray-900 text-sm">{ach.name}</p>
-                                <p className="text-xs text-gray-500 font-medium">{ach.description}</p>
+                                <p className="break-words text-sm font-black text-gray-900">{ach.name}</p>
+                                <p className="break-words text-xs font-medium text-gray-500">{ach.description}</p>
                                 {ach.xp_reward > 0 && <span className="text-[10px] font-black text-green-600 bg-green-50 px-2 py-0.5 rounded-full mt-1 inline-block">+{ach.xp_reward} XP</span>}
                             </div>
                         </div>
@@ -619,16 +677,16 @@ const SidebarLink = ({ href, active, children, icon, isExpanded, className = '' 
     return (
         <Link
             href={href}
-            className={`group flex min-h-[56px] w-full items-center ${isExpanded ? 'justify-start px-4 flex-row' : 'justify-center flex-col px-1'} rounded-2xl transition-all duration-200 ${
+            className={`group flex min-h-[56px] w-full items-center ${isExpanded ? 'flex-row justify-start px-4' : 'flex-col justify-center px-1'} rounded-2xl transition-all duration-200 ${
                 active
                     ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-lg shadow-red-500/20'
-                    : 'text-gray-500 hover:-translate-y-0.5 hover:bg-white hover:text-red-700 hover:shadow-md hover:shadow-red-900/5 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-red-300 dark:hover:shadow-black/20'
+                    : 'text-gray-500 lg:hover:-translate-y-0.5 lg:hover:bg-white lg:hover:text-red-700 lg:hover:shadow-md lg:hover:shadow-red-900/5 dark:text-gray-400 lg:dark:hover:bg-gray-800 lg:dark:hover:text-red-300 lg:dark:hover:shadow-black/20'
             } ${className}`}
         >
-            <span className={`flex shrink-0 items-center justify-center transition-transform duration-200 group-hover:scale-110 ${isExpanded ? 'mr-3' : 'mb-0.5'} ${active ? 'text-white' : ''}`}>
+            <span className={`flex shrink-0 items-center justify-center transition-transform duration-200 lg:group-hover:scale-110 ${isExpanded ? 'mr-3' : 'mb-0.5'} ${active ? 'text-white' : ''}`}>
                 {icon}
             </span>
-            <span className={`flex-1 truncate tracking-tight ${isExpanded ? 'text-left font-black text-[15px]' : 'w-full text-center font-black text-[11px] leading-tight'} ${active ? 'text-white' : ''}`}>
+            <span className={`min-w-0 flex-1 truncate tracking-tight ${isExpanded ? 'text-left font-black text-[15px]' : 'w-full text-center font-black text-[11px] leading-tight'} ${active ? 'text-white' : ''}`}>
                 {children}
             </span>
         </Link>
