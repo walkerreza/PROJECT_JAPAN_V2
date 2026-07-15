@@ -1,14 +1,14 @@
 <?php
 
-use App\Http\Controllers\Auth\SesiAutentikasiController;
-use App\Http\Controllers\Auth\KonfirmasiPasswordController;
-use App\Http\Controllers\Auth\NotifikasiVerifikasiEmailController;
-use App\Http\Controllers\Auth\PromptVerifikasiEmailController;
-use App\Http\Controllers\Auth\PasswordBaruController;
 use App\Http\Controllers\Auth\KataSandiController;
+use App\Http\Controllers\Auth\KonfirmasiPasswordController;
 use App\Http\Controllers\Auth\LinkResetPasswordController;
-use App\Http\Controllers\Auth\RegistrasiPenggunaController;
 use App\Http\Controllers\Auth\LoginSosialController;
+use App\Http\Controllers\Auth\NotifikasiVerifikasiEmailController;
+use App\Http\Controllers\Auth\PasswordBaruController;
+use App\Http\Controllers\Auth\PromptVerifikasiEmailController;
+use App\Http\Controllers\Auth\RegistrasiPenggunaController;
+use App\Http\Controllers\Auth\SesiAutentikasiController;
 use App\Http\Controllers\Auth\VerifikasiEmailController;
 use Illuminate\Support\Facades\Route;
 
@@ -16,7 +16,7 @@ Route::middleware('guest')->group(function () {
     Route::get('register', [RegistrasiPenggunaController::class, 'create'])
         ->name('register');
 
-    Route::post('register', [RegistrasiPenggunaController::class, 'store']);
+    Route::post('register', [RegistrasiPenggunaController::class, 'store'])->middleware('throttle:guest-sensitive');
 
     Route::get('login', [SesiAutentikasiController::class, 'create'])
         ->name('login');
@@ -33,12 +33,14 @@ Route::middleware('guest')->group(function () {
         ->name('password.request');
 
     Route::post('forgot-password', [LinkResetPasswordController::class, 'store'])
+        ->middleware('throttle:guest-sensitive')
         ->name('password.email');
 
     Route::get('reset-password/{token}', [PasswordBaruController::class, 'create'])
         ->name('password.reset');
 
     Route::post('reset-password', [PasswordBaruController::class, 'store'])
+        ->middleware('throttle:guest-sensitive')
         ->name('password.store');
 });
 

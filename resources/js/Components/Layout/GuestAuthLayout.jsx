@@ -46,10 +46,12 @@ export default function GuestAuthLayout({ children }) {
             </div>
 
             <div className="flex min-h-screen w-full flex-col overflow-y-auto bg-gray-50 lg:w-1/2">
-                <div className="px-5 py-4 sm:p-6 lg:hidden">
-                    <Link href="/" className="flex items-center gap-2 no-underline">
-                        <img src="/logo.png" alt="Japanlingo" className="h-8 w-auto" />
+                <div className="relative overflow-hidden bg-gradient-to-r from-red-700 to-red-900 px-5 py-4 sm:p-6 lg:hidden">
+                    <div className="absolute -right-5 -top-8 text-8xl font-black text-white/10" aria-hidden="true">N3</div>
+                    <Link href="/" className="relative flex items-center gap-2 no-underline">
+                        <img src="/logo.png" alt="Japanlingo" className="h-8 w-auto brightness-0 invert" />
                     </Link>
+                    <p className="relative mt-2 text-xs font-semibold tracking-wide text-white/80">JLPT N3 STRUCTURED LEARNING</p>
                 </div>
 
                 <div className="flex flex-1 items-center justify-center px-4 py-4 sm:px-6 sm:py-8 lg:px-16">

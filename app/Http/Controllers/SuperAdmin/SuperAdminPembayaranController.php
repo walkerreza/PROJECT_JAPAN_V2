@@ -269,6 +269,9 @@ class SuperAdminPembayaranController extends SuperAdminDasarController
         ]);
 
         DB::transaction(function () use ($request, $transaction) {
+            $transaction = Transaksi::query()->lockForUpdate()->findOrFail($transaction->id);
+            abort_unless($transaction->status === 'pending', 422, 'Hanya transaksi pending yang dapat disetujui.');
+
             $oldStatus = $transaction->status;
 
             $transaction->update([

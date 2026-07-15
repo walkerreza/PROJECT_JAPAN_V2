@@ -145,7 +145,7 @@ export default function Progress({
                 <div className="pointer-events-none absolute right-8 top-[700px] hidden text-[12rem] font-black leading-none text-red-900/[0.04] dark:text-white/[0.03] lg:block">練</div>
                 <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
                     {/* ── HERO SECTION ───────────────────────────────────────── */}
-                    <section className="relative overflow-hidden rounded-[2rem] mb-8 border border-white/70 bg-white/62 p-8 shadow-2xl shadow-emerald-900/5 backdrop-blur-md transition-colors duration-300 dark:border-gray-800 dark:bg-gray-900/62">
+                    <section className="relative overflow-hidden rounded-[2rem] mb-8 border border-white/70 bg-white/62 p-5 shadow-2xl shadow-emerald-900/5 backdrop-blur-md transition-colors duration-300 sm:p-8 dark:border-gray-800 dark:bg-gray-900/62">
                         {/* Kanji Watermark */}
                         <span
                             aria-hidden="true"
@@ -172,7 +172,7 @@ export default function Progress({
                                 <motion.div
                                     key={i}
                                     variants={fadeUp}
-                                    className={`relative rounded-2xl p-5 ring-1 ${s.ring} shadow-sm dark:shadow-xl ${s.glow} overflow-hidden bg-white/60 dark:bg-white/5 backdrop-blur-md transition-all duration-300`}
+                                    className={`relative rounded-2xl p-4 ring-1 ${s.ring} shadow-sm dark:shadow-xl ${s.glow} overflow-hidden bg-white/60 dark:bg-white/5 backdrop-blur-md transition-all duration-300 sm:p-5`}
                                     whileHover={{ scale: 1.03, transition: { duration: 0.2 } }}
                                 >
                                     {/* Gradient accent strip */}
@@ -180,10 +180,10 @@ export default function Progress({
                                     <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${s.gradient} flex items-center justify-center text-white mb-3 shadow-md dark:shadow-lg`}>
                                         {s.icon}
                                     </div>
-                                    <p className="text-3xl font-black text-slate-900 dark:text-white leading-none transition-colors duration-300">
+                                    <p className="text-2xl font-black text-slate-900 dark:text-white leading-none transition-colors duration-300 sm:text-3xl">
                                         <CountUp target={s.value} />
                                     </p>
-                                    <p className="text-[10px] uppercase tracking-widest font-semibold text-slate-500 dark:text-gray-400 mt-1 transition-colors duration-300">{s.label}</p>
+                                    <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-500 transition-colors duration-300 sm:text-[10px] sm:tracking-widest dark:text-gray-400">{s.label}</p>
                                 </motion.div>
                             ))}
                         </motion.div>

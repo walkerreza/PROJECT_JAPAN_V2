@@ -13,6 +13,9 @@ class Transaksi extends Model
 
     protected $fillable = [
         'transaction_code',
+        'checkout_request_key',
+        'midtrans_snap_token',
+        'midtrans_snap_redirect_url',
         'user_id',
         'payment_plan_id',
         'subscription_id',

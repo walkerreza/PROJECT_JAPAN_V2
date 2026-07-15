@@ -323,7 +323,7 @@ export default function DaftarModul({ weeks = [], userProgress = {}, program = n
         <AuthenticatedLayout header={false}>
             <Head title={`${program?.title || 'Modul'} - Japanlingo`} />
 
-            <div className="relative min-h-screen overflow-hidden bg-[#f7efe6] text-gray-900 transition-colors duration-300 dark:bg-gray-950">
+            <div className="relative min-h-screen overflow-hidden bg-[#f7efe6] pb-24 text-gray-900 transition-colors duration-300 sm:pb-0 dark:bg-gray-950">
                 <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(220,38,38,0.10)_0%,transparent_28%),linear-gradient(240deg,rgba(245,158,11,0.12)_0%,transparent_30%),repeating-linear-gradient(90deg,rgba(120,53,15,0.055)_0_1px,transparent_1px_82px),repeating-linear-gradient(0deg,rgba(120,53,15,0.045)_0_1px,transparent_1px_82px)] dark:bg-[linear-gradient(120deg,rgba(220,38,38,0.14)_0%,transparent_28%),linear-gradient(240deg,rgba(245,158,11,0.08)_0%,transparent_30%),repeating-linear-gradient(90deg,rgba(255,255,255,0.035)_0_1px,transparent_1px_82px),repeating-linear-gradient(0deg,rgba(255,255,255,0.028)_0_1px,transparent_1px_82px)]" />
                 <div className="pointer-events-none absolute left-4 top-40 hidden text-[13rem] font-black leading-none text-red-900/[0.045] dark:text-white/[0.035] lg:block">道</div>
                 <div className="pointer-events-none absolute right-8 top-[560px] hidden text-[12rem] font-black leading-none text-amber-900/[0.05] dark:text-white/[0.03] lg:block">週</div>
@@ -598,8 +598,9 @@ export default function DaftarModul({ weeks = [], userProgress = {}, program = n
                 </div>
 
                 {/* Legend */}
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-20">
-                    <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl px-5 py-3 shadow-xl flex items-center gap-5 text-xs font-bold text-gray-500">
+                <div className="fixed bottom-4 left-4 right-4 z-20 sm:bottom-6 sm:left-1/2 sm:right-auto sm:-translate-x-1/2">
+                    <div className="max-w-full overflow-x-auto rounded-2xl bg-white shadow-xl dark:bg-gray-900 sm:overflow-visible">
+                    <div className="flex min-w-max items-center gap-4 rounded-2xl border border-gray-100 px-4 py-3 text-[11px] font-bold text-gray-500 dark:border-gray-800 sm:gap-5 sm:px-5 sm:text-xs">
                         <div className="flex items-center gap-1.5">
                             <span className="w-3 h-3 rounded-full bg-green-500 inline-block" />
                             Selesai
@@ -617,6 +618,7 @@ export default function DaftarModul({ weeks = [], userProgress = {}, program = n
                             <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
                             Flashcard / Kuis
                         </div>
+                    </div>
                     </div>
                 </div>
 

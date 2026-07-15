@@ -67,18 +67,18 @@ export default function KosakataPage({ program = {}, vocabulary = {}, filters = 
                                 </p>
                             </div>
 
-                            <div className="grid grid-cols-3 gap-3">
-                                <div className="rounded-2xl bg-white/15 px-4 py-4 backdrop-blur">
-                                    <p className="text-3xl font-black">{stats.total}</p>
-                                    <p className="text-xs font-bold uppercase tracking-wider text-white/70">Kosakata</p>
+                            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                                <div className="min-w-0 rounded-2xl bg-white/15 px-2 py-3 backdrop-blur sm:px-4 sm:py-4">
+                                    <p className="text-2xl font-black sm:text-3xl">{stats.total}</p>
+                                    <p className="break-words text-[9px] font-bold uppercase tracking-[0.08em] text-white/70 sm:text-xs sm:tracking-wider">Kosakata</p>
                                 </div>
-                                <div className="rounded-2xl bg-white/15 px-4 py-4 backdrop-blur">
-                                    <p className="text-3xl font-black">{stats.categories}</p>
-                                    <p className="text-xs font-bold uppercase tracking-wider text-white/70">Kategori</p>
+                                <div className="min-w-0 rounded-2xl bg-white/15 px-2 py-3 backdrop-blur sm:px-4 sm:py-4">
+                                    <p className="text-2xl font-black sm:text-3xl">{stats.categories}</p>
+                                    <p className="break-words text-[9px] font-bold uppercase tracking-[0.08em] text-white/70 sm:text-xs sm:tracking-wider">Kategori</p>
                                 </div>
-                                <div className="rounded-2xl bg-white/15 px-4 py-4 backdrop-blur">
-                                    <p className="text-3xl font-black">{stats.shown}</p>
-                                    <p className="text-xs font-bold uppercase tracking-wider text-white/70">Tampil</p>
+                                <div className="min-w-0 rounded-2xl bg-white/15 px-2 py-3 backdrop-blur sm:px-4 sm:py-4">
+                                    <p className="text-2xl font-black sm:text-3xl">{stats.shown}</p>
+                                    <p className="break-words text-[9px] font-bold uppercase tracking-[0.08em] text-white/70 sm:text-xs sm:tracking-wider">Tampil</p>
                                 </div>
                             </div>
                         </div>
@@ -130,7 +130,7 @@ export default function KosakataPage({ program = {}, vocabulary = {}, filters = 
                                 <div className="relative overflow-hidden p-5">
                                     <div className={`absolute -right-10 -top-10 h-28 w-28 rounded-full bg-gradient-to-br ${theme.ctaBg} opacity-20`} />
                                     <div className="relative flex items-start justify-between gap-4">
-                                        <div>
+                                        <div className="min-w-0">
                                             <div className="flex flex-wrap gap-2">
                                                 <span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">{item.jlpt_level || 'N3'}</span>
                                                 {item.category && (
@@ -140,8 +140,8 @@ export default function KosakataPage({ program = {}, vocabulary = {}, filters = 
                                                     </span>
                                                 )}
                                             </div>
-                                            <h2 className={`mt-4 text-4xl font-black ${theme.heroAccent}`}>{item.word}</h2>
-                                            <p className="mt-1 text-base font-bold text-gray-500 dark:text-gray-400">{item.reading || '-'}</p>
+                                            <h2 className={`mt-4 break-words text-3xl font-black sm:text-4xl ${theme.heroAccent}`}>{item.word}</h2>
+                                            <p className="mt-1 break-words text-sm font-bold text-gray-500 sm:text-base dark:text-gray-400">{item.reading || '-'}</p>
                                         </div>
                                         <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${theme.ctaBg} text-white shadow-sm`}>
                                             <TranslateIcon />

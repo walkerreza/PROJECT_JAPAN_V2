@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\LogTransaksi;
 use App\Models\PaketPembayaran;
+use App\Models\Pengguna;
 use App\Models\Transaksi;
 use App\Services\AksesLanggananService;
 use App\Services\AksesPremiumService;
@@ -12,7 +13,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Database\QueryException;
 
 class PembayaranMidtransController extends Controller
 {
@@ -20,6 +23,7 @@ class PembayaranMidtransController extends Controller
     {
         $validated = $request->validate([
             'payment_plan_id' => ['required', 'exists:payment_plans,id'],
+            'checkout_request_key' => ['required', 'uuid'],
         ]);
 
         abort_unless($request->user()?->role === 'user', 403);
@@ -34,86 +38,28 @@ class PembayaranMidtransController extends Controller
             ->findOrFail($validated['payment_plan_id']);
         $scope = app(AksesLanggananService::class)->scopeFromPlan($plan);
 
-        $transaction = DB::transaction(function () use ($request, $plan, $scope) {
-            $transaction = Transaksi::create([
-                'transaction_code' => 'MID-' . strtoupper(Str::random(10)),
-                'user_id' => $request->user()->id,
-                'payment_plan_id' => $plan->id,
-                ...$scope,
-                'amount' => $plan->price,
-                'payment_method' => 'midtrans',
-                'status' => 'pending',
-                'notes' => 'Midtrans Snap checkout dibuat dari halaman pricing.',
-            ]);
-
-            LogTransaksi::create([
-                'transaction_id' => $transaction->id,
-                'changed_by' => $request->user()->id,
-                'new_status' => 'pending',
-                'notes' => 'Midtrans Snap checkout dibuat.',
-            ]);
-
-            return $transaction;
-        });
-
-        $payload = [
-            'transaction_details' => [
-                'order_id' => $transaction->transaction_code,
-                'gross_amount' => (int) $transaction->amount,
-            ],
-            'customer_details' => [
-                'first_name' => $request->user()->username ?: $request->user()->name,
-                'email' => $request->user()->email,
-            ],
-            'item_details' => [[
-                'id' => (string) $plan->id,
-                'price' => (int) $plan->price,
-                'quantity' => 1,
-                'name' => Str::limit($plan->name, 50, ''),
-            ]],
-            'callbacks' => [
-                'finish' => route('user.checkout', $transaction->transaction_code),
-            ],
-            'credit_card' => [
-                'secure' => (bool) config('services.midtrans.is_3ds', true),
-            ],
-        ];
-
-        $response = Http::withBasicAuth($serverKey, '')
-            ->acceptJson()
-            ->post($this->snapBaseUrl() . '/snap/v1/transactions', $payload);
-
-        if ($response->failed()) {
-            $transaction->update([
-                'status' => 'failed',
-                'processed_at' => now(),
-                'notes' => 'Gagal membuat Snap token: ' . $response->body(),
-            ]);
-
-            LogTransaksi::create([
-                'transaction_id' => $transaction->id,
-                'changed_by' => $request->user()->id,
-                'old_status' => 'pending',
-                'new_status' => 'failed',
-                'notes' => 'Gagal membuat Snap token.',
-            ]);
-
-            abort(422, 'Gagal membuat transaksi Midtrans. Cek konfigurasi Midtrans sandbox.');
-        }
-
-        app(NotifikasiPenggunaService::class)->kirimKePengguna(
-            $request->user(),
-            'payment_pending',
-            'Pembayaran dibuat',
-            'Selesaikan pembayaran agar akses belajar kamu aktif.',
-            route('user.checkout', $transaction->transaction_code),
-            ['transaction_id' => $transaction->id, 'source' => 'midtrans']
+        [$transaction, $wasCreated] = $this->createOrReuseCheckout(
+            $request,
+            $plan,
+            $scope,
+            $validated['checkout_request_key']
         );
+        $snap = $this->prepareSnapPayment($transaction, $request);
+
+        if ($wasCreated) {
+            app(NotifikasiPenggunaService::class)->kirimKePengguna(
+                $request->user(),
+                'payment_pending',
+                'Pembayaran dibuat',
+                'Selesaikan pembayaran agar akses belajar kamu aktif.',
+                route('user.checkout', $transaction->transaction_code),
+                ['transaction_id' => $transaction->id, 'source' => 'midtrans']
+            );
+        }
 
         return response()->json([
             'transaction_code' => $transaction->transaction_code,
-            'snap_token' => $response->json('token'),
-            'redirect_url' => $response->json('redirect_url'),
+            ...$snap,
         ]);
     }
 
@@ -129,44 +75,7 @@ class PembayaranMidtransController extends Controller
 
         abort_unless($transaction->status === 'pending', 422, 'Transaksi ini sudah tidak bisa dibayar ulang.');
 
-        $serverKey = config('services.midtrans.server_key');
-        abort_if(blank($serverKey), 422, 'Midtrans server key belum dikonfigurasi.');
-
-        $payload = [
-            'transaction_details' => [
-                'order_id' => $transaction->transaction_code,
-                'gross_amount' => (int) $transaction->amount,
-            ],
-            'customer_details' => [
-                'first_name' => $request->user()->username ?: $request->user()->name,
-                'email' => $request->user()->email,
-            ],
-            'item_details' => [[
-                'id' => (string) $transaction->paymentPlan->id,
-                'price' => (int) $transaction->paymentPlan->price,
-                'quantity' => 1,
-                'name' => Str::limit($transaction->paymentPlan->name, 50, ''),
-            ]],
-            'callbacks' => [
-                'finish' => route('user.checkout', $transaction->transaction_code),
-            ],
-            'credit_card' => [
-                'secure' => (bool) config('services.midtrans.is_3ds', true),
-            ],
-        ];
-
-        $response = Http::withBasicAuth($serverKey, '')
-            ->acceptJson()
-            ->post($this->snapBaseUrl() . '/snap/v1/transactions', $payload);
-
-        if ($response->failed()) {
-            abort(422, 'Gagal menyiapkan pembayaran Midtrans. Coba beberapa saat lagi.');
-        }
-
-        return response()->json([
-            'snap_token' => $response->json('token'),
-            'redirect_url' => $response->json('redirect_url'),
-        ]);
+        return response()->json($this->prepareSnapPayment($transaction, $request));
     }
 
     public function sync(Request $request, string $transactionCode): JsonResponse
@@ -182,12 +91,13 @@ class PembayaranMidtransController extends Controller
 
         $response = Http::withBasicAuth($serverKey, '')
             ->acceptJson()
-            ->get($this->apiBaseUrl() . '/v2/' . $transaction->transaction_code . '/status');
+            ->get($this->apiBaseUrl().'/v2/'.$transaction->transaction_code.'/status');
 
         if ($response->failed()) {
             abort(422, 'Gagal mengambil status transaksi dari Midtrans.');
         }
 
+        abort_unless($this->payloadMatchesTransaction($transaction, $response->json()), 422, 'Respons Midtrans tidak sesuai transaksi.');
         $this->applyMidtransStatus($transaction, $response->json(), $request->user()->id, 'Sync status Midtrans dari frontend.');
 
         $freshTransaction = $transaction->fresh(['kloterBelajar.admin']);
@@ -207,6 +117,73 @@ class PembayaranMidtransController extends Controller
         ]);
     }
 
+    public function cancel(Request $request, string $transactionCode): JsonResponse
+    {
+        abort_unless($request->user()?->role === 'user', 403);
+
+        $transaction = Transaksi::query()
+            ->where('transaction_code', $transactionCode)
+            ->where('user_id', $request->user()->id)
+            ->where('payment_method', 'midtrans')
+            ->firstOrFail();
+
+        abort_unless($transaction->status === 'pending', 422, 'Hanya transaksi yang menunggu pembayaran yang dapat dibatalkan.');
+
+        $serverKey = config('services.midtrans.server_key');
+        abort_if(blank($serverKey), 422, 'Midtrans server key belum dikonfigurasi.');
+
+        $statusResponse = Http::withBasicAuth($serverKey, '')
+            ->acceptJson()
+            ->timeout(10)
+            ->get($this->apiBaseUrl().'/v2/'.$transaction->transaction_code.'/status');
+
+        if ($statusResponse->failed()) {
+            abort(422, 'Gagal mengambil status transaksi dari Midtrans. Coba lagi beberapa saat lagi.');
+        }
+
+        abort_unless($this->payloadMatchesTransaction($transaction, $statusResponse->json()), 422, 'Respons Midtrans tidak sesuai transaksi.');
+        $this->applyMidtransStatus($transaction, $statusResponse->json(), $request->user()->id, 'Status Midtrans diperiksa sebelum pembatalan user.');
+
+        $transaction = $transaction->fresh();
+
+        if ($transaction->status !== 'pending') {
+            return response()->json([
+                'status' => $transaction->status,
+                'canceled' => false,
+                'message' => 'Status pembayaran sudah berubah. Pesanan tidak dibatalkan.',
+            ]);
+        }
+
+        $cancelResponse = Http::withBasicAuth($serverKey, '')
+            ->acceptJson()
+            ->timeout(10)
+            ->post($this->apiBaseUrl().'/v2/'.$transaction->transaction_code.'/cancel');
+
+        if ($cancelResponse->failed()) {
+            $this->refreshStatusAfterCancelFailure($transaction, $request->user()->id);
+            $transaction = $transaction->fresh();
+
+            if ($transaction->status !== 'pending') {
+                return response()->json([
+                    'status' => $transaction->status,
+                    'canceled' => false,
+                    'message' => 'Status pembayaran sudah berubah. Pesanan tidak dibatalkan.',
+                ]);
+            }
+
+            abort(422, 'Midtrans belum dapat membatalkan pesanan ini. Coba lagi beberapa saat lagi.');
+        }
+
+        abort_unless($this->payloadMatchesTransaction($transaction, $cancelResponse->json()), 422, 'Respons pembatalan Midtrans tidak sesuai transaksi.');
+        $this->applyMidtransStatus($transaction, $cancelResponse->json(), $request->user()->id, 'Pesanan dibatalkan oleh user melalui Midtrans.');
+
+        return response()->json([
+            'status' => $transaction->fresh()->status,
+            'canceled' => true,
+            'message' => 'Pesanan berhasil dibatalkan.',
+        ]);
+    }
+
     public function notification(Request $request): JsonResponse
     {
         $serverKey = config('services.midtrans.server_key');
@@ -218,25 +195,95 @@ class PembayaranMidtransController extends Controller
         $grossAmount = (string) ($payload['gross_amount'] ?? '');
         $signature = (string) ($payload['signature_key'] ?? '');
 
-        $expectedSignature = hash('sha512', $orderId . $statusCode . $grossAmount . $serverKey);
+        $expectedSignature = hash('sha512', $orderId.$statusCode.$grossAmount.$serverKey);
         abort_unless(hash_equals($expectedSignature, $signature), 403, 'Invalid Midtrans signature.');
 
         $transaction = Transaksi::where('transaction_code', $orderId)->firstOrFail();
+        abort_unless($this->payloadMatchesTransaction($transaction, $payload), 422, 'Respons Midtrans tidak sesuai transaksi.');
         $this->applyMidtransStatus($transaction, $payload, null, 'Callback Midtrans diterima.');
 
         return response()->json(['message' => 'OK']);
     }
 
+    public function reconcilePendingTransaction(Transaksi $transaction): bool
+    {
+        $serverKey = config('services.midtrans.server_key');
+
+        if (blank($serverKey)) {
+            Log::warning('Rekonsiliasi Midtrans dilewati karena server key belum dikonfigurasi.');
+
+            return false;
+        }
+
+        $response = Http::withBasicAuth($serverKey, '')
+            ->acceptJson()
+            ->timeout(10)
+            ->retry(2, 500)
+            ->get($this->apiBaseUrl().'/v2/'.$transaction->transaction_code.'/status');
+
+        if ($response->failed()) {
+            Log::warning('Rekonsiliasi Midtrans gagal mengambil status.', [
+                'transaction_id' => $transaction->id,
+                'http_status' => $response->status(),
+            ]);
+
+            return false;
+        }
+
+        if (! $this->payloadMatchesTransaction($transaction, $response->json())) {
+            Log::warning('Rekonsiliasi Midtrans menerima respons yang tidak sesuai transaksi.', [
+                'transaction_id' => $transaction->id,
+                'transaction_code' => $transaction->transaction_code,
+            ]);
+
+            return false;
+        }
+
+        $this->applyMidtransStatus($transaction, $response->json(), null, 'Rekonsiliasi transaksi pending Midtrans.');
+
+        return true;
+    }
+
+    private function refreshStatusAfterCancelFailure(Transaksi $transaction, ?int $changedBy): void
+    {
+        $serverKey = config('services.midtrans.server_key');
+
+        if (blank($serverKey)) {
+            return;
+        }
+
+        $response = Http::withBasicAuth($serverKey, '')
+            ->acceptJson()
+            ->timeout(10)
+            ->get($this->apiBaseUrl().'/v2/'.$transaction->transaction_code.'/status');
+
+        if ($response->successful() && $this->payloadMatchesTransaction($transaction, $response->json())) {
+            $this->applyMidtransStatus($transaction, $response->json(), $changedBy, 'Status Midtrans diperiksa setelah pembatalan gagal.');
+        }
+    }
+
     private function applyMidtransStatus(Transaksi $transaction, array $payload, ?int $changedBy, string $notes): void
     {
-        $oldStatus = $transaction->status;
         $newStatus = $this->mapStatus($payload['transaction_status'] ?? null, $payload['fraud_status'] ?? null);
 
-        DB::transaction(function () use ($transaction, $oldStatus, $newStatus, $payload, $changedBy, $notes) {
+        DB::transaction(function () use ($transaction, $newStatus, $payload, $changedBy, $notes) {
+            $transaction = Transaksi::query()->lockForUpdate()->findOrFail($transaction->id);
+            $oldStatus = $transaction->status;
+
+            if (! $this->canTransitionStatus($oldStatus, $newStatus)) {
+                Log::warning('Status Midtrans yang terlambat atau tidak valid diabaikan.', [
+                    'transaction_id' => $transaction->id,
+                    'old_status' => $oldStatus,
+                    'new_status' => $newStatus,
+                ]);
+
+                return;
+            }
+
             $transaction->update([
                 'status' => $newStatus,
                 'processed_at' => $newStatus === 'pending' ? null : now(),
-                'notes' => 'Midtrans status: ' . ($payload['transaction_status'] ?? '-') . '; fraud: ' . ($payload['fraud_status'] ?? '-'),
+                'notes' => 'Midtrans status: '.($payload['transaction_status'] ?? '-').'; fraud: '.($payload['fraud_status'] ?? '-'),
             ]);
 
             if ($newStatus === 'success' && $oldStatus !== 'success') {
@@ -288,6 +335,32 @@ class PembayaranMidtransController extends Controller
                 );
             }
 
+            if ($newStatus === 'refunded' && $oldStatus !== 'refunded') {
+                $refundedTransaction = $transaction->fresh(['subscription.user', 'user']);
+                app(AksesLanggananService::class)->cancelFromTransaction($refundedTransaction);
+
+                if ($refundedTransaction->user) {
+                    app(NotifikasiPenggunaService::class)->kirimKePengguna(
+                        $refundedTransaction->user,
+                        'payment_refunded',
+                        'Pembayaran dibatalkan',
+                        'Pembayaran dibatalkan atau dikembalikan. Akses dari transaksi ini telah dinonaktifkan.',
+                        route('pricing'),
+                        ['transaction_id' => $refundedTransaction->id, 'source' => 'midtrans'],
+                        'payment',
+                        'warning',
+                        true
+                    );
+                }
+
+                $this->notifySuperadminTransaction(
+                    $refundedTransaction,
+                    'payment_refunded',
+                    'Pembayaran Midtrans dibatalkan atau direfund',
+                    'warning'
+                );
+            }
+
             if ($oldStatus !== $newStatus || $notes !== 'Sync status Midtrans dari frontend.') {
                 LogTransaksi::create([
                     'transaction_id' => $transaction->id,
@@ -300,16 +373,181 @@ class PembayaranMidtransController extends Controller
         });
     }
 
+    private function createOrReuseCheckout(Request $request, PaketPembayaran $plan, array $scope, string $checkoutRequestKey): array
+    {
+        try {
+            return DB::transaction(function () use ($request, $plan, $scope, $checkoutRequestKey) {
+                Pengguna::query()
+                    ->whereKey($request->user()->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                $existing = Transaksi::query()
+                    ->where('checkout_request_key', $checkoutRequestKey)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($existing) {
+                    $this->assertReusableCheckout($existing, $request, $plan);
+
+                    return [$existing, false];
+                }
+
+                $pendingTransaction = Transaksi::query()
+                    ->where('user_id', $request->user()->id)
+                    ->where('payment_plan_id', $plan->id)
+                    ->where('payment_method', 'midtrans')
+                    ->where('status', 'pending')
+                    ->latest('id')
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($pendingTransaction) {
+                    return [$pendingTransaction, false];
+                }
+
+                $transaction = Transaksi::create([
+                    'transaction_code' => 'MID-'.strtoupper(Str::random(10)),
+                    'checkout_request_key' => $checkoutRequestKey,
+                    'user_id' => $request->user()->id,
+                    'payment_plan_id' => $plan->id,
+                    ...$scope,
+                    'amount' => $plan->price,
+                    'payment_method' => 'midtrans',
+                    'status' => 'pending',
+                    'notes' => 'Midtrans Snap checkout dibuat dari halaman pricing.',
+                ]);
+
+                LogTransaksi::create([
+                    'transaction_id' => $transaction->id,
+                    'changed_by' => $request->user()->id,
+                    'new_status' => 'pending',
+                    'notes' => 'Midtrans Snap checkout dibuat.',
+                ]);
+
+                return [$transaction, true];
+            }, 3);
+        } catch (QueryException $exception) {
+            $existing = Transaksi::query()
+                ->where('checkout_request_key', $checkoutRequestKey)
+                ->first();
+
+            if (! $existing) {
+                throw $exception;
+            }
+
+            $this->assertReusableCheckout($existing, $request, $plan);
+
+            return [$existing, false];
+        }
+    }
+
+    private function assertReusableCheckout(Transaksi $transaction, Request $request, PaketPembayaran $plan): void
+    {
+        abort_unless($transaction->user_id === $request->user()->id, 403);
+        abort_unless($transaction->payment_plan_id === $plan->id, 422, 'Checkout intent tidak sesuai paket pembayaran.');
+        abort_if($transaction->status !== 'pending', 409, 'Checkout sebelumnya sudah selesai. Buat checkout baru untuk melanjutkan.');
+    }
+
+    private function prepareSnapPayment(Transaksi $transaction, Request $request): array
+    {
+        $transaction->loadMissing('paymentPlan');
+
+        if ($transaction->midtrans_snap_token) {
+            return [
+                'snap_token' => $transaction->midtrans_snap_token,
+                'redirect_url' => $transaction->midtrans_snap_redirect_url,
+            ];
+        }
+
+        $serverKey = config('services.midtrans.server_key');
+        abort_if(blank($serverKey), 422, 'Midtrans server key belum dikonfigurasi.');
+        abort_if(! $transaction->paymentPlan, 422, 'Paket pembayaran untuk transaksi ini tidak ditemukan.');
+
+        $payload = [
+            'transaction_details' => [
+                'order_id' => $transaction->transaction_code,
+                'gross_amount' => (int) $transaction->amount,
+            ],
+            'customer_details' => [
+                'first_name' => $request->user()->username ?: $request->user()->name,
+                'email' => $request->user()->email,
+            ],
+            'item_details' => [[
+                'id' => (string) $transaction->paymentPlan->id,
+                'price' => (int) $transaction->amount,
+                'quantity' => 1,
+                'name' => Str::limit($transaction->paymentPlan->name, 50, ''),
+            ]],
+            'callbacks' => [
+                'finish' => route('user.checkout', $transaction->transaction_code),
+            ],
+            'credit_card' => [
+                'secure' => (bool) config('services.midtrans.is_3ds', true),
+            ],
+        ];
+
+        $response = Http::withBasicAuth($serverKey, '')
+            ->acceptJson()
+            ->withHeaders([
+                'Idempotency-Key' => 'snap-'.$transaction->transaction_code,
+            ])
+            ->post($this->snapBaseUrl().'/snap/v1/transactions', $payload);
+
+        if ($response->failed()) {
+            abort(422, 'Gagal menyiapkan pembayaran Midtrans. Coba beberapa saat lagi.');
+        }
+
+        return DB::transaction(function () use ($transaction, $response) {
+            $lockedTransaction = Transaksi::query()->lockForUpdate()->findOrFail($transaction->id);
+
+            if (! $lockedTransaction->midtrans_snap_token) {
+                $lockedTransaction->update([
+                    'midtrans_snap_token' => $response->json('token'),
+                    'midtrans_snap_redirect_url' => $response->json('redirect_url'),
+                ]);
+            }
+
+            return [
+                'snap_token' => $lockedTransaction->midtrans_snap_token,
+                'redirect_url' => $lockedTransaction->midtrans_snap_redirect_url,
+            ];
+        });
+    }
+
     private function mapStatus(?string $transactionStatus, ?string $fraudStatus): string
     {
         return match ($transactionStatus) {
-            'capture' => $fraudStatus === 'challenge' ? 'pending' : 'success',
+            'capture' => match ($fraudStatus) {
+                'accept' => 'success',
+                'challenge' => 'pending',
+                'deny' => 'failed',
+                default => 'pending',
+            },
             'settlement' => 'success',
-            'pending' => 'pending',
-            'deny', 'cancel', 'failure' => 'failed',
+            'pending', 'authorize' => 'pending',
+            'deny', 'failure' => 'failed',
+            'cancel' => 'canceled',
             'expire' => 'expired',
+            'refund', 'partial_refund', 'chargeback' => 'refunded',
             default => 'pending',
         };
+    }
+
+    private function payloadMatchesTransaction(Transaksi $transaction, array $payload): bool
+    {
+        return (string) ($payload['order_id'] ?? '') === $transaction->transaction_code
+            && (int) ($payload['gross_amount'] ?? -1) === (int) $transaction->amount;
+    }
+
+    private function canTransitionStatus(string $oldStatus, string $newStatus): bool
+    {
+        if (in_array($oldStatus, ['refunded', 'canceled'], true)) {
+            return $newStatus === $oldStatus;
+        }
+
+        return $oldStatus !== 'success'
+            || in_array($newStatus, ['success', 'refunded'], true);
     }
 
     private function notifySuperadminTransaction(Transaksi $transaction, string $type, string $title, string $severity): void

@@ -5,19 +5,19 @@ namespace App\Http\Controllers\User;
 use App\Http\Controllers\Controller;
 use App\Models\Flashcard;
 use App\Models\SetFlashcard;
-use App\Models\LogReward;
+use App\Services\AksesFlashcardPenggunaService;
 use App\Services\RepetisiPembelajaranService;
+use App\Services\XpService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
 class FlashcardController extends Controller
 {
-    public function show(SetFlashcard $flashcardSet)
+    public function show(SetFlashcard $flashcardSet, AksesFlashcardPenggunaService $aksesFlashcard)
     {
-        abort_unless($flashcardSet->status === 'published', 404);
-
         $user = Auth::user();
+        $aksesFlashcard->abortJikaTerkunci($user, $flashcardSet);
         $flashcardSet->load(['flashcards.vocabulary', 'flashcards.reviews' => fn ($query) => $query->where('user_id', $user->id)]);
 
         $cards = $flashcardSet->flashcards->values()->map(function ($card) {
@@ -52,32 +52,30 @@ class FlashcardController extends Controller
         ]);
     }
 
-    public function review(Request $request, Flashcard $flashcard, RepetisiPembelajaranService $repetisi)
-    {
+    public function review(
+        Request $request,
+        Flashcard $flashcard,
+        RepetisiPembelajaranService $repetisi,
+        AksesFlashcardPenggunaService $aksesFlashcard,
+        XpService $xpService
+    ) {
         $validated = $request->validate([
             'action' => ['required', 'in:known,learning'],
             'completed' => ['nullable', 'boolean'],
         ]);
 
         $user = Auth::user();
+        $aksesFlashcard->abortJikaKartuTerkunci($user, $flashcard);
         $repetisi->catatReviewFlashcard($user, $flashcard, $validated['action'] === 'known');
 
         if ($request->boolean('completed')) {
-            $exists = LogReward::where('user_id', $user->id)
-                ->where('source_type', 'flashcard')
-                ->where('source_id', $flashcard->flashcard_set_id)
-                ->exists();
-
-            if (! $exists) {
-                $user->increment('xp', 10);
-                LogReward::create([
-                    'user_id' => $user->id,
-                    'source_type' => 'flashcard',
-                    'source_id' => $flashcard->flashcard_set_id,
-                    'xp_amount' => 10,
-                    'description' => 'Menyelesaikan sesi flashcard.',
-                ]);
-            }
+            $xpService->awardXP(
+                $user,
+                10,
+                'flashcard',
+                $flashcard->flashcard_set_id,
+                'Menyelesaikan sesi flashcard.'
+            );
         }
 
         return redirect()->back()->with('success', 'Progres flashcard disimpan.');

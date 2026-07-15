@@ -133,11 +133,11 @@ export default function LatihanFlashcard({ set, cards = [], back_url = null, nex
                                 />
                             </div>
                             
-                            <div className="mt-6 relative h-[400px] w-full [perspective:1000px] cursor-pointer" onClick={() => setFlipped(!flipped)}>
+                            <div className="mt-6 relative h-[380px] w-full cursor-pointer [perspective:1000px] sm:h-[400px]" onClick={() => setFlipped(!flipped)}>
                                 <div className={`relative w-full h-full transition-transform duration-700 [transform-style:preserve-3d] ${flipped ? '[transform:rotateY(180deg)]' : ''}`}>
                                     
                                     {/* FRONT (Kanji/Text) */}
-                                    <section className="absolute inset-0 [backface-visibility:hidden] rounded-[2rem] border-2 border-red-200 bg-gradient-to-br from-white to-red-50/50 shadow-xl dark:border-gray-800 dark:from-gray-900 flex flex-col items-center justify-center p-8">
+                                    <section className="absolute inset-0 flex flex-col items-center justify-center rounded-[2rem] border-2 border-red-200 bg-gradient-to-br from-white to-red-50/50 p-5 shadow-xl [backface-visibility:hidden] sm:p-8 dark:border-gray-800 dark:from-gray-900">
                                         <div className="absolute top-5 left-5 flex items-center gap-3">
                                             <KatanaIcon className="w-8 h-8 text-red-500" />
                                             <span className="text-xs font-bold text-gray-500">{index + 1}/{cards.length}</span>
@@ -145,47 +145,53 @@ export default function LatihanFlashcard({ set, cards = [], back_url = null, nex
                                         <div className="absolute top-5 right-5 rounded-full bg-white/80 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-red-600 shadow-sm">
                                             Lv {card.mastery_level ?? 0}
                                         </div>
-                                        <JapaneseSpeechButton
-                                            text={card.front_text || card.reading}
-                                            audioUrl={card.audio_url}
-                                            className="absolute bottom-5 right-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-red-200 bg-white text-red-600 shadow-sm transition hover:bg-red-50"
-                                        />
-                                        <p className="text-7xl font-black text-gray-900 dark:text-white" style={{fontFamily: "'Noto Sans JP', sans-serif"}}>{card.front_text}</p>
-                                        <p className="mt-8 text-sm font-bold text-gray-400 animate-pulse">Klik untuk membalik</p>
-                                    </section>
-
-                                    {/* BACK (Meaning/Reading) */}
-                                    <section className="absolute inset-0 [backface-visibility:hidden] [transform:rotateY(180deg)] rounded-[2rem] border-2 border-red-300 bg-gradient-to-br from-red-50 to-white shadow-xl dark:border-gray-700 dark:from-gray-800 flex flex-col items-center justify-center p-8 text-center">
-                                        <p className="text-3xl font-bold text-gray-500 dark:text-gray-400 mb-2">{card.reading || '-'}</p>
-                                        <h2 className="text-4xl font-black text-gray-900 dark:text-white" style={{fontFamily: "'Yuji Syuku', serif"}}>{card.back_text || 'Belum ada arti'}</h2>
-                                        <div className="mt-5 flex items-center justify-center gap-3">
+                                        <div onClick={(event) => event.stopPropagation()}>
                                             <JapaneseSpeechButton
                                                 text={card.front_text || card.reading}
                                                 audioUrl={card.audio_url}
-                                                className="flex h-11 w-11 items-center justify-center rounded-full border border-red-200 text-red-600 transition hover:bg-red-100 dark:border-gray-700 dark:text-gray-300"
+                                                className="absolute bottom-5 right-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-red-200 bg-white text-red-600 shadow-sm transition hover:bg-red-50"
                                             />
                                         </div>
-                                        {(card.example_sentence) && (
-                                            <div className="mt-6 text-center bg-white/60 p-4 rounded-xl border border-red-100 w-full">
-                                                <p className="text-lg font-bold text-gray-800">{card.example_sentence}</p>
-                                                <p className="text-sm italic text-gray-600 mt-1">{card.example_meaning}</p>
+                                        <div className="max-h-[220px] max-w-full overflow-y-auto overscroll-contain px-2 text-center sm:max-h-[240px]">
+                                            <p className="break-words text-5xl font-black leading-tight text-gray-900 sm:text-7xl dark:text-white" style={{fontFamily: "'Noto Sans JP', sans-serif"}}>{card.front_text}</p>
+                                        </div>
+                                        <p className="mt-5 text-xs font-bold text-gray-400 animate-pulse sm:mt-8 sm:text-sm">Klik untuk membalik</p>
+                                    </section>
+
+                                    {/* BACK (Meaning/Reading) */}
+                                    <section className="absolute inset-0 flex flex-col rounded-[2rem] border-2 border-red-300 bg-gradient-to-br from-red-50 to-white p-5 text-center shadow-xl [backface-visibility:hidden] [transform:rotateY(180deg)] sm:p-8 dark:border-gray-700 dark:from-gray-800">
+                                        <div className="flex-1 overflow-y-auto overscroll-contain px-1">
+                                            <p className="mb-2 break-words text-2xl font-bold text-gray-500 sm:text-3xl dark:text-gray-400">{card.reading || '-'}</p>
+                                            <h2 className="break-words text-3xl font-black leading-tight text-gray-900 sm:text-4xl dark:text-white" style={{fontFamily: "'Yuji Syuku', serif"}}>{card.back_text || 'Belum ada arti'}</h2>
+                                            <div className="mt-4 flex items-center justify-center gap-3 sm:mt-5" onClick={(event) => event.stopPropagation()}>
+                                                <JapaneseSpeechButton
+                                                    text={card.front_text || card.reading}
+                                                    audioUrl={card.audio_url}
+                                                    className="flex h-11 w-11 items-center justify-center rounded-full border border-red-200 text-red-600 transition hover:bg-red-100 dark:border-gray-700 dark:text-gray-300"
+                                                />
                                             </div>
-                                        )}
-                                        <div className="mt-5 flex flex-wrap justify-center gap-2 text-[10px] font-black uppercase tracking-wider">
-                                            <span className="rounded-full bg-white/70 px-3 py-1 text-gray-600">Status: {card.status === 'new' ? 'Baru' : card.status}</span>
-                                            <span className="rounded-full bg-white/70 px-3 py-1 text-gray-600">Streak: {card.correct_streak ?? 0}</span>
-                                            <span className="rounded-full bg-white/70 px-3 py-1 text-gray-600">Review: {card.review_count ?? 0}</span>
+                                            {(card.example_sentence) && (
+                                                <div className="mt-5 w-full rounded-xl border border-red-100 bg-white/60 p-3 text-center sm:mt-6 sm:p-4">
+                                                    <p className="break-words text-base font-bold text-gray-800 sm:text-lg">{card.example_sentence}</p>
+                                                    <p className="mt-1 break-words text-xs italic text-gray-600 sm:text-sm">{card.example_meaning}</p>
+                                                </div>
+                                            )}
+                                            <div className="mt-4 flex flex-wrap justify-center gap-2 text-[10px] font-black uppercase tracking-wider sm:mt-5">
+                                                <span className="rounded-full bg-white/70 px-3 py-1 text-gray-600">Status: {card.status === 'new' ? 'Baru' : card.status}</span>
+                                                <span className="rounded-full bg-white/70 px-3 py-1 text-gray-600">Streak: {card.correct_streak ?? 0}</span>
+                                                <span className="rounded-full bg-white/70 px-3 py-1 text-gray-600">Review: {card.review_count ?? 0}</span>
+                                            </div>
                                         </div>
                                     </section>
                                 </div>
                             </div>
 
 
-                            <section className="mt-8 grid grid-cols-2 gap-5">
+                            <section className="mt-6 grid grid-cols-2 gap-3 sm:mt-8 sm:gap-5">
                                 <button
                                     onClick={() => submitReview('learning')}
                                     disabled={isSubmitting}
-                                    className="rounded-[2rem] bg-[var(--btn-bg)] px-5 py-5 text-center font-black text-gray-950 dark:text-white shadow-[0_8px_0_var(--btn-shadow)] transition-all duration-300 active:translate-y-1 active:shadow-[0_4px_0_var(--btn-shadow)] disabled:cursor-wait disabled:opacity-70"
+                                    className="rounded-[1.5rem] bg-[var(--btn-bg)] px-3 py-4 text-center text-sm font-black text-gray-950 shadow-[0_8px_0_var(--btn-shadow)] transition-all duration-300 active:translate-y-1 active:shadow-[0_4px_0_var(--btn-shadow)] disabled:cursor-wait disabled:opacity-70 sm:rounded-[2rem] sm:px-5 sm:py-5 sm:text-base dark:text-white"
                                     style={{ '--btn-bg': theme.activeColor || '#fb923c', '--btn-shadow': theme.activeShadow || '#c2410c' }}
                                 >
                                     <span className="block text-2xl">?</span>
@@ -194,7 +200,7 @@ export default function LatihanFlashcard({ set, cards = [], back_url = null, nex
                                 <button
                                     onClick={() => submitReview('known')}
                                     disabled={isSubmitting}
-                                    className="rounded-[2rem] bg-[var(--btn-bg)] px-5 py-5 text-center font-black text-gray-950 dark:text-white shadow-[0_8px_0_var(--btn-shadow)] transition-all duration-300 active:translate-y-1 active:shadow-[0_4px_0_var(--btn-shadow)] disabled:cursor-wait disabled:opacity-70"
+                                    className="rounded-[1.5rem] bg-[var(--btn-bg)] px-3 py-4 text-center text-sm font-black text-gray-950 shadow-[0_8px_0_var(--btn-shadow)] transition-all duration-300 active:translate-y-1 active:shadow-[0_4px_0_var(--btn-shadow)] disabled:cursor-wait disabled:opacity-70 sm:rounded-[2rem] sm:px-5 sm:py-5 sm:text-base dark:text-white"
                                     style={{ '--btn-bg': theme.doneColor || '#a3e635', '--btn-shadow': theme.doneShadow || '#65a30d' }}
                                 >
                                     <span className="block text-2xl">OK</span>
@@ -206,10 +212,10 @@ export default function LatihanFlashcard({ set, cards = [], back_url = null, nex
                                 <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-800 transition-colors duration-300">
                                     <div className="h-full rounded-full bg-[var(--progress-bg)] transition-all duration-300" style={{ width: `${((index + 1) / cards.length) * 100}%`, '--progress-bg': theme.activeColor || '#ef4444' }} />
                                 </div>
-                                <div className="grid grid-cols-3 gap-2 py-4 text-sm text-gray-600 dark:text-gray-400 transition-colors duration-300">
-                                    <div><span className="block text-xs">Time</span><span className="font-black text-gray-900 dark:text-white">{formatTime(seconds)}</span></div>
-                                    <div><span className="block text-xs">Reviews</span><span className="font-black text-gray-900 dark:text-white">{index + 1} / {cards.length}</span></div>
-                                    <div><span className="block text-xs">Progress</span><span className="font-black text-gray-900 dark:text-white">{card.status === 'new' ? 'New!' : card.status}</span></div>
+                                <div className="grid grid-cols-3 gap-2 py-4 text-xs text-gray-600 sm:text-sm dark:text-gray-400 transition-colors duration-300">
+                                    <div><span className="block text-[10px] sm:text-xs">Time</span><span className="font-black text-gray-900 dark:text-white">{formatTime(seconds)}</span></div>
+                                    <div><span className="block text-[10px] sm:text-xs">Reviews</span><span className="font-black text-gray-900 dark:text-white">{index + 1} / {cards.length}</span></div>
+                                    <div><span className="block text-[10px] sm:text-xs">Progress</span><span className="font-black text-gray-900 dark:text-white">{card.status === 'new' ? 'New!' : card.status}</span></div>
                                 </div>
                             </footer>
                         </div>

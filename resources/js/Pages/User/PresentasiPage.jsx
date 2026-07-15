@@ -24,8 +24,8 @@ const backgroundClass = {
 };
 
 const slideDimensions = (slide = {}) => {
-    const sourceWidth = Number(slide.source_meta?.canvas_width || slide.source_meta?.width || slide.canvas_json?.width);
-    const sourceHeight = Number(slide.source_meta?.canvas_height || slide.source_meta?.height || slide.canvas_json?.height);
+    const sourceWidth = Number(slide.canvas_width);
+    const sourceHeight = Number(slide.canvas_height);
 
     if (sourceWidth > 0 && sourceHeight > 0) {
         return {
@@ -60,10 +60,12 @@ function SlideFrame({ slide }) {
                         <EmbedFrame url={visualUrl} title={slide.title || 'Media'} />
                     </div>
                 ) : (
-                    <div>
-                        <p className="text-xs font-black uppercase tracking-[0.25em] text-white/70">{slide.layout}</p>
-                        <h2 className="mt-3 text-2xl font-black">{slide.title || 'Slide Presentasi'}</h2>
-                        <p className="mt-3 max-w-xl whitespace-pre-line text-sm font-semibold leading-7 text-white/85">{slide.content || 'Konten slide belum diisi.'}</p>
+                    <div className="flex h-full min-h-0 w-full flex-col items-center justify-center text-center">
+                        <p className="shrink-0 text-xs font-black uppercase tracking-[0.2em] text-white/70">{slide.layout}</p>
+                        <h2 className="mt-2 shrink-0 break-words text-xl font-black sm:mt-3 sm:text-2xl">{slide.title || 'Slide Presentasi'}</h2>
+                        <div className="mt-3 max-h-[55%] w-full overflow-y-auto overscroll-contain px-2">
+                            <p className="mx-auto max-w-xl whitespace-pre-line break-words text-xs font-semibold leading-6 text-white/85 sm:text-sm sm:leading-7">{slide.content || 'Konten slide belum diisi.'}</p>
+                        </div>
                     </div>
                 )}
             </div>

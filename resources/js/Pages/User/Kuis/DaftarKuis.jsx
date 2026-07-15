@@ -89,18 +89,18 @@ export default function DaftarKuis({ quizzes = [] }) {
 
                             {/* Stats row */}
                             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 }}
-                                className="flex gap-4 shrink-0">
-                                <div className="rounded-2xl bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 px-5 py-4 text-center shadow-sm dark:shadow-none transition-colors duration-300 backdrop-blur-sm">
-                                    <p className="text-2xl font-black text-gray-900 dark:text-white transition-colors duration-300">{available}</p>
-                                    <p className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mt-0.5 transition-colors duration-300">Tersedia</p>
+                                className="grid w-full shrink-0 grid-cols-3 gap-2 sm:w-auto sm:gap-4">
+                                <div className="min-w-0 rounded-2xl border border-black/5 bg-white/60 px-2 py-3 text-center shadow-sm backdrop-blur transition-colors duration-300 sm:px-5 sm:py-4 dark:border-white/10 dark:bg-white/5 dark:shadow-none">
+                                    <p className="text-xl font-black text-gray-900 transition-colors duration-300 sm:text-2xl dark:text-white">{available}</p>
+                                    <p className="mt-0.5 break-words text-[9px] font-black uppercase tracking-[0.08em] text-gray-500 transition-colors duration-300 sm:text-[10px] sm:tracking-widest dark:text-gray-400">Tersedia</p>
                                 </div>
-                                <div className="rounded-2xl bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 px-5 py-4 text-center shadow-sm dark:shadow-none transition-colors duration-300 backdrop-blur-sm">
-                                    <p className="text-2xl font-black text-amber-500 dark:text-amber-400 flex items-center gap-1 transition-colors duration-300"><BoltIcon sx={{ fontSize: 20 }} />{totalXP}</p>
-                                    <p className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mt-0.5 transition-colors duration-300">Max XP</p>
+                                <div className="min-w-0 rounded-2xl border border-black/5 bg-white/60 px-2 py-3 text-center shadow-sm backdrop-blur transition-colors duration-300 sm:px-5 sm:py-4 dark:border-white/10 dark:bg-white/5 dark:shadow-none">
+                                    <p className="flex justify-center gap-1 break-words text-xl font-black text-amber-500 transition-colors duration-300 sm:text-2xl dark:text-amber-400"><BoltIcon sx={{ fontSize: 18 }} />{totalXP}</p>
+                                    <p className="mt-0.5 break-words text-[9px] font-black uppercase tracking-[0.08em] text-gray-500 transition-colors duration-300 sm:text-[10px] sm:tracking-widest dark:text-gray-400">Max XP</p>
                                 </div>
-                                <div className="rounded-2xl bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 px-5 py-4 text-center shadow-sm dark:shadow-none transition-colors duration-300 backdrop-blur-sm">
-                                    <p className="text-2xl font-black text-gray-900 dark:text-white transition-colors duration-300">{quizzes.length}</p>
-                                    <p className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mt-0.5 transition-colors duration-300">Total Kuis</p>
+                                <div className="min-w-0 rounded-2xl border border-black/5 bg-white/60 px-2 py-3 text-center shadow-sm backdrop-blur transition-colors duration-300 sm:px-5 sm:py-4 dark:border-white/10 dark:bg-white/5 dark:shadow-none">
+                                    <p className="text-xl font-black text-gray-900 transition-colors duration-300 sm:text-2xl dark:text-white">{quizzes.length}</p>
+                                    <p className="mt-0.5 break-words text-[9px] font-black uppercase tracking-[0.08em] text-gray-500 transition-colors duration-300 sm:text-[10px] sm:tracking-widest dark:text-gray-400">Total Kuis</p>
                                 </div>
                             </motion.div>
                         </div>

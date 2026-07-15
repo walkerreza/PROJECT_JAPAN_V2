@@ -6,6 +6,18 @@ use ZipArchive;
 
 class ImportSpreadsheetService
 {
+    private const MAX_ARCHIVE_ENTRIES = 200;
+
+    private const MAX_UNCOMPRESSED_BYTES = 20 * 1024 * 1024;
+
+    private const MAX_XML_BYTES = 10 * 1024 * 1024;
+
+    private const MAX_ROWS = 10000;
+
+    private const MAX_COLUMNS = 100;
+
+    private const MAX_CELL_LENGTH = 10000;
+
     public function rows(string $path, string $extension): array
     {
         return strtolower($extension) === 'xlsx'
@@ -25,13 +37,28 @@ class ImportSpreadsheetService
 
         if (! $header) {
             fclose($handle);
+
             return [];
         }
 
         $headers = $this->normalizeHeaders($header);
         $rows = [];
 
+        $rowCount = 0;
+
         while (($row = fgetcsv($handle)) !== false) {
+            if (++$rowCount > self::MAX_ROWS + 1 || count($row) > self::MAX_COLUMNS) {
+                fclose($handle);
+
+                return [];
+            }
+
+            if (collect($row)->contains(fn ($value) => mb_strlen((string) $value) > self::MAX_CELL_LENGTH)) {
+                fclose($handle);
+
+                return [];
+            }
+
             if (count(array_filter($row, fn ($value) => trim((string) $value) !== '')) === 0) {
                 continue;
             }
@@ -50,9 +77,15 @@ class ImportSpreadsheetService
             return [];
         }
 
-        $zip = new ZipArchive();
+        $zip = new ZipArchive;
 
         if ($zip->open($path) !== true) {
+            return [];
+        }
+
+        if (! $this->isSafeArchive($zip)) {
+            $zip->close();
+
             return [];
         }
 
@@ -60,11 +93,11 @@ class ImportSpreadsheetService
         $sheetXml = $zip->getFromName('xl/worksheets/sheet1.xml');
         $zip->close();
 
-        if (! $sheetXml) {
+        if (! $sheetXml || strlen($sheetXml) > self::MAX_XML_BYTES) {
             return [];
         }
 
-        $sheet = simplexml_load_string($sheetXml);
+        $sheet = $this->loadXml($sheetXml);
 
         if ($sheet === false || ! isset($sheet->sheetData->row)) {
             return [];
@@ -73,6 +106,10 @@ class ImportSpreadsheetService
         $rawRows = [];
 
         foreach ($sheet->sheetData->row as $row) {
+            if (count($rawRows) >= self::MAX_ROWS + 1) {
+                return [];
+            }
+
             $values = [];
 
             foreach ($row->c as $cell) {
@@ -86,6 +123,10 @@ class ImportSpreadsheetService
                     $value = $sharedStrings[(int) $value] ?? '';
                 } elseif ($type === 'inlineStr') {
                     $value = (string) ($cell->is->t ?? '');
+                }
+
+                if ($index >= self::MAX_COLUMNS || mb_strlen($value) > self::MAX_CELL_LENGTH) {
+                    return [];
                 }
 
                 $values[$index] = $value;
@@ -131,11 +172,11 @@ class ImportSpreadsheetService
     {
         $xml = $zip->getFromName('xl/sharedStrings.xml');
 
-        if (! $xml) {
+        if (! $xml || strlen($xml) > self::MAX_XML_BYTES) {
             return [];
         }
 
-        $shared = simplexml_load_string($xml);
+        $shared = $this->loadXml($xml);
 
         if ($shared === false || ! isset($shared->si)) {
             return [];
@@ -144,8 +185,17 @@ class ImportSpreadsheetService
         $strings = [];
 
         foreach ($shared->si as $item) {
+            if (count($strings) >= self::MAX_ROWS * self::MAX_COLUMNS) {
+                return [];
+            }
+
             if (isset($item->t)) {
-                $strings[] = (string) $item->t;
+                $value = (string) $item->t;
+                if (mb_strlen($value) > self::MAX_CELL_LENGTH) {
+                    return [];
+                }
+                $strings[] = $value;
+
                 continue;
             }
 
@@ -153,7 +203,11 @@ class ImportSpreadsheetService
             foreach ($item->r as $run) {
                 $parts[] = (string) $run->t;
             }
-            $strings[] = implode('', $parts);
+            $value = implode('', $parts);
+            if (mb_strlen($value) > self::MAX_CELL_LENGTH) {
+                return [];
+            }
+            $strings[] = $value;
         }
 
         return $strings;
@@ -167,5 +221,43 @@ class ImportSpreadsheetService
         }
 
         return max(0, $index - 1);
+    }
+
+    private function isSafeArchive(ZipArchive $zip): bool
+    {
+        if ($zip->numFiles < 1 || $zip->numFiles > self::MAX_ARCHIVE_ENTRIES) {
+            return false;
+        }
+
+        $totalSize = 0;
+
+        for ($index = 0; $index < $zip->numFiles; $index++) {
+            $stat = $zip->statIndex($index);
+            $name = (string) ($stat['name'] ?? '');
+            $size = (int) ($stat['size'] ?? 0);
+
+            if ($name === '' || str_contains($name, '../') || str_starts_with($name, '/') || str_contains($name, '\\')) {
+                return false;
+            }
+
+            $totalSize += $size;
+            if ($size > self::MAX_XML_BYTES || $totalSize > self::MAX_UNCOMPRESSED_BYTES) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function loadXml(string $xml): \SimpleXMLElement|false
+    {
+        $previous = libxml_use_internal_errors(true);
+
+        try {
+            return simplexml_load_string($xml, \SimpleXMLElement::class, LIBXML_NONET | LIBXML_COMPACT);
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
     }
 }

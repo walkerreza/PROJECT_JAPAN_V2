@@ -92,6 +92,7 @@ const features = [
 
 export default function Roadmap() {
   const [tooltip, setTooltip] = useState(null);
+  const [selectedUnit, setSelectedUnit] = useState(null);
 
   return (
     <>
@@ -189,7 +190,7 @@ export default function Roadmap() {
                 >
                   {tooltip === i && (
                     <div
-                      className="absolute z-20 bottom-full mb-3 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs rounded-xl px-4 py-2.5 whitespace-nowrap shadow-xl text-center"
+                      className="absolute z-20 bottom-full left-1/2 mb-3 hidden -translate-x-1/2 whitespace-nowrap rounded-xl bg-gray-900 px-4 py-2.5 text-center text-xs text-white shadow-xl md:block"
                       style={{ minWidth: '140px' }}
                     >
                       <p className="font-bold">{unit.title}</p>
@@ -208,8 +209,12 @@ export default function Roadmap() {
                   <button
                     onMouseEnter={() => setTooltip(i)}
                     onMouseLeave={() => setTooltip(null)}
-                    className="relative flex flex-col items-center gap-2 group focus:outline-none"
-                    disabled={unit.status === 'locked'}
+                    onFocus={() => setTooltip(i)}
+                    onBlur={() => setTooltip(null)}
+                    onClick={() => setSelectedUnit((current) => current === i ? null : i)}
+                    className="relative flex flex-col items-center gap-2 group focus:outline-none focus-visible:ring-4 focus-visible:ring-red-600/25 rounded-full"
+                    aria-expanded={selectedUnit === i}
+                    aria-label={`Lihat detail ${unit.title}: ${unit.subtitle}`}
                   >
                     <div
                       className="w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 group-hover:scale-110 group-active:scale-95"
@@ -258,6 +263,14 @@ export default function Roadmap() {
               );
             })}
           </div>
+
+          {selectedUnit !== null && (
+            <div className="mt-8 rounded-2xl border border-red-100 bg-white p-5 text-center shadow-sm md:hidden">
+              <p className="text-xs font-bold uppercase tracking-wide text-red-600">Unit {units[selectedUnit].id}</p>
+              <h3 className="mt-1 text-lg font-black text-gray-900">{units[selectedUnit].title}</h3>
+              <p className="mt-1 text-sm text-gray-500">{units[selectedUnit].subtitle}</p>
+            </div>
+          )}
         </div>
       </section>
 

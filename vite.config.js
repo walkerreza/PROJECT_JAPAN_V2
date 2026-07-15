@@ -1,11 +1,14 @@
 import { defineConfig } from 'vite';
 import laravel from 'laravel-vite-plugin';
 import react from '@vitejs/plugin-react';
+import { fileURLToPath, URL } from 'node:url';
+
+const appEntry = fileURLToPath(new URL('./resources/js/app.jsx', import.meta.url));
 
 export default defineConfig({
     plugins: [
         laravel({
-            input: 'resources/js/app.jsx',
+            input: appEntry,
             refresh: true,
         }),
         react(),

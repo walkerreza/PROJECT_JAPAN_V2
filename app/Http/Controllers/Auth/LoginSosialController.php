@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Models\RiwayatLogin;
 use App\Models\Pengguna;
+use App\Models\RiwayatLogin;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -15,24 +15,41 @@ class LoginSosialController extends Controller
 {
     public function redirectToGoogle(): RedirectResponse
     {
-        return Socialite::driver('google')->stateless()->redirect();
+        return Socialite::driver('google')->redirect();
     }
 
     public function handleGoogleCallback(): RedirectResponse
     {
         try {
-            $googleUser = Socialite::driver('google')->stateless()->user();
+            $googleUser = Socialite::driver('google')->user();
         } catch (\Throwable) {
             return redirect()->route('login')->withErrors([
                 'email' => 'Login Google gagal. Coba lagi atau gunakan email dan password.',
             ]);
         }
 
-        $user = Pengguna::where('google_id', $googleUser->getId())
-            ->orWhere('email', $googleUser->getEmail())
-            ->first();
+        $email = $googleUser->getEmail();
+        $emailVerified = (bool) data_get($googleUser->user, 'email_verified');
+
+        if (! $email || ! $emailVerified) {
+            return redirect()->route('login')->withErrors([
+                'email' => 'Akun Google harus memiliki email yang sudah terverifikasi.',
+            ]);
+        }
+
+        $user = Pengguna::where('google_id', $googleUser->getId())->first();
+
+        if (! $user) {
+            $user = Pengguna::where('email', $email)->first();
+        }
 
         if ($user) {
+            if (in_array($user->role, ['admin', 'superadmin'], true) && ! $user->google_id) {
+                return redirect()->route('login')->withErrors([
+                    'email' => 'Login Google belum terhubung untuk akun pengelola ini.',
+                ]);
+            }
+
             $user->update([
                 'google_id' => $user->google_id ?: $googleUser->getId(),
                 'auth_provider' => 'google',
@@ -42,7 +59,7 @@ class LoginSosialController extends Controller
         } else {
             $user = Pengguna::create([
                 'username' => $this->usernameFromGoogle($googleUser->getName(), $googleUser->getEmail()),
-                'email' => $googleUser->getEmail(),
+                'email' => $email,
                 'password' => Hash::make(Str::random(40)),
                 'role' => 'user',
                 'subscription_status' => 'free',

@@ -5,16 +5,16 @@ namespace App\Http\Controllers\User;
 use App\Http\Controllers\Controller;
 use App\Models\DeckPresentasi;
 use App\Models\Flashcard;
-use App\Models\Kuis;
 use App\Models\Kosakata;
+use App\Models\Kuis;
 use App\Models\Modul;
 use App\Models\PengerjaanKuis;
 use App\Models\ProgramPembelajaran;
 use App\Models\ReviewFlashcard;
 use App\Models\SetFlashcard;
 use App\Models\Soal;
-use App\Services\AksesPremiumService;
 use App\Services\AksesKuisPenggunaService;
+use App\Services\AksesPremiumService;
 use App\Services\KloterBelajarService;
 use App\Services\PembelajaranPenggunaService;
 use Illuminate\Http\Request;
@@ -89,7 +89,7 @@ class ModulController extends Controller
 
             return [
                 'id' => $modul->id,
-                'title' => 'Week ' . ($modul->week_number ?? ($index + 1)) . ' - ' . $modul->title,
+                'title' => 'Week '.($modul->week_number ?? ($index + 1)).' - '.$modul->title,
                 'week_number' => $modul->week_number ?? ($index + 1),
                 'subtitle' => $modul->description ?? 'Flashcard dan kuis mingguan.',
                 'status' => $status,
@@ -244,7 +244,43 @@ class ModulController extends Controller
             ->where('status', 'published')
             ->orderBy('module_id')
             ->orderBy('id')
-            ->get();
+            ->get()
+            ->map(function (DeckPresentasi $deck) {
+                return [
+                    'id' => $deck->id,
+                    'title' => $deck->title,
+                    'description' => $deck->description,
+                    'module' => $deck->module ? [
+                        'id' => $deck->module->id,
+                        'title' => $deck->module->title,
+                        'week_number' => $deck->module->week_number,
+                    ] : null,
+                    'slides_count' => $deck->slides_count,
+                    'source_file_url' => $deck->finalPdfPath()
+                        ? route('presentations.pdf.content', $deck, false)
+                        : null,
+                    'slides' => $deck->slides->map(function ($slide) {
+                        $meta = $slide->source_meta ?? [];
+                        $canvas = $slide->canvas_json ?? [];
+
+                        return [
+                            'id' => $slide->id,
+                            'title' => $slide->title,
+                            'layout' => $slide->layout,
+                            'content' => $slide->content,
+                            'media_url' => $slide->media_url,
+                            'background' => $slide->background,
+                            'accent_color' => $slide->accent_color,
+                            'order' => $slide->order,
+                            'jamboard_snapshot' => $slide->jamboard_snapshot,
+                            'snapshot_url' => $slide->snapshot_url,
+                            'canvas_width' => $meta['canvas_width'] ?? $meta['width'] ?? $canvas['width'] ?? null,
+                            'canvas_height' => $meta['canvas_height'] ?? $meta['height'] ?? $canvas['height'] ?? null,
+                        ];
+                    })->values(),
+                ];
+            })
+            ->values();
 
         return Inertia::render('User/PresentasiPage', [
             'program' => [
@@ -317,8 +353,7 @@ class ModulController extends Controller
         AksesPremiumService $aksesPremium,
         PembelajaranPenggunaService $learning,
         AksesKuisPenggunaService $aksesKuis
-    )
-    {
+    ) {
         $user = Auth::user();
         $modul = Modul::where('status', 'published')->findOrFail($weekId);
 

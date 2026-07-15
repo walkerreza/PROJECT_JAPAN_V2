@@ -78,7 +78,7 @@ const LandingPage = () => {
             <span className={`text-xs font-bold ${theme.heroBadgeText} uppercase tracking-wider`}>Platform #1 Belajar JLPT N3</span>
           </div>
 
-          <h1 className="text-5xl lg:text-7xl font-black leading-[1.1] mb-6 text-[#1A1A1A] tracking-tight">
+          <h1 className="text-4xl sm:text-5xl lg:text-7xl font-black leading-[1.1] mb-6 text-[#1A1A1A] tracking-tight">
             Belajar Bahasa <br />
             <span className={`bg-gradient-to-r ${theme.heroGradText} bg-clip-text text-transparent`}>
               Jepang Terstruktur &amp; Gamified
@@ -167,7 +167,7 @@ const LandingPage = () => {
               </Button>
             </div>
 
-            <div className="absolute -left-12 -bottom-6 animate-float-delayed">
+            <div className="absolute -left-12 -bottom-6 hidden animate-float-delayed sm:block">
               <div className="bg-[#E4E2D5] rounded-3xl p-4 shadow-xl border border-white flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-white/50 border border-white flex items-center justify-center overflow-hidden">
                   <div className="w-6 h-6 bg-[#C4C1B1] rounded-sm"></div>
@@ -179,7 +179,7 @@ const LandingPage = () => {
               </div>
             </div>
 
-            <div className="absolute -right-8 -top-8 animate-float-fast">
+            <div className="absolute -right-8 -top-8 hidden animate-float-fast sm:block">
               <div className="bg-white/90 backdrop-blur-md rounded-2xl p-3 shadow-xl border border-white flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center">
                   <CheckIcon sx={{ fontSize: 16 }} />
@@ -192,15 +192,15 @@ const LandingPage = () => {
       </section>
 
       {/* Roadmap Section */}
-      <section className="px-6 lg:px-20 py-24 bg-white">
+      <section className="px-6 lg:px-20 py-16 sm:py-24 bg-white overflow-hidden">
         <div className="max-w-7xl mx-auto text-center">
           <Badge color="red" className="mb-4">PETA PERJALANAN</Badge>
-          <h2 className="text-4xl font-black text-gray-900 mb-4">Pilih Titik Awal Anda</h2>
-          <p className="text-gray-500 max-w-2xl mx-auto mb-16">
+          <h2 className="text-3xl sm:text-4xl font-black text-gray-900 mb-4">Pilih Titik Awal Anda</h2>
+          <p className="text-gray-500 max-w-2xl mx-auto mb-10 sm:mb-16">
             Dari pemula absolut hingga fasih tingkat lanjut. Kurikulum kami diselaraskan dengan standar resmi JLPT.
           </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+          <div className="-mx-6 flex snap-x snap-mandatory gap-4 overflow-x-auto px-6 pb-5 text-left sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-6 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-5">
             {[
               { level: 'N5', title: 'Pemula', desc: 'Salam dasar, hiragana, katakana, dan struktur kalimat sederhana.', color: 'bg-green-500', label: 'Dasar Sekali' },
               { level: 'N4', title: 'Dasar', desc: 'Percakapan harian, kanji dasar, dan membaca bacaan sederhana.', color: 'bg-red-500', label: 'Fondasi' },
@@ -210,7 +210,7 @@ const LandingPage = () => {
             ].map((item, i) => (
               <div
                 key={i}
-                className={`relative p-6 rounded-[2rem] text-left transition-all duration-300 flex flex-col h-full ${item.highlight
+                className={`relative flex h-full w-[min(82vw,20rem)] shrink-0 snap-center flex-col rounded-[1.5rem] p-5 text-left transition-all duration-300 sm:w-auto sm:rounded-[2rem] sm:p-6 ${item.highlight
                   ? theme.highlightBorder
                   : 'bg-gray-50/50 border border-gray-100 hover:border-gray-200'
                   }`}
@@ -361,17 +361,17 @@ const LandingPage = () => {
       </section>
 
       {/* CTA + Pricing */}
-      <section className="px-6 lg:px-20 py-16 lg:py-20">
-        <div className={`${theme.ctaBg} rounded-3xl px-6 lg:px-16 py-14 text-center text-white`}>
-          <h2 className="text-3xl lg:text-4xl font-extrabold mb-3">Siap memulai perjalanan Anda?</h2>
-          <p className="text-gray-400 max-w-lg mx-auto mb-10">Bergabunglah secara gratis hari ini. Dapatkan akses ke materi, kuis, dan review kosakata terstruktur.</p>
-          <div className="grid sm:grid-cols-2 gap-6 max-w-2xl mx-auto">
-            <div className="bg-gray-800/50 border border-white/10 rounded-2xl p-8 text-left">
+      <section className="px-4 sm:px-6 lg:px-20 py-12 sm:py-16 lg:py-20">
+        <div className={`${theme.ctaBg} rounded-2xl sm:rounded-3xl px-5 sm:px-6 lg:px-16 py-10 sm:py-14 text-center text-white`}>
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold mb-3">Siap memulai perjalanan Anda?</h2>
+          <p className="text-sm sm:text-base text-gray-400 max-w-lg mx-auto mb-7 sm:mb-10">Bergabunglah secara gratis hari ini. Dapatkan akses ke materi, kuis, dan review kosakata terstruktur.</p>
+          <div className="grid sm:grid-cols-2 gap-4 sm:gap-6 max-w-2xl mx-auto">
+            <div className="bg-gray-800/50 border border-white/10 rounded-2xl p-5 sm:p-8 text-left">
               <h3 className="text-lg font-bold text-white mb-2">Dasar Gratis</h3>
-              <div className="flex items-baseline gap-1 mb-5">
-                <span className="text-4xl font-black text-white">Gratis</span>
+              <div className="flex items-baseline gap-1 mb-4 sm:mb-5">
+                <span className="text-3xl sm:text-4xl font-black text-white">Gratis</span>
               </div>
-              <ul className="space-y-3 mb-6 list-none p-0">
+              <ul className="space-y-2.5 sm:space-y-3 mb-5 sm:mb-6 list-none p-0">
                 <li className="flex items-center gap-2 text-sm text-white/80"><CheckIcon sx={{ fontSize: 16 }} className="text-green-400" /> Preview materi Week 1</li>
                 <li className="flex items-center gap-2 text-sm text-white/80"><CheckIcon sx={{ fontSize: 16 }} className="text-green-400" /> Kuis Dasar Week 1</li>
                 <li className="flex items-center gap-2 text-sm text-white/80"><CheckIcon sx={{ fontSize: 16 }} className="text-green-400" /> Progress Belajar</li>
@@ -380,13 +380,13 @@ const LandingPage = () => {
                 Mulai Preview Gratis
               </Button>
             </div>
-            <div className={`${theme.ctaProBg} rounded-2xl p-8 text-left relative`}>
+            <div className={`${theme.ctaProBg} rounded-2xl p-5 sm:p-8 text-left relative`}>
               <Badge color="yellow" className="absolute -top-3 right-5">PREMIUM</Badge>
               <h3 className="text-lg font-bold text-white mb-2">Akses Premium</h3>
-              <div className="flex items-baseline gap-1 mb-5">
-                <span className="text-4xl font-black text-white">Berlangganan</span>
+              <div className="flex items-baseline gap-1 mb-4 sm:mb-5">
+                <span className="text-3xl sm:text-4xl font-black text-white">Berlangganan</span>
               </div>
-              <ul className="space-y-3 mb-6 list-none p-0">
+              <ul className="space-y-2.5 sm:space-y-3 mb-5 sm:mb-6 list-none p-0">
                 <li className="flex items-center gap-2 text-sm text-white/90"><CheckIcon sx={{ fontSize: 16 }} className="text-white" /> Akses materi premium</li>
                 <li className="flex items-center gap-2 text-sm text-white/90"><CheckIcon sx={{ fontSize: 16 }} className="text-white" /> Kuis premium &amp; XP</li>
                 <li className="flex items-center gap-2 text-sm text-white/90"><CheckIcon sx={{ fontSize: 16 }} className="text-white" /> Flashcard &amp; Kosakata</li>

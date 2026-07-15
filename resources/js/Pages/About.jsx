@@ -79,15 +79,15 @@ export default function About() {
           </div>
 
           {/* Stats Floating Card */}
-          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 w-[92%] md:w-[85%] max-w-4xl">
-            <div className="bg-white/90 backdrop-blur-xl border border-white/50 shadow-2xl rounded-[1.5rem] p-8 md:p-10 flex items-center justify-around">
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[92%] md:bottom-10 md:w-[85%] max-w-4xl">
+            <div className="bg-white/90 backdrop-blur-xl border border-white/50 shadow-2xl rounded-[1.5rem] p-4 sm:p-6 md:p-10 flex items-center justify-around">
               {stats.map((s, i) => (
                 <React.Fragment key={i}>
                   <div className="text-center">
-                    <div className="text-3xl md:text-4xl font-black text-red-600 tracking-tight">{s.value}</div>
-                    <div className="text-[10px] md:text-xs text-gray-400 font-extrabold uppercase tracking-[0.2em] mt-2">{s.label}</div>
+                    <div className="text-2xl sm:text-3xl md:text-4xl font-black text-red-600 tracking-tight">{s.value}</div>
+                    <div className="text-[9px] sm:text-[10px] md:text-xs text-gray-400 font-extrabold uppercase tracking-[0.08em] sm:tracking-[0.2em] mt-1.5 sm:mt-2">{s.label}</div>
                   </div>
-                  {i < stats.length - 1 && <div className="h-12 w-px bg-gray-100" />}
+                  {i < stats.length - 1 && <div className="h-9 sm:h-12 w-px bg-gray-100" />}
                 </React.Fragment>
               ))}
             </div>

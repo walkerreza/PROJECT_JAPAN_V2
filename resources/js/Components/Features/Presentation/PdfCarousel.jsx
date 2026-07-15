@@ -247,10 +247,10 @@ export default function PdfCarousel({ url, title = 'PDF Presentasi' }) {
             </div>
 
             {status === 'ready' && (
-                <div className="flex items-center justify-between gap-3 border-t border-gray-100 p-3 dark:border-gray-800">
-                    <button type="button" onClick={previous} disabled={pageNumber <= 1} className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-black text-gray-700 disabled:opacity-40 dark:border-gray-700 dark:text-gray-200">Prev</button>
-                    <p className="text-xs font-black text-gray-500">Canvas render - tanpa link download langsung</p>
-                    <button type="button" onClick={next} disabled={pageNumber >= totalPages} className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-black text-gray-700 disabled:opacity-40 dark:border-gray-700 dark:text-gray-200">Next</button>
+                <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-t border-gray-100 p-3 dark:border-gray-800">
+                    <button type="button" onClick={previous} disabled={pageNumber <= 1} className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-black text-gray-700 disabled:opacity-40 sm:px-4 dark:border-gray-700 dark:text-gray-200">Prev</button>
+                    <p className="min-w-0 text-center text-[10px] font-black leading-4 text-gray-500 sm:text-xs">Canvas render - tanpa link download langsung</p>
+                    <button type="button" onClick={next} disabled={pageNumber >= totalPages} className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-black text-gray-700 disabled:opacity-40 sm:px-4 dark:border-gray-700 dark:text-gray-200">Next</button>
                 </div>
             )}
         </div>

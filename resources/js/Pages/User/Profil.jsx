@@ -144,11 +144,11 @@ export default function Profile({ recentTransactions = [], achievements = [], ga
     const deleteAccountForm = useForm({ password: '' });
     const accessStatus = user.access_status || {};
     const transactionInvoices = recentTransactions.map((transaction) => ({
-        id: transaction.code,
+        id: transaction.code || transaction.transaction_code || null,
         date: transaction.created_at_label || 'Tanggal belum tersedia',
         plan: `${transaction.plan}${transaction.scope_label ? ` - ${transaction.scope_label}` : ''}`,
         price: transaction.amount_formatted,
-        status: transaction.status === 'success' ? 'Success' : 'Failed',
+        status: transaction.status,
         statusLabel: transaction.status_label || (transaction.status === 'success' ? 'Berhasil' : 'Gagal'),
     }));
 
@@ -301,10 +301,10 @@ export default function Profile({ recentTransactions = [], achievements = [], ga
                                         animate={{ opacity: 1, scale: 1 }}
                                         exit={{ opacity: 0, scale: 0.98 }}
                                         transition={{ duration: 0.2 }}
-                                        className="grid grid-cols-2 gap-6"
+                                        className="grid grid-cols-1 gap-4 min-[380px]:grid-cols-2 sm:gap-6"
                                     >
                                         {/* Streak Card */}
-                                        <div className="col-span-1 bg-orange-50 dark:bg-orange-900/10 rounded-[2rem] border border-orange-100 dark:border-orange-500/20 p-6 sm:p-8 flex flex-col justify-center relative overflow-hidden group transition-colors">
+                                        <div className="col-span-1 bg-orange-50 dark:bg-orange-900/10 rounded-[2rem] border border-orange-100 dark:border-orange-500/20 p-5 sm:p-8 flex flex-col justify-center relative overflow-hidden group transition-colors">
                                             <div className="absolute -right-4 -top-4 opacity-10 dark:opacity-[0.05] group-hover:scale-110 transition-transform duration-500">
                                                 <LocalFireDepartmentIcon sx={{ fontSize: 120, color: '#f97316' }} />
                                             </div>
@@ -312,13 +312,13 @@ export default function Profile({ recentTransactions = [], achievements = [], ga
                                                 <div className="w-12 h-12 bg-white dark:bg-orange-500/20 rounded-2xl shadow-sm flex items-center justify-center text-orange-500 dark:text-orange-400 mb-4">
                                                     <LocalFireDepartmentIcon sx={{ fontSize: 24 }} />
                                                 </div>
-                                                <h3 className="text-4xl font-black text-orange-600 dark:text-orange-400 tracking-tight">{streak}</h3>
-                                                <p className="text-xs font-black text-orange-500/80 dark:text-orange-400/80 uppercase tracking-widest mt-1">Hari Streak</p>
+                                                <h3 className="text-3xl sm:text-4xl font-black text-orange-600 dark:text-orange-400 tracking-tight">{streak}</h3>
+                                                <p className="mt-1 text-[10px] font-black uppercase tracking-[0.12em] text-orange-500/80 sm:text-xs sm:tracking-widest dark:text-orange-400/80">Hari Streak</p>
                                             </div>
                                         </div>
 
                                         {/* XP Card */}
-                                        <div className="col-span-1 bg-red-50 dark:bg-red-900/10 rounded-[2rem] border border-red-100 dark:border-red-500/20 p-6 sm:p-8 flex flex-col justify-center relative overflow-hidden group transition-colors">
+                                        <div className="col-span-1 bg-red-50 dark:bg-red-900/10 rounded-[2rem] border border-red-100 dark:border-red-500/20 p-5 sm:p-8 flex flex-col justify-center relative overflow-hidden group transition-colors">
                                             <div className="absolute -right-4 -top-4 opacity-10 dark:opacity-[0.05] group-hover:scale-110 transition-transform duration-500">
                                                 <BoltIcon sx={{ fontSize: 120, color: '#3b82f6' }} />
                                             </div>
@@ -326,13 +326,13 @@ export default function Profile({ recentTransactions = [], achievements = [], ga
                                                 <div className="w-12 h-12 bg-white dark:bg-red-500/20 rounded-2xl shadow-sm flex items-center justify-center text-red-500 dark:text-red-400 mb-4">
                                                     <BoltIcon sx={{ fontSize: 24 }} />
                                                 </div>
-                                                <h3 className="text-4xl font-black text-red-600 dark:text-red-400 tracking-tight">{xp.toLocaleString()}</h3>
-                                                <p className="text-xs font-black text-red-500/80 dark:text-red-400/80 uppercase tracking-widest mt-1">Total XP</p>
+                                                <h3 className="break-words text-3xl sm:text-4xl font-black text-red-600 dark:text-red-400 tracking-tight">{xp.toLocaleString()}</h3>
+                                                <p className="mt-1 text-[10px] font-black uppercase tracking-[0.12em] text-red-500/80 sm:text-xs sm:tracking-widest dark:text-red-400/80">Total XP</p>
                                             </div>
                                         </div>
 
                                         {/* League / Liga Card */}
-                                        <div className="col-span-2 bg-white dark:bg-gray-900 rounded-[2rem] shadow-sm border border-gray-100 dark:border-gray-800 p-6 sm:p-8 transition-colors">
+                                        <div className="col-span-1 min-[380px]:col-span-2 bg-white dark:bg-gray-900 rounded-[2rem] shadow-sm border border-gray-100 dark:border-gray-800 p-5 sm:p-8 transition-colors">
                                             <div className="flex items-center gap-2 mb-6">
                                                 <EmojiEventsIcon sx={{ color: '#f43f5e' }} />
                                                 <h3 className="font-black text-gray-900 dark:text-white text-lg">Perjalanan Liga</h3>
@@ -590,11 +590,15 @@ export default function Profile({ recentTransactions = [], achievements = [], ga
                                             </div>
 
                                             <div className="space-y-3">
-                                                {transactionInvoices.map((inv, idx) => (
-                                                    <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors gap-4">
+                                                {transactionInvoices.map((inv) => inv.id && (
+                                                    <Link
+                                                        key={inv.id}
+                                                        href={route('user.checkout', { transactionCode: inv.id })}
+                                                        className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2 dark:focus:ring-offset-gray-900 transition-colors gap-4"
+                                                    >
                                                         <div className="flex items-center gap-4">
-                                                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${inv.status === 'Success' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 dark:text-emerald-400' : 'bg-rose-50 dark:bg-rose-900/20 text-rose-500 dark:text-rose-400'}`}>
-                                                                {inv.status === 'Success' ? <CheckCircleIcon /> : <WarningAmberIcon />}
+                                                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${inv.status === 'success' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 dark:text-emerald-400' : inv.status === 'pending' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400' : 'bg-rose-50 dark:bg-rose-900/20 text-rose-500 dark:text-rose-400'}`}>
+                                                                {inv.status === 'success' ? <CheckCircleIcon /> : <WarningAmberIcon />}
                                                             </div>
                                                             <div>
                                                                 <h4 className="font-black text-gray-900 dark:text-gray-100 text-sm">{inv.plan}</h4>
@@ -604,11 +608,11 @@ export default function Profile({ recentTransactions = [], achievements = [], ga
                                                         <div className="flex items-center justify-between sm:flex-col sm:items-end sm:justify-center gap-1 pl-16 sm:pl-0">
                                                             <p className="font-black text-gray-900 dark:text-white">{inv.price}</p>
                                                             <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider
-                                                                ${inv.status === 'Success' ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400' : 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-400'}`}>
+                                                                ${inv.status === 'success' ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400' : inv.status === 'pending' ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400' : 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-400'}`}>
                                                                 {inv.statusLabel}
                                                             </span>
                                                         </div>
-                                                    </div>
+                                                    </Link>
                                                 ))}
                                                 {transactionInvoices.length === 0 && (
                                                     <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-5 py-8 text-center dark:border-gray-800 dark:bg-gray-950/60">

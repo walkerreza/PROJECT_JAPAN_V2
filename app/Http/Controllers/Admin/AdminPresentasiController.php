@@ -3,17 +3,17 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\LevelPembelajaran;
-use App\Models\Modul;
 use App\Models\DeckPresentasi;
+use App\Models\LevelPembelajaran;
+use App\Models\LogAktivitas;
+use App\Models\Modul;
 use App\Models\SlidePresentasi;
+use App\Services\AksesPremiumService;
 use App\Services\ImportPresentasiGambarService;
 use App\Services\ImportPresentasiPdfService;
 use App\Services\ImportPresentasiPptxService;
-use App\Services\AksesPremiumService;
 use App\Services\NotifikasiPenggunaService;
 use App\Services\PresentasiStorageService;
-use App\Models\LogAktivitas;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -219,15 +219,9 @@ class AdminPresentasiController extends Controller
 
         abort_unless($pdfPath, 404);
 
-        $disk = Storage::disk('local')->exists($pdfPath) ? 'local' : null;
+        abort_unless(Storage::disk('local')->exists($pdfPath), 404);
 
-        if (! $disk && Storage::disk('public')->exists($pdfPath)) {
-            $disk = 'public';
-        }
-
-        abort_unless($disk, 404);
-
-        $path = Storage::disk($disk)->path($pdfPath);
+        $path = Storage::disk('local')->path($pdfPath);
 
         $this->catatAksesPdf($request, $presentationDeck);
 

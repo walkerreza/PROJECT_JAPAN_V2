@@ -99,6 +99,7 @@ class HalamanController extends Controller
                         'pending' => 'Menunggu',
                         'failed' => 'Gagal',
                         'expired' => 'Kedaluwarsa',
+                        'canceled' => 'Dibatalkan',
                         default => ucfirst((string) $transaction->status),
                     },
                     'created_at_label' => optional($transaction->created_at)->format('d M Y H:i'),

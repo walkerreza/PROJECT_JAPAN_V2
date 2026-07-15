@@ -511,12 +511,12 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                             </div>
                         </div>
 
-                        <div className="relative px-6 py-10 text-center sm:px-10 sm:py-12">
+                        <div className="relative max-h-[58vh] overflow-y-auto overscroll-contain px-5 py-8 text-center sm:px-10 sm:py-12">
                             <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-100 text-3xl font-black text-orange-700">
                                 あ
                             </div>
-                            <p className="text-6xl font-black tracking-tight text-gray-950 sm:text-7xl">{activeFlashcard.front_text}</p>
-                            <p className="mt-4 text-2xl font-bold text-gray-500">{activeFlashcard.reading || '-'}</p>
+                            <p className="break-words text-4xl font-black tracking-tight text-gray-950 sm:text-7xl">{activeFlashcard.front_text}</p>
+                            <p className="mt-4 break-words text-xl font-bold text-gray-500 sm:text-2xl">{activeFlashcard.reading || '-'}</p>
                             <div className="mx-auto mt-5 h-px max-w-md bg-orange-200" />
 
                             <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
@@ -530,13 +530,13 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                                 )}
                             </div>
 
-                            <h2 className="mt-6 text-3xl font-black text-gray-900">{activeFlashcard.back_text || 'Belum ada arti'}</h2>
+                            <h2 className="mt-6 break-words text-2xl font-black text-gray-900 sm:text-3xl">{activeFlashcard.back_text || 'Belum ada arti'}</h2>
                             <p className="mt-3 text-sm font-bold text-gray-400">Pilih jujur. Yang belum paham akan masuk ke Review Kosakata.</p>
 
                             {(activeFlashcard.example_sentence || activeFlashcard.example_meaning) && (
                                 <div className="mx-auto mt-8 max-w-2xl rounded-2xl bg-gray-50 p-5 text-left">
-                                    <p className="text-base font-bold text-gray-700">{activeFlashcard.example_sentence}</p>
-                                    <p className="mt-2 text-sm italic text-gray-500">{activeFlashcard.example_meaning}</p>
+                                    <p className="break-words text-base font-bold text-gray-700">{activeFlashcard.example_sentence}</p>
+                                    <p className="mt-2 break-words text-sm italic text-gray-500">{activeFlashcard.example_meaning}</p>
                                 </div>
                             )}
                         </div>
@@ -565,7 +565,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
 
     // === TAMPILAN KUIS AKTIF ===
     return (
-        <div className="min-h-screen font-sans flex flex-col items-center pt-8 md:pt-16 px-4 pb-32 overflow-x-hidden"
+        <div className="min-h-screen font-sans flex flex-col items-center px-4 pb-56 pt-8 overflow-x-hidden sm:pb-40 md:pt-16"
              style={{ backgroundColor: theme.landingHeroBg }}>
             <Head title={`Quiz - Level 2`} />
 
@@ -629,7 +629,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                     >
                         {/* Question Info */}
                         <div className="text-center mb-8 w-full">
-                            <h2 className="text-xl md:text-3xl font-black text-gray-900 mb-2">{currentQ.question}</h2>
+                            <h2 className="mb-2 break-words px-1 text-xl font-black text-gray-900 md:text-3xl">{currentQ.question}</h2>
                             <p className="text-sm font-bold text-gray-400 uppercase tracking-widest text-shadow">
                                 Soal {currentIndex + 1} dari {questions.length} - Terjawab {answeredCount}/{questions.length}
                             </p>
@@ -639,11 +639,11 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                         {(currentQ.kanji || currentQ.audio_url || currentSpeechText) && (
                             <div className="w-full max-w-[500px] aspect-video bg-white rounded-[2rem] shadow-sm border-2 border-gray-100 flex items-center justify-center relative mb-10 overflow-hidden">
                                 {currentQ.kanji ? (
-                                    <span className="text-[72px] sm:text-[100px] md:text-[140px] leading-none font-medium text-gray-900 select-none">{currentQ.kanji}</span>
+                                    <span className="max-w-full break-words px-4 text-[64px] font-medium leading-none text-gray-900 select-none sm:text-[100px] md:text-[140px]">{currentQ.kanji}</span>
                                 ) : !currentQ.audio_url ? (
-                                    <div className="px-8 text-center">
+                                    <div className="max-h-[72%] overflow-y-auto overscroll-contain px-6 text-center sm:px-8">
                                         <span className="text-xs font-black uppercase tracking-[0.25em] text-gray-300">Narator Jepang</span>
-                                        <p className="mt-3 text-3xl font-black text-gray-700 md:text-5xl">{currentSpeechText}</p>
+                                        <p className="mt-3 break-words text-2xl font-black text-gray-700 sm:text-3xl md:text-5xl">{currentSpeechText}</p>
                                     </div>
                                 ) : null}
                                 
@@ -779,25 +779,25 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                             borderColor: answerFeedback?.status === 'wrong' ? '#ef4444' : theme.activeColor
                         }}
                     >
-                        <div className="max-w-4xl mx-auto px-4 py-6 md:px-8 md:py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div className="mx-auto flex max-w-4xl flex-col items-stretch justify-between gap-3 px-4 py-4 sm:flex-row sm:items-center sm:gap-4 sm:px-8 sm:py-8">
                             
                             {/* Feedback Message */}
-                            <div className="flex items-center gap-4 w-full sm:w-auto">
+                            <div className="flex w-full items-center gap-3 sm:w-auto sm:gap-4">
                                 <motion.div 
                                     initial={{ scale: 0 }}
                                     animate={{ scale: 1 }}
                                     transition={{ type: "spring", bounce: 0.6, delay: 0.1 }}
-                                    className="w-16 h-16 rounded-full bg-white flex items-center justify-center shrink-0 shadow-sm"
+                                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white shadow-sm sm:h-16 sm:w-16"
                                     style={{ color: answerFeedback?.status === 'wrong' ? '#ef4444' : theme.activeColor }}
                                 >
-                                    {answerFeedback?.status === 'wrong' ? <CloseIcon sx={{ fontSize: 40 }} /> : <CheckCircleIcon sx={{ fontSize: 40 }} />}
+                                    {answerFeedback?.status === 'wrong' ? <CloseIcon sx={{ fontSize: 30 }} /> : <CheckCircleIcon sx={{ fontSize: 30 }} />}
                                 </motion.div>
                                 <div>
-                                    <h3 className="text-2xl font-black mb-1" 
+                                    <h3 className="mb-1 break-words text-xl font-black sm:text-2xl"
                                         style={{ color: answerFeedback?.status === 'wrong' ? '#991b1b' : theme.activeShadow }}>
                                         {answerFeedback?.title || 'Jawaban direkam'}
                                     </h3>
-                                    <p className="text-sm font-medium" 
+                                    <p className="break-words text-xs font-medium sm:text-sm"
                                        style={{ color: answerFeedback?.status === 'wrong' ? '#b91c1c' : theme.activeShadow }}>
                                         {answerFeedback?.message || 'Koreksi dan XP dihitung oleh server.'}
                                     </p>
@@ -807,7 +807,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                             {/* Action Button */}
                             <button 
                                 onClick={handleNext}
-                                className="w-full sm:w-auto px-12 py-4 rounded-2xl font-black text-white text-lg tracking-wide uppercase transition-all shadow-lg active:translate-y-1 active:shadow-none hover:brightness-110 disabled:cursor-wait disabled:opacity-70"
+                                className="w-full rounded-2xl px-8 py-3.5 text-base font-black uppercase tracking-wide text-white shadow-lg transition-all active:translate-y-1 active:shadow-none hover:brightness-110 disabled:cursor-wait disabled:opacity-70 sm:w-auto sm:px-12 sm:py-4 sm:text-lg"
                                 style={{ 
                                     backgroundColor: theme.doneColor, 
                                     boxShadow: `0 4px 0 0 ${theme.doneShadow}` 

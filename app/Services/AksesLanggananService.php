@@ -63,6 +63,31 @@ class AksesLanggananService
         });
     }
 
+    public function cancelFromTransaction(Transaksi $transaction): void
+    {
+        DB::transaction(function () use ($transaction) {
+            $transaction->loadMissing('subscription.user');
+            $subscription = $transaction->subscription;
+
+            if (! $subscription || $subscription->status !== 'active') {
+                return;
+            }
+
+            $subscription->update(['status' => 'cancelled']);
+
+            $hasOtherActiveSubscription = Langganan::query()
+                ->where('user_id', $subscription->user_id)
+                ->where('id', '!=', $subscription->id)
+                ->where('status', 'active')
+                ->whereDate('end_date', '>=', now()->toDateString())
+                ->exists();
+
+            if (! $hasOtherActiveSubscription) {
+                $subscription->user?->update(['subscription_status' => 'free']);
+            }
+        });
+    }
+
     public function activateFromAccessKey(Pengguna $user, KodeAkses $accessKey): Langganan
     {
         return DB::transaction(function () use ($user, $accessKey) {

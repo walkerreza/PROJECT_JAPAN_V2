@@ -1,15 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { AnimatePresence, motion } from 'framer-motion';
+import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import CreditCardIcon from '@mui/icons-material/CreditCard';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlineOutlined';
 import HourglassTopIcon from '@mui/icons-material/HourglassTop';
-import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
-import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium';
-import theme from '@/Components/theme/themes';
+import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 
 const loadSnapScript = (midtrans) => new Promise((resolve, reject) => {
   if (window.snap) {
@@ -40,16 +37,54 @@ const loadSnapScript = (midtrans) => new Promise((resolve, reject) => {
   document.body.appendChild(script);
 });
 
-const statusText = {
-  pending: 'Menunggu pembayaran',
-  success: 'Pesanan selesai',
-  failed: 'Pembayaran gagal',
-  expired: 'Pembayaran kedaluwarsa',
-  canceled: 'Pembayaran dibatalkan',
+const statusPresentation = {
+  pending: {
+    label: 'Menunggu pembayaran',
+    description: 'Selesaikan pembayaran di Midtrans untuk mengaktifkan akses belajar.',
+    badgeClass: 'border-amber-200 bg-amber-50 text-amber-800',
+    iconClass: 'bg-amber-50 text-amber-700',
+    Icon: HourglassTopIcon,
+  },
+  success: {
+    label: 'Pembayaran berhasil',
+    description: 'Akses belajar kamu sudah aktif.',
+    badgeClass: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+    iconClass: 'bg-emerald-50 text-emerald-700',
+    Icon: CheckCircleIcon,
+  },
+  failed: {
+    label: 'Pembayaran gagal',
+    description: 'Pembayaran belum berhasil diproses. Kamu dapat membuat pesanan baru.',
+    badgeClass: 'border-red-200 bg-red-50 text-red-800',
+    iconClass: 'bg-red-50 text-red-700',
+    Icon: ErrorOutlineIcon,
+  },
+  expired: {
+    label: 'Pembayaran kedaluwarsa',
+    description: 'Waktu pembayaran untuk pesanan ini telah berakhir.',
+    badgeClass: 'border-red-200 bg-red-50 text-red-800',
+    iconClass: 'bg-red-50 text-red-700',
+    Icon: ErrorOutlineIcon,
+  },
+  refunded: {
+    label: 'Pembayaran dikembalikan',
+    description: 'Pembayaran untuk pesanan ini telah dibatalkan atau dikembalikan.',
+    badgeClass: 'border-red-200 bg-red-50 text-red-800',
+    iconClass: 'bg-red-50 text-red-700',
+    Icon: ErrorOutlineIcon,
+  },
+  canceled: {
+    label: 'Pembayaran dibatalkan',
+    description: 'Pesanan ini dibatalkan. Kamu dapat membuat pesanan baru bila masih membutuhkan akses.',
+    badgeClass: 'border-red-200 bg-red-50 text-red-800',
+    iconClass: 'bg-red-50 text-red-700',
+    Icon: ErrorOutlineIcon,
+  },
 };
 
 const formatDate = (value) => {
   if (!value) return '-';
+
   return new Intl.DateTimeFormat('id-ID', {
     day: 'numeric',
     month: 'long',
@@ -64,14 +99,18 @@ export default function Checkout({ transaction, midtrans }) {
   const [snapToken, setSnapToken] = useState('');
   const [isOpening, setIsOpening] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [invoiceOpen, setInvoiceOpen] = useState(true);
+  const [isCanceling, setIsCanceling] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [kloter, setKloter] = useState(transaction.kloter || null);
+  const { confirmState, openConfirm, closeConfirm, setConfirmProcessing } = useConfirmAction();
 
   const isDone = status === 'success';
   const isPending = status === 'pending';
+  const shouldRestartCheckout = ['failed', 'expired', 'refunded', 'canceled'].includes(status);
   const storageKey = `midtrans:${transaction.transaction_code}`;
+  const presentation = statusPresentation[status] || statusPresentation.pending;
+  const StatusIcon = presentation.Icon;
 
   const savedPayment = useMemo(() => {
     try {
@@ -99,19 +138,19 @@ export default function Checkout({ transaction, midtrans }) {
       if (nextStatus === 'success' || response.data?.is_premium) {
         setKloter(response.data?.kloter || null);
         window.sessionStorage?.removeItem(storageKey);
-        setNotice(successMessage || 'Pembayaran berhasil divalidasi. Pesanan selesai dan akses belajar sudah aktif.');
+        setNotice(successMessage || 'Pembayaran berhasil divalidasi. Akses belajar sudah aktif.');
         router.reload({ only: ['auth'] });
         return;
       }
 
       if (nextStatus === 'pending') {
-        setNotice('Pembayaran masih pending. Jika sudah membayar QRIS/VA, tunggu sebentar lalu validasi lagi.');
+        setNotice('Pembayaran masih menunggu konfirmasi. Coba periksa lagi beberapa saat setelah pembayaran selesai.');
         return;
       }
 
-      setError('Status pembayaran belum berhasil. Silakan coba ulang pembayaran atau hubungi admin.');
+      setNotice('Status pesanan telah diperbarui.');
     } catch (syncError) {
-      setError(syncError.response?.data?.message || 'Gagal validasi status pembayaran.');
+      setError(syncError.response?.data?.message || 'Gagal memeriksa status pembayaran.');
     } finally {
       setIsSyncing(false);
     }
@@ -126,6 +165,7 @@ export default function Checkout({ transaction, midtrans }) {
       snapToken: response.data.snap_token,
       redirectUrl: response.data.redirect_url,
     }));
+
     return response.data.snap_token;
   };
 
@@ -139,10 +179,10 @@ export default function Checkout({ transaction, midtrans }) {
       const token = await prepareSnapToken();
 
       window.snap.pay(token, {
-        onSuccess: async () => syncStatus('Pembayaran berhasil. Pesanan selesai dan akses belajar sudah aktif.'),
+        onSuccess: async () => syncStatus('Pembayaran berhasil. Akses belajar sudah aktif.'),
         onPending: async () => syncStatus(),
-        onError: () => setError('Pembayaran gagal diproses. Silakan buka Midtrans lagi.'),
-        onClose: () => setNotice('Popup pembayaran ditutup. Kamu bisa membuka Midtrans lagi dari tombol di bawah.'),
+        onError: () => setError('Pembayaran gagal diproses. Kamu dapat mencoba lagi dari Midtrans.'),
+        onClose: () => setNotice('Pembayaran belum diselesaikan. Kamu dapat melanjutkannya kapan saja dari halaman ini.'),
       });
     } catch (openError) {
       setError(openError.response?.data?.message || openError.message || 'Gagal membuka Midtrans.');
@@ -151,345 +191,213 @@ export default function Checkout({ transaction, midtrans }) {
     }
   };
 
-  if (isDone) {
-    return (
-      <>
-        <Head title="Pembayaran Selesai - Japanlingo" />
+  const cancelPayment = async () => {
+    setError('');
+    setNotice('');
+    setIsCanceling(true);
+    setConfirmProcessing(true);
 
-        <main className="min-h-screen bg-[#fbfcfe] px-5 py-8 text-gray-900 sm:px-8">
-          <section className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-3xl flex-col justify-center">
-            <div className="text-center">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.72 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ type: 'spring', stiffness: 120, damping: 20 }}
-                className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-green-50"
-              >
-                <motion.svg
-                  viewBox="0 0 96 96"
-                  className="h-20 w-20"
-                  aria-hidden="true"
-                >
-                  <motion.circle
-                    cx="48"
-                    cy="48"
-                    r="34"
-                    fill="none"
-                    stroke="#22c55e"
-                    strokeWidth="6"
-                    initial={{ pathLength: 0, opacity: 0.3 }}
-                    animate={{ pathLength: 1, opacity: 1 }}
-                    transition={{ duration: 0.5, ease: 'easeOut' }}
-                  />
-                  <motion.path
-                    d="M32 49.5 43.5 61 65 37"
-                    fill="none"
-                    stroke="#16a34a"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="7"
-                    initial={{ pathLength: 0 }}
-                    animate={{ pathLength: 1 }}
-                    transition={{ delay: 0.28, duration: 0.42, ease: 'easeOut' }}
-                  />
-                </motion.svg>
-              </motion.div>
+    try {
+      const response = await window.axios.post(route('payments.midtrans.cancel', transaction.transaction_code));
+      const nextStatus = response.data?.status || status;
+      setStatus(nextStatus);
 
-              <motion.div
-                initial={{ opacity: 0, y: 18 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.18 }}
-              >
-                <p className="mt-8 text-xs font-black uppercase tracking-[0.28em] text-green-600">Payment Success</p>
-                <h1 className="mt-3 text-4xl font-black tracking-tight text-gray-950 sm:text-5xl">
-                  Pembayaran selesai
-                </h1>
-                <p className="mx-auto mt-4 max-w-xl text-sm font-semibold leading-7 text-gray-500 sm:text-base">
-                  Akses belajar sudah aktif. Simpan invoice ini sebagai bukti pembayaran.
-                </p>
-                {kloter ? (
-                  <div className="mx-auto mt-5 max-w-xl border-y border-green-100 py-4 text-sm font-bold text-green-700">
-                    Kamu masuk ke kloter {kloter.nama}. Mulai {kloter.tanggal_mulai_label || '-'}
-                    {kloter.admin_name ? ` bersama ${kloter.admin_name}` : ''}.
-                  </div>
-                ) : (
-                  <div className="mx-auto mt-5 max-w-xl border-y border-amber-100 py-4 text-sm font-bold text-amber-700">
-                    Akses aktif, tetapi akun ini belum masuk kloter. Superadmin bisa menempatkan akun ke kloter belajar.
-                  </div>
-                )}
-                <p className="mt-7 text-4xl font-black tracking-tight text-gray-950 sm:text-5xl">
-                  {transaction.amount_formatted}
-                </p>
-              </motion.div>
-            </div>
+      if (nextStatus === 'canceled') {
+        window.sessionStorage?.removeItem(storageKey);
+      }
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.28 }}
-              className="mt-10 w-full text-left"
-            >
-              <button
-                type="button"
-                onClick={() => setInvoiceOpen((open) => !open)}
-                className="flex w-full items-center justify-between border-y border-gray-200 py-5 text-left transition hover:border-gray-300"
-              >
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.22em] text-gray-400">Invoice</p>
-                  <h2 className="mt-2 text-lg font-black text-gray-950 sm:text-xl">#{transaction.transaction_code}</h2>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="hidden text-right sm:block">
-                    <p className="text-xs font-black uppercase tracking-[0.22em] text-gray-400">Status</p>
-                    <p className="mt-2 text-sm font-black text-green-600">Lunas</p>
-                  </div>
-                  <KeyboardArrowDownIcon
-                    className={`text-gray-400 transition-transform ${invoiceOpen ? 'rotate-180' : ''}`}
-                  />
-                </div>
-              </button>
+      setNotice(response.data?.message || 'Status pesanan telah diperbarui.');
+      closeConfirm();
+    } catch (cancelError) {
+      setError(cancelError.response?.data?.message || 'Gagal membatalkan pesanan.');
+      closeConfirm();
+    } finally {
+      setConfirmProcessing(false);
+      setIsCanceling(false);
+    }
+  };
 
-              <AnimatePresence initial={false}>
-                {invoiceOpen && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.24, ease: 'easeOut' }}
-                    className="overflow-hidden"
-                  >
-                    <div className="divide-y divide-gray-100">
-                      <div className="grid gap-2 py-5 sm:grid-cols-[180px_1fr]">
-                        <p className="text-sm font-bold text-gray-400">Paket</p>
-                        <p className="text-sm font-black text-gray-900">{transaction.payment_plan?.name || 'Akses Japanlingo'}</p>
-                      </div>
-                      <div className="grid gap-2 py-5 sm:grid-cols-[180px_1fr]">
-                        <p className="text-sm font-bold text-gray-400">Akses</p>
-                        <p className="text-sm font-black text-gray-900">{transaction.scope_label || 'Semua kelas'}</p>
-                      </div>
-                      <div className="grid gap-2 py-5 sm:grid-cols-[180px_1fr]">
-                        <p className="text-sm font-bold text-gray-400">Kloter</p>
-                        <p className="text-sm font-black text-gray-900">{kloter?.nama || 'Menunggu penempatan kloter'}</p>
-                      </div>
-                      <div className="grid gap-2 py-5 sm:grid-cols-[180px_1fr]">
-                        <p className="text-sm font-bold text-gray-400">Deskripsi</p>
-                        <p className="text-sm font-semibold leading-6 text-gray-600">
-                          {transaction.payment_plan?.description || 'Akses untuk membuka konten belajar lanjutan.'}
-                        </p>
-                      </div>
-                      <div className="grid gap-2 py-5 sm:grid-cols-[180px_1fr]">
-                        <p className="text-sm font-bold text-gray-400">Tanggal</p>
-                        <p className="text-sm font-semibold text-gray-700">{formatDate(transaction.processed_at || transaction.created_at)}</p>
-                      </div>
-                      <div className="grid gap-2 py-5 sm:grid-cols-[180px_1fr]">
-                        <p className="text-sm font-bold text-gray-400">Total</p>
-                        <p className="text-xl font-black text-gray-950">{transaction.amount_formatted}</p>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.42 }}
-              className="mt-10 flex w-full flex-col gap-3 sm:flex-row"
-            >
-              <Link
-                href={route('user.dashboard')}
-                className={`inline-flex h-13 flex-1 items-center justify-center rounded-2xl bg-gradient-to-r ${theme.ctaBg} px-6 py-4 text-sm font-black text-white shadow-lg shadow-red-900/15 transition hover:-translate-y-0.5 hover:brightness-95`}
-              >
-                Kembali ke Dashboard
-              </Link>
-              <Link
-                href={route('user.kelas.index')}
-                className="inline-flex h-13 flex-1 items-center justify-center rounded-2xl border border-gray-200 bg-white px-6 py-4 text-sm font-black text-gray-800 transition hover:-translate-y-0.5 hover:bg-gray-50"
-              >
-                Lanjut ke Kelas
-              </Link>
-            </motion.div>
-          </section>
-        </main>
-      </>
-    );
-  }
+  const confirmCancelPayment = () => {
+    openConfirm({
+      variant: 'warning',
+      title: 'Batalkan pesanan?',
+      message: 'Pembayaran untuk pesanan ini akan dibatalkan di Midtrans dan tidak dapat dilanjutkan kembali.',
+      details: [{ label: 'Nomor pesanan', value: transaction.transaction_code }],
+      confirmLabel: 'Batalkan pesanan',
+      cancelLabel: 'Kembali',
+      onConfirm: cancelPayment,
+    });
+  };
 
   return (
     <>
       <Head title={`Checkout ${transaction.transaction_code} - Japanlingo`} />
 
-      <main className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,#fee2e2_0,transparent_34%),linear-gradient(135deg,#fff_0%,#f8fafc_45%,#fff7ed_100%)] px-4 py-8 text-gray-900 sm:px-6 lg:px-8">
-        <section className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl items-center">
-          <div className="grid w-full overflow-hidden rounded-[2rem] border border-white/80 bg-white/85 shadow-2xl shadow-red-900/10 backdrop-blur lg:grid-cols-[1.05fr_0.95fr]">
-            <div className="relative flex min-h-[620px] flex-col justify-between overflow-hidden bg-gray-950 p-7 text-white sm:p-10">
-              <div className={`absolute inset-0 bg-gradient-to-br ${theme.ctaBg} opacity-95`} />
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_22px_22px,rgba(255,255,255,0.20)_2px,transparent_3px)] bg-[length:32px_32px] opacity-35" />
-              <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-white/15 blur-3xl" />
-              <div className="absolute -bottom-24 left-8 h-72 w-72 rounded-full bg-yellow-300/20 blur-3xl" />
+      <main className="min-h-screen bg-slate-50 px-4 py-5 text-slate-900 sm:px-6 sm:py-8">
+        <div className="mx-auto max-w-5xl">
+          <header className="flex items-center justify-between gap-4 border-b border-slate-200 pb-4 sm:pb-5">
+            <Link href={route('home')} className="text-lg font-black text-slate-950">
+              Japanlingo
+            </Link>
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+              <VerifiedUserIcon sx={{ fontSize: 17 }} className="text-slate-600" />
+              <span>Pembayaran aman melalui Midtrans</span>
+            </div>
+          </header>
 
-              <div className="relative">
-                <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-xs font-black uppercase tracking-[0.24em] text-white/80 backdrop-blur">
-                  <WorkspacePremiumIcon sx={{ fontSize: 16 }} />
-                  Checkout Akses
+          <section className="mt-5 grid overflow-hidden border border-slate-200 bg-white lg:mt-8 lg:grid-cols-[0.82fr_1.18fr]">
+            <aside className="order-2 border-t border-slate-200 bg-slate-50 p-5 lg:order-1 lg:border-r lg:border-t-0 lg:p-8">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase text-slate-500">
+                <ReceiptLongIcon sx={{ fontSize: 18 }} />
+                Ringkasan pesanan
+              </div>
+
+              <h1 className="mt-5 break-words text-xl font-black text-slate-950 sm:text-2xl">
+                {transaction.payment_plan?.name || 'Akses Japanlingo'}
+              </h1>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                {transaction.payment_plan?.description || 'Akses untuk membuka konten belajar lanjutan.'}
+              </p>
+
+              <dl className="mt-7 divide-y divide-slate-200 border-y border-slate-200 text-sm">
+                <div className="grid gap-1 py-4 sm:grid-cols-[120px_1fr] lg:grid-cols-1">
+                  <dt className="font-medium text-slate-500">Akses</dt>
+                  <dd className="font-bold text-slate-900">{transaction.scope_label || 'Semua kelas'}</dd>
                 </div>
-                <h1 className="mt-6 max-w-xl text-4xl font-black tracking-tight sm:text-5xl">
-                  {isDone ? 'Pembayaran berhasil.' : 'Selesaikan pembayaran akses belajar.'}
-                </h1>
-                <p className="mt-4 max-w-lg text-sm font-semibold leading-7 text-white/78">
-                  {isDone
-                    ? 'Akses belajar sudah aktif. Kamu bisa kembali ke dashboard dan lanjut belajar.'
-                    : 'Pilih metode pembayaran di Midtrans. Setelah selesai, validasi status pesanan di halaman ini.'}
+                <div className="grid gap-1 py-4 sm:grid-cols-[120px_1fr] lg:grid-cols-1">
+                  <dt className="font-medium text-slate-500">Nomor pesanan</dt>
+                  <dd className="break-all font-bold text-slate-900">{transaction.transaction_code}</dd>
+                </div>
+                <div className="grid gap-1 py-4 sm:grid-cols-[120px_1fr] lg:grid-cols-1">
+                  <dt className="font-medium text-slate-500">Tanggal dibuat</dt>
+                  <dd className="font-semibold text-slate-800">{formatDate(transaction.created_at)}</dd>
+                </div>
+                <div className="grid gap-1 py-4 sm:grid-cols-[120px_1fr] lg:grid-cols-1">
+                  <dt className="font-medium text-slate-500">Total</dt>
+                  <dd className="text-xl font-black text-slate-950">{transaction.amount_formatted}</dd>
+                </div>
+              </dl>
+
+              {isDone && kloter && (
+                <div className="mt-6 border-l-2 border-slate-300 pl-4 text-sm leading-6 text-slate-600">
+                  <p className="font-bold text-slate-800">Kelas kamu</p>
+                  <p className="mt-1">
+                    Kloter {kloter.nama}. Mulai {kloter.tanggal_mulai_label || '-'}
+                    {kloter.admin_name ? ` bersama ${kloter.admin_name}` : ''}.
+                  </p>
+                </div>
+              )}
+            </aside>
+
+            <section className="order-1 p-5 sm:p-8 lg:order-2 lg:p-10">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <span className={`inline-flex items-center rounded border px-2.5 py-1 text-xs font-bold ${presentation.badgeClass}`}>
+                    {presentation.label}
+                  </span>
+                  <h2 className="mt-5 text-2xl font-black text-slate-950 sm:text-3xl">{presentation.label}</h2>
+                  <p className="mt-3 max-w-xl text-sm leading-6 text-slate-600 sm:text-base">
+                    {presentation.description}
+                  </p>
+                </div>
+                <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${presentation.iconClass}`}>
+                  <StatusIcon sx={{ fontSize: 25 }} />
+                </div>
+              </div>
+
+              <div className="mt-8 border-y border-slate-200 py-5">
+                <p className="text-sm font-medium text-slate-500">Total pembayaran</p>
+                <p className="mt-1 break-words text-3xl font-black text-slate-950 sm:text-4xl">
+                  {transaction.amount_formatted}
                 </p>
               </div>
 
-              <AnimatePresence>
-                {isDone && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.84, y: 24 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    transition={{ type: 'spring', stiffness: 180, damping: 16 }}
-                    className="relative my-10 flex justify-center"
-                  >
-                    <div className="relative">
-                      {[0, 1, 2].map((ring) => (
-                        <motion.span
-                          key={ring}
-                          className="absolute inset-0 rounded-full border border-white/40"
-                          initial={{ scale: 0.7, opacity: 0.9 }}
-                          animate={{ scale: 1.55 + ring * 0.24, opacity: 0 }}
-                          transition={{
-                            duration: 1.8,
-                            repeat: Infinity,
-                            delay: ring * 0.25,
-                            ease: 'easeOut',
-                          }}
-                        />
-                      ))}
-                      <motion.div
-                        initial={{ rotate: -16 }}
-                        animate={{ rotate: 0 }}
-                        className="relative flex h-28 w-28 items-center justify-center rounded-full bg-white text-green-600 shadow-2xl shadow-black/20"
-                      >
-                        <CheckCircleIcon sx={{ fontSize: 72 }} />
-                      </motion.div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              <div className="relative grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl bg-white/12 p-4 backdrop-blur">
-                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/55">Order ID</p>
-                  <p className="mt-2 break-all text-sm font-black">#{transaction.transaction_code}</p>
-                </div>
-                <div className="rounded-2xl bg-white/12 p-4 backdrop-blur">
-                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/55">Total</p>
-                  <p className="mt-2 text-2xl font-black">{transaction.amount_formatted}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-6 sm:p-8 lg:p-10">
-              <div className="mb-8 flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.22em] text-gray-400">Status pesanan</p>
-                  <h2 className="mt-2 text-2xl font-black">{statusText[status] || status}</h2>
-                </div>
-                <motion.div
-                  animate={isDone ? { scale: [1, 1.08, 1] } : { scale: 1 }}
-                  transition={{ repeat: isDone ? Infinity : 0, duration: 1.8 }}
-                  className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl ${isDone ? 'bg-green-100 text-green-600' : 'bg-red-50 text-red-600'}`}
-                >
-                  {isDone ? <CheckCircleIcon sx={{ fontSize: 34 }} /> : <CreditCardIcon sx={{ fontSize: 32 }} />}
-                </motion.div>
-              </div>
-
-              <div className="rounded-[1.5rem] border border-gray-100 bg-gray-50 p-5">
-                <div className="flex items-start gap-4">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-gray-700 shadow-sm">
-                    <ReceiptLongIcon />
-                  </div>
-                  <div>
-                    <p className="text-sm font-black text-gray-900">{transaction.payment_plan?.name || 'Akses Japanlingo'}</p>
-                    <p className="mt-1 text-xs font-black uppercase tracking-wider text-red-500">
-                      {transaction.scope_label || 'Semua kelas'}
-                    </p>
-                    <p className="mt-1 text-sm font-medium leading-6 text-gray-500">
-                      {transaction.payment_plan?.description || 'Akses untuk membuka konten belajar lanjutan.'}
-                    </p>
-                    <p className="mt-3 text-xs font-bold text-gray-400">Dibuat: {formatDate(transaction.created_at)}</p>
-                  </div>
-                </div>
-              </div>
-
               {(notice || error) && (
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`mt-5 flex items-start gap-3 rounded-2xl border px-5 py-4 text-sm font-bold ${error ? 'border-red-100 bg-red-50 text-red-700' : 'border-green-100 bg-green-50 text-green-700'}`}
+                <div
+                  role={error ? 'alert' : 'status'}
+                  className={`mt-6 flex items-start gap-3 border-l-2 px-4 py-3 text-sm leading-6 ${error
+                    ? 'border-red-500 bg-red-50 text-red-800'
+                    : 'border-slate-400 bg-slate-50 text-slate-700'
+                    }`}
                 >
-                  {error ? <ErrorOutlineIcon sx={{ fontSize: 20 }} /> : <CheckCircleIcon sx={{ fontSize: 20 }} />}
+                  {error ? <ErrorOutlineIcon sx={{ fontSize: 20 }} /> : <HourglassTopIcon sx={{ fontSize: 20 }} />}
                   <span>{error || notice}</span>
-                </motion.div>
+                </div>
               )}
 
               <div className="mt-8 space-y-3">
                 {isPending && (
-                  <button
-                    type="button"
-                    onClick={openMidtrans}
-                    disabled={isOpening}
-                    className={`inline-flex h-13 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r ${theme.ctaBg} px-6 py-4 text-sm font-black text-white shadow-lg shadow-red-900/15 transition hover:-translate-y-0.5 hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60`}
-                  >
-                    <OpenInNewIcon sx={{ fontSize: 19 }} />
-                    {isOpening ? 'Membuka Midtrans...' : 'Buka Pembayaran Midtrans'}
-                  </button>
-                )}
-
-                {!isDone && (
-                  <button
-                    type="button"
-                    onClick={() => syncStatus()}
-                    disabled={isSyncing}
-                    className="inline-flex h-13 w-full items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-6 py-4 text-sm font-black text-gray-800 transition hover:-translate-y-0.5 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <HourglassTopIcon sx={{ fontSize: 19 }} />
-                    {isSyncing ? 'Memvalidasi...' : 'Validasi Status Pembayaran'}
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={openMidtrans}
+                      disabled={isOpening || isSyncing || isCanceling}
+                      className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#c33d4b] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#a9323f] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <OpenInNewIcon sx={{ fontSize: 19 }} />
+                      {isOpening ? 'Membuka Midtrans...' : 'Lanjutkan ke Midtrans'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => syncStatus()}
+                      disabled={isOpening || isSyncing || isCanceling}
+                      className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-800 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <HourglassTopIcon sx={{ fontSize: 19 }} />
+                      {isSyncing ? 'Memeriksa status...' : 'Periksa status pembayaran'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={confirmCancelPayment}
+                      disabled={isOpening || isSyncing || isCanceling}
+                      className="inline-flex min-h-11 w-full items-center justify-center px-5 py-2 text-sm font-semibold text-slate-500 transition hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isCanceling ? 'Membatalkan pesanan...' : 'Batalkan pesanan'}
+                    </button>
+                  </>
                 )}
 
                 {isDone && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="grid gap-3 sm:grid-cols-2"
-                  >
-                    <Link
-                      href={route('user.dashboard')}
-                      className={`inline-flex h-13 items-center justify-center rounded-2xl bg-gradient-to-r ${theme.ctaBg} px-6 py-4 text-sm font-black text-white shadow-lg shadow-red-900/15 transition hover:-translate-y-0.5 hover:brightness-95`}
-                    >
-                      Kembali ke Dashboard
-                    </Link>
+                  <div className="grid gap-3 sm:grid-cols-2">
                     <Link
                       href={route('user.kelas.index')}
-                      className="inline-flex h-13 items-center justify-center rounded-2xl border border-gray-200 bg-white px-6 py-4 text-sm font-black text-gray-800 transition hover:-translate-y-0.5 hover:bg-gray-50"
+                      className="inline-flex min-h-12 items-center justify-center rounded-lg bg-[#c33d4b] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#a9323f]"
                     >
-                      Lanjut ke Kelas
+                      Mulai belajar
                     </Link>
-                  </motion.div>
+                    <Link
+                      href={route('user.dashboard')}
+                      className="inline-flex min-h-12 items-center justify-center rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-800 transition hover:bg-slate-50"
+                    >
+                      Ke dashboard
+                    </Link>
+                  </div>
+                )}
+
+                {shouldRestartCheckout && (
+                  <Link
+                    href={route('pricing')}
+                    className="inline-flex min-h-12 w-full items-center justify-center rounded-lg bg-[#c33d4b] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#a9323f]"
+                  >
+                    Pilih paket lagi
+                  </Link>
                 )}
               </div>
 
-              <p className="mt-6 text-center text-xs font-semibold leading-5 text-gray-400">
-                Jangan tutup halaman ini sebelum status tervalidasi jika kamu sedang melakukan demo pembayaran.
-              </p>
-            </div>
-          </div>
-        </section>
+              {isPending && (
+                <p className="mt-6 flex items-start gap-2 text-xs leading-5 text-slate-500">
+                  <VerifiedUserIcon sx={{ fontSize: 16 }} className="mt-0.5 shrink-0" />
+                  Pembayaran diproses oleh Midtrans. Akses hanya aktif setelah status pembayaran dikonfirmasi.
+                </p>
+              )}
+            </section>
+          </section>
+        </div>
       </main>
+      <ConfirmActionDialog
+        {...confirmState}
+        onCancel={closeConfirm}
+      />
     </>
   );
 }

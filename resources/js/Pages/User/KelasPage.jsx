@@ -70,6 +70,19 @@ const accessMeta = (item) => {
 
 const clampProgress = (value) => Math.max(0, Math.min(100, Number(value ?? 0)));
 
+const createCheckoutRequestKey = () => {
+    if (window.crypto?.randomUUID) {
+        return window.crypto.randomUUID();
+    }
+
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
+        const random = Math.floor(Math.random() * 16);
+        const value = character === 'x' ? random : ((random & 0x3) | 0x8);
+
+        return value.toString(16);
+    });
+};
+
 function EmptyThumbnail({ compact = false }) {
     return (
         <div className={`absolute inset-0 bg-gradient-to-br ${theme.ctaBg}`}>
@@ -275,20 +288,35 @@ export default function KelasPage({ programs = [] }) {
 
         try {
             setCheckoutPlanId(plan.id);
+            const storageKey = `midtrans:checkout-intent:${plan.id}`;
+            const requestKey = window.sessionStorage?.getItem(storageKey) || createCheckoutRequestKey();
+            window.sessionStorage?.setItem(storageKey, requestKey);
             const response = await window.axios.post(route('payments.midtrans.checkout'), {
                 payment_plan_id: plan.id,
+                checkout_request_key: requestKey,
             });
+            const transactionCode = response.data?.transaction_code;
+
+            if (!transactionCode) {
+                throw new Error('Checkout tidak mengembalikan kode transaksi. Silakan coba lagi.');
+            }
+
+            window.sessionStorage?.removeItem(storageKey);
 
             window.sessionStorage?.setItem(
-                `midtrans:${response.data.transaction_code}`,
+                `midtrans:${transactionCode}`,
                 JSON.stringify({
                     snapToken: response.data.snap_token,
                     redirectUrl: response.data.redirect_url,
                 }),
             );
 
-            window.location.href = route('user.checkout', response.data.transaction_code);
+            window.location.href = route('user.checkout', { transactionCode });
         } catch (error) {
+            if (error.response?.status === 409) {
+                window.sessionStorage?.removeItem(`midtrans:checkout-intent:${plan.id}`);
+            }
+
             setCheckoutError(error.response?.data?.message || error.message || 'Gagal memulai pembayaran Midtrans.');
         } finally {
             setCheckoutPlanId(null);
@@ -328,17 +356,17 @@ export default function KelasPage({ programs = [] }) {
                             </div>
 
                             <div className="grid grid-cols-3 gap-2 sm:min-w-[360px]">
-                                <div className="rounded-2xl bg-white/75 px-3 py-3 text-slate-950 shadow-sm backdrop-blur transition-colors duration-300 dark:bg-gray-950/70 dark:text-white">
-                                    <p className="text-2xl font-black">{kelasItems.length}</p>
-                                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400">Kelas</p>
+                                <div className="min-w-0 rounded-2xl bg-white/75 px-2 py-2.5 text-slate-950 shadow-sm backdrop-blur transition-colors duration-300 sm:px-3 sm:py-3 dark:bg-gray-950/70 dark:text-white">
+                                    <p className="text-xl font-black sm:text-2xl">{kelasItems.length}</p>
+                                    <p className="break-words text-[9px] font-bold uppercase tracking-[0.08em] text-slate-500 sm:text-[11px] sm:tracking-wider dark:text-gray-400">Kelas</p>
                                 </div>
-                                <div className="rounded-2xl bg-white/75 px-3 py-3 text-slate-950 shadow-sm backdrop-blur transition-colors duration-300 dark:bg-gray-950/70 dark:text-white">
-                                    <p className="text-2xl font-black">{summary.lessons}</p>
-                                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400">Pelajaran</p>
+                                <div className="min-w-0 rounded-2xl bg-white/75 px-2 py-2.5 text-slate-950 shadow-sm backdrop-blur transition-colors duration-300 sm:px-3 sm:py-3 dark:bg-gray-950/70 dark:text-white">
+                                    <p className="text-xl font-black sm:text-2xl">{summary.lessons}</p>
+                                    <p className="break-words text-[9px] font-bold uppercase tracking-[0.08em] text-slate-500 sm:text-[11px] sm:tracking-wider dark:text-gray-400">Pelajaran</p>
                                 </div>
-                                <div className="rounded-2xl bg-white/75 px-3 py-3 text-slate-950 shadow-sm backdrop-blur transition-colors duration-300 dark:bg-gray-950/70 dark:text-white">
-                                    <p className="text-2xl font-black">{summary.active}</p>
-                                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400">Aktif</p>
+                                <div className="min-w-0 rounded-2xl bg-white/75 px-2 py-2.5 text-slate-950 shadow-sm backdrop-blur transition-colors duration-300 sm:px-3 sm:py-3 dark:bg-gray-950/70 dark:text-white">
+                                    <p className="text-xl font-black sm:text-2xl">{summary.active}</p>
+                                    <p className="break-words text-[9px] font-bold uppercase tracking-[0.08em] text-slate-500 sm:text-[11px] sm:tracking-wider dark:text-gray-400">Aktif</p>
                                 </div>
                             </div>
                         </div>
