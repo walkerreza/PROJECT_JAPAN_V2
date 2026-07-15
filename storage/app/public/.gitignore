@@ -1,2 +1,7 @@
 *
 !.gitignore
+!uploads/
+!uploads/news/
+!uploads/news/covers/
+!uploads/news/covers/seed/
+!uploads/news/covers/seed/*.png

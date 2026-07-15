@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             PenggunaSeeder::class,
+            NewsPortalSeeder::class,
             N3CourseSeeder::class,
             KelasDemoSeeder::class,
             KloterDemoSeeder::class,
