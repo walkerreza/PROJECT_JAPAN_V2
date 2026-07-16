@@ -1,5 +1,5 @@
 import BoltIcon from '@mui/icons-material/Bolt';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, usePage } from '@inertiajs/react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -36,19 +36,42 @@ const SectionTitle = ({ icon, children }) => (
     </div>
 );
 
+const resolveThemeLabel = () => {
+    if (typeof window === 'undefined') {
+        return 'System';
+    }
+
+    const mode = window.localStorage.getItem('theme') || 'system';
+
+    if (mode === 'dark') {
+        return 'Dark';
+    }
+
+    if (mode === 'light') {
+        return 'Light';
+    }
+
+    return 'System';
+};
+
 export default function ProfilAdmin() {
     const { user } = usePage().props.auth;
     const [activeTab, setActiveTab] = useState('settings');
-    const [themeMode, setThemeMode] = useState(() =>
-        typeof window !== 'undefined' ? localStorage.getItem('theme') || 'system' : 'system'
-    );
+    const [themeLabel, setThemeLabel] = useState(resolveThemeLabel);
     const [saved, setSaved] = useState(false);
 
-    const handleThemeChange = (val) => {
-        setThemeMode(val);
-        localStorage.setItem('theme', val);
-        window.dispatchEvent(new Event('storage'));
-    };
+    useEffect(() => {
+        const syncThemeLabel = () => setThemeLabel(resolveThemeLabel());
+
+        syncThemeLabel();
+        window.addEventListener('storage', syncThemeLabel);
+        window.addEventListener('japanlingo:theme-changed', syncThemeLabel);
+
+        return () => {
+            window.removeEventListener('storage', syncThemeLabel);
+            window.removeEventListener('japanlingo:theme-changed', syncThemeLabel);
+        };
+    }, []);
 
     const handleSave = () => {
         setSaved(true);
@@ -145,17 +168,15 @@ export default function ProfilAdmin() {
                                                 <div>
                                                     <SectionTitle icon={<PaletteIcon />}>Preferensi Tema</SectionTitle>
                                                     <div className="bg-gray-50/50 dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-800 p-5 transition-colors duration-300">
-                                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3 transition-colors duration-300">Mode Tampilan</label>
-                                                        <select
-                                                            value={themeMode}
-                                                            onChange={e => handleThemeChange(e.target.value)}
-                                                            className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 rounded-xl px-4 py-3 text-sm font-bold cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:focus:border-indigo-400 transition-all duration-300"
-                                                        >
-                                                            <option value="system">Sistem Sistem Default</option>
-                                                            <option value="light">Terang Terang</option>
-                                                            <option value="dark">Gelap Gelap</option>
-                                                        </select>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-3 leading-relaxed transition-colors duration-300">Pilih tampilan antarmuka yang paling nyaman untuk Anda.</p>
+                                                        <div className="flex items-center justify-between gap-4">
+                                                            <div>
+                                                                <p className="text-sm font-bold text-gray-700 dark:text-gray-300 transition-colors duration-300">Mode Tampilan</p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed transition-colors duration-300">Tema diatur dari tombol kanan atas agar konsisten di semua halaman.</p>
+                                                            </div>
+                                                            <span className="shrink-0 rounded-xl bg-gray-900 px-4 py-2 text-xs font-black uppercase tracking-widest text-white dark:bg-white dark:text-gray-900">
+                                                                {themeLabel}
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                 </div>
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import ConfirmActionDialog from '@/Components/UI/ConfirmActionDialog';
@@ -132,14 +132,30 @@ const transactionTone = (status) => {
     };
 };
 
+const resolveThemeLabel = () => {
+    if (typeof window === 'undefined') {
+        return 'System';
+    }
+
+    const mode = window.localStorage.getItem('theme') || 'system';
+
+    if (mode === 'dark') {
+        return 'Dark';
+    }
+
+    if (mode === 'light') {
+        return 'Light';
+    }
+
+    return 'System';
+};
+
 export default function Profile({ recentTransactions = [], achievements = [], gamificationSettings = {} }) {
     const { user } = usePage().props.auth;
     const [activeTab, setActiveTab] = useState('stats');
     const [saved, setSaved] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState(false);
-    const [themeMode, setThemeMode] = useState(() =>
-        typeof window !== 'undefined' ? localStorage.getItem('theme') || 'system' : 'system'
-    );
+    const [themeLabel, setThemeLabel] = useState(resolveThemeLabel);
     const accessKeyForm = useForm({ code: '' });
     const deleteAccountForm = useForm({ password: '' });
     const accessStatus = user.access_status || {};
@@ -152,22 +168,18 @@ export default function Profile({ recentTransactions = [], achievements = [], ga
         statusLabel: transaction.status_label || (transaction.status === 'success' ? 'Berhasil' : 'Gagal'),
     }));
 
-    const handleThemeChange = (val) => {
-        setThemeMode(val);
-        localStorage.setItem('theme', val);
-        window.dispatchEvent(new Event('storage'));
-        if (val === 'dark') {
-            document.documentElement.classList.add('dark');
-        } else if (val === 'light') {
-            document.documentElement.classList.remove('dark');
-        } else {
-            if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-                document.documentElement.classList.add('dark');
-            } else {
-                document.documentElement.classList.remove('dark');
-            }
-        }
-    };
+    useEffect(() => {
+        const syncThemeLabel = () => setThemeLabel(resolveThemeLabel());
+
+        syncThemeLabel();
+        window.addEventListener('storage', syncThemeLabel);
+        window.addEventListener('japanlingo:theme-changed', syncThemeLabel);
+
+        return () => {
+            window.removeEventListener('storage', syncThemeLabel);
+            window.removeEventListener('japanlingo:theme-changed', syncThemeLabel);
+        };
+    }, []);
 
     const handleSave = () => {
         setSaved(true);
@@ -482,15 +494,12 @@ export default function Profile({ recentTransactions = [], achievements = [], ga
                                                             </div>
                                                             <div>
                                                                 <p className="font-bold text-gray-800 dark:text-gray-200 text-sm">Mode Tampilan</p>
-                                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Sesuaikan preferensi visual Anda.</p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Tema diatur dari tombol kanan atas.</p>
                                                             </div>
                                                         </div>
-                                                        <select value={themeMode} onChange={e => handleThemeChange(e.target.value)}
-                                                            className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold cursor-pointer focus:outline-none focus:ring-2 focus:ring-rose-200 dark:focus:ring-rose-900 min-w-[160px] shadow-sm">
-                                                            <option value="system">Sistem Default</option>
-                                                            <option value="light">Terang Terang</option>
-                                                            <option value="dark">Gelap</option>
-                                                        </select>
+                                                        <span className="shrink-0 rounded-xl bg-gray-900 px-4 py-2.5 text-xs font-black uppercase tracking-widest text-white shadow-sm dark:bg-white dark:text-gray-900">
+                                                            {themeLabel}
+                                                        </span>
                                                     </div>
                                                 </div>
 

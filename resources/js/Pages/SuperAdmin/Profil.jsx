@@ -1,6 +1,6 @@
 import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
 import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, usePage } from '@inertiajs/react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -50,20 +50,43 @@ const SectionTitle = ({ icon, children, subtitle, color = 'text-red-500 dark:tex
     </div>
 );
 
+const resolveThemeLabel = () => {
+    if (typeof window === 'undefined') {
+        return 'System';
+    }
+
+    const mode = window.localStorage.getItem('theme') || 'system';
+
+    if (mode === 'dark') {
+        return 'Dark';
+    }
+
+    if (mode === 'light') {
+        return 'Light';
+    }
+
+    return 'System';
+};
+
 export default function ProfilSuperAdmin() {
     const { user } = usePage().props.auth;
     const [activeTab, setActiveTab] = useState('settings');
-    const [themeMode, setThemeMode] = useState(() =>
-        typeof window !== 'undefined' ? localStorage.getItem('theme') || 'system' : 'system'
-    );
+    const [themeLabel, setThemeLabel] = useState(resolveThemeLabel);
     const [saved, setSaved] = useState(false);
     const [confirmMaintenance, setConfirmMaintenance] = useState(false);
 
-    const handleThemeChange = (val) => {
-        setThemeMode(val);
-        localStorage.setItem('theme', val);
-        window.dispatchEvent(new Event('storage'));
-    };
+    useEffect(() => {
+        const syncThemeLabel = () => setThemeLabel(resolveThemeLabel());
+
+        syncThemeLabel();
+        window.addEventListener('storage', syncThemeLabel);
+        window.addEventListener('japanlingo:theme-changed', syncThemeLabel);
+
+        return () => {
+            window.removeEventListener('storage', syncThemeLabel);
+            window.removeEventListener('japanlingo:theme-changed', syncThemeLabel);
+        };
+    }, []);
 
     const handleSave = () => {
         setSaved(true);
@@ -159,22 +182,11 @@ export default function ProfilSuperAdmin() {
                                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50 dark:bg-gray-900/50 rounded-2xl border border-slate-100 dark:border-gray-800 p-5 transition-colors duration-300">
                                                 <div>
                                                     <p className="font-bold text-slate-800 dark:text-white transition-colors duration-300">Mode Tampilan Global</p>
-                                                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 transition-colors duration-300">Pilih tema terang, gelap, atau ikuti sistem.</p>
+                                                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 transition-colors duration-300">Tema diatur dari tombol kanan atas agar tidak ada kontrol ganda.</p>
                                                 </div>
-                                                <div className="relative">
-                                                    <select
-                                                        value={themeMode}
-                                                        onChange={e => handleThemeChange(e.target.value)}
-                                                        className="appearance-none bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 text-slate-700 dark:text-slate-200 rounded-xl px-5 py-3 pr-10 text-sm font-bold cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-100 dark:focus:ring-red-900/30 min-w-[180px] transition-colors duration-300"
-                                                    >
-                                                        <option value="system">Sistem Sistem Default</option>
-                                                        <option value="light">Terang Terang</option>
-                                                        <option value="dark">Gelap Gelap</option>
-                                                    </select>
-                                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400 dark:text-slate-500 transition-colors duration-300">
-                                                        <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" fillRule="evenodd"></path></svg>
-                                                    </div>
-                                                </div>
+                                                <span className="shrink-0 rounded-xl bg-slate-900 px-5 py-3 text-xs font-black uppercase tracking-widest text-white dark:bg-white dark:text-slate-900">
+                                                    {themeLabel}
+                                                </span>
                                             </div>
                                         </BentoCard>
 

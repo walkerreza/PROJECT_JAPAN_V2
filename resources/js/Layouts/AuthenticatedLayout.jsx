@@ -19,6 +19,8 @@ import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import SlideshowIcon from '@mui/icons-material/Slideshow';
 import MenuIcon from '@mui/icons-material/Menu';
 import CloseIcon from '@mui/icons-material/Close';
+import DarkModeIcon from '@mui/icons-material/DarkMode';
+import LightModeIcon from '@mui/icons-material/LightMode';
 
 // Ikon Bawah
 import NotificationsOutlinedIcon from '@mui/icons-material/NotificationsOutlined';
@@ -67,6 +69,7 @@ export default function AuthenticatedLayout({ children }) {
     const flash = usePage().props.flash || {};
     const [profileMenuOpen, setProfileMenuOpen] = useState(false);
     const [notificationOpen, setNotificationOpen] = useState(false);
+    const [themeMode, setThemeMode] = useState(resolveThemeMode);
     const [isExpanded, setIsExpanded] = useState(true);
     const [mobileOpen, setMobileOpen] = useState(false);
     const [openMenuGroups, setOpenMenuGroups] = useState({});
@@ -78,7 +81,11 @@ export default function AuthenticatedLayout({ children }) {
     const [toastAchievements, setToastAchievements] = useState([]);
 
     useEffect(() => {
-        const syncTheme = () => applyDocumentTheme();
+        const syncTheme = () => {
+            const mode = resolveThemeMode();
+            setThemeMode(mode);
+            applyDocumentTheme(mode);
+        };
         const mediaQuery = window.matchMedia?.('(prefers-color-scheme: dark)');
 
         syncTheme();
@@ -90,6 +97,15 @@ export default function AuthenticatedLayout({ children }) {
             mediaQuery?.removeEventListener?.('change', syncTheme);
         };
     }, []);
+
+    const toggleThemeMode = () => {
+        const nextMode = shouldUseDarkMode(themeMode) ? 'light' : 'dark';
+
+        window.localStorage.setItem('theme', nextMode);
+        setThemeMode(nextMode);
+        applyDocumentTheme(nextMode);
+        window.dispatchEvent(new CustomEvent('japanlingo:theme-changed', { detail: { mode: nextMode } }));
+    };
 
     useEffect(() => {
         if (flash.achievement_unlocked) {
@@ -420,10 +436,24 @@ export default function AuthenticatedLayout({ children }) {
             </Link>
         );
     };
+    const isDarkModeActive = shouldUseDarkMode(themeMode);
+    const renderUtilityControls = (compact = false) => (
+        <div className={`flex items-center ${compact ? 'gap-1.5' : 'gap-2'}`}>
+            <button
+                type="button"
+                onClick={toggleThemeMode}
+                aria-label={isDarkModeActive ? 'Aktifkan mode terang' : 'Aktifkan mode gelap'}
+                title={isDarkModeActive ? 'Mode terang' : 'Mode gelap'}
+                className={`${compact ? 'h-10 w-10' : 'h-11 px-3'} inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white text-sm font-black text-gray-700 shadow-sm transition hover:-translate-y-0.5 hover:border-red-200 hover:text-red-600 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200 dark:hover:border-red-500/40 dark:hover:text-red-300`}
+            >
+                {isDarkModeActive ? <LightModeIcon sx={{ fontSize: 19 }} /> : <DarkModeIcon sx={{ fontSize: 19 }} />}
+                {!compact && <span>{isDarkModeActive ? 'Light' : 'Dark'}</span>}
+            </button>
+        </div>
+    );
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 flex flex-col lg:flex-row w-full overflow-x-clip transition-colors duration-300">
-            
             {/* ====== HEADER MOBILE ====== */}
             <div className="lg:hidden flex min-h-[64px] items-center justify-between bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-3 py-2 sticky top-0 z-30 shadow-sm transition-colors duration-300">
                 <div className="flex items-center gap-3">
@@ -432,13 +462,16 @@ export default function AuthenticatedLayout({ children }) {
                     </button>
                     <span className="font-black text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-red-400 text-lg tracking-tight">Japanlingo</span>
                 </div>
-                <button type="button" onClick={() => setMobileOpen(true)} aria-label="Buka menu akun dan navigasi" className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-red-600 text-sm font-black text-white shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2">
-                    {user?.avatar ? (
-                        <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    ) : (
-                        (user?.username || user?.name || "User")?.charAt(0).toUpperCase()
-                    )}
-                </button>
+                <div className="flex items-center gap-2">
+                    {renderUtilityControls(true)}
+                    <button type="button" onClick={() => setMobileOpen(true)} aria-label="Buka menu akun dan navigasi" className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-red-600 text-sm font-black text-white shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2">
+                        {user?.avatar ? (
+                            <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                            (user?.username || user?.name || "User")?.charAt(0).toUpperCase()
+                        )}
+                    </button>
+                </div>
             </div>
 
             {/* ====== OVERLAY MOBILE ====== */}
@@ -627,6 +660,17 @@ export default function AuthenticatedLayout({ children }) {
             </aside>
 
             <div className={`flex-1 w-full transition-all duration-300 ${isExpanded ? 'lg:ml-[240px]' : 'lg:ml-[88px]'}`}>
+                <header className="sticky top-0 z-20 hidden min-h-[64px] items-center justify-between border-b border-gray-200/80 bg-white/85 px-6 shadow-sm backdrop-blur-xl transition-colors duration-300 dark:border-gray-800 dark:bg-gray-950/80 lg:flex">
+                    <div className="min-w-0">
+                        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-red-500 dark:text-red-300">
+                            Japanlingo
+                        </p>
+                        <p className="truncate text-sm font-bold text-slate-600 dark:text-slate-300">
+                            Learning workspace
+                        </p>
+                    </div>
+                    {renderUtilityControls(false)}
+                </header>
                 <main className="min-h-screen bg-slate-50 dark:bg-[#0b1121] text-slate-900 dark:text-slate-100 shadow-[-5px_0_30px_-10px_rgba(0,0,0,0.05)] relative z-0 transition-colors duration-300">
                     {children}
                 </main>
@@ -663,6 +707,18 @@ export default function AuthenticatedLayout({ children }) {
             <style dangerouslySetInnerHTML={{__html:`
                 .hide-scrollbar::-webkit-scrollbar { display: none; }
                 .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+                .goog-te-banner-frame,
+                .goog-te-gadget,
+                .goog-te-balloon-frame,
+                #goog-gt-tt {
+                    display: none !important;
+                }
+                body {
+                    top: 0 !important;
+                }
+                iframe.skiptranslate {
+                    display: none !important;
+                }
                 @keyframes fade-in-slide-up {
                     0% { opacity: 0; transform: translateY(10px) scale(0.98); }
                     100% { opacity: 1; transform: translateY(0) scale(1); }
