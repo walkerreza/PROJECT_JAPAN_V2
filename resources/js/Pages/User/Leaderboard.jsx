@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Head } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { KabutoIcon } from '@/Components/JapaneseIcons';
 import LeagueIcon from '@/Components/Gamification/LeagueIcon';
@@ -26,7 +26,7 @@ const hashColor = (name) => {
 };
 
 const Avatar = ({ name, size = 'md', gradient }) => {
-    const sizes = { sm: 'w-10 h-10 text-base', md: 'w-12 h-12 text-lg', lg: 'w-16 h-16 text-2xl', xl: 'w-20 h-20 text-3xl' };
+    const sizes = { sm: 'w-10 h-10 text-base', md: 'w-12 h-12 text-lg', lg: 'h-12 w-12 text-xl sm:h-16 sm:w-16 sm:text-2xl', xl: 'h-14 w-14 text-2xl sm:h-20 sm:w-20 sm:text-3xl' };
     const bg = gradient || hashColor(name);
     return (
         <div className={`${sizes[size]} rounded-full bg-gradient-to-br ${bg} flex items-center justify-center font-bold text-white shadow-lg flex-shrink-0 transition-colors duration-300`}>
@@ -35,7 +35,10 @@ const Avatar = ({ name, size = 'md', gradient }) => {
     );
 };
 
-const TABS = ['Weekly', 'Monthly', 'All Time'];
+const TABS = [
+    { key: 'week', label: 'Weekly' },
+    { key: 'all', label: 'All Time' },
+];
 
 const medalEmoji = (rank) => {
     if (rank === 1) return <KabutoIcon className="w-5 h-5 inline-block text-yellow-500" />;
@@ -46,21 +49,22 @@ const medalEmoji = (rank) => {
 
 const rowVariants = {
     hidden: { opacity: 0, x: -24 },
-    visible: (i) => ({ opacity: 1, x: 0, transition: { delay: i * 0.06, duration: 0.4, ease: 'easeOut' } }),
+    visible: (i) => ({ opacity: 1, x: 0, transition: { delay: Math.min(i * 0.025, 0.25), duration: 0.4, ease: 'easeOut' } }),
 };
 
-export default function Leaderboard({ players = [], leagues = [] }) {
-    const [activeTab, setActiveTab] = useState('Weekly');
+export default function Leaderboard({
+    players = [],
+    leagues = [],
+    period = 'week',
+    my_position: myPosition = null,
+}) {
     const [activeLeague, setActiveLeague] = useState('all');
-
     const visiblePlayers = players
         .filter((player) => activeLeague === 'all' || player.league?.name === activeLeague)
         .map((player, index) => ({
             ...player,
             displayRank: index + 1,
         }));
-
-    const totalXP = visiblePlayers.reduce((s, p) => s + (p.xp || 0), 0);
     const leagueCounts = leagues.map((league) => ({
         ...league,
         count: players.filter((player) => player.league?.name === league.name).length,
@@ -70,24 +74,29 @@ export default function Leaderboard({ players = [], leagues = [] }) {
     const podiumOrder = top3.length >= 3 ? [top3[1], top3[0], top3[2]] : top3;
 
     const podiumStyles = {
-        1: { height: 'h-40', gradient: 'from-amber-400 to-yellow-600', ring: 'ring-amber-400', glow: 'shadow-amber-400/50', avatarGrad: 'from-amber-300 to-yellow-500' },
-        2: { height: 'h-28', gradient: 'from-slate-400 to-slate-600 dark:from-slate-300 dark:to-gray-500', ring: 'ring-slate-400', glow: 'shadow-slate-400/30', avatarGrad: 'from-slate-400 to-slate-600 dark:from-slate-300 dark:to-gray-500' },
-        3: { height: 'h-20', gradient: 'from-amber-600 to-orange-800 dark:from-amber-700 dark:to-orange-900', ring: 'ring-amber-700', glow: 'shadow-amber-700/30', avatarGrad: 'from-amber-600 to-orange-700 dark:from-amber-700 dark:to-orange-800' },
+        1: { height: 'h-28 sm:h-40', gradient: 'from-amber-400 to-yellow-600', ring: 'ring-amber-400', glow: 'shadow-amber-400/50', avatarGrad: 'from-amber-300 to-yellow-500' },
+        2: { height: 'h-20 sm:h-28', gradient: 'from-slate-400 to-slate-600 dark:from-slate-300 dark:to-gray-500', ring: 'ring-slate-400', glow: 'shadow-slate-400/30', avatarGrad: 'from-slate-400 to-slate-600 dark:from-slate-300 dark:to-gray-500' },
+        3: { height: 'h-16 sm:h-20', gradient: 'from-amber-600 to-orange-800 dark:from-amber-700 dark:to-orange-900', ring: 'ring-amber-700', glow: 'shadow-amber-700/30', avatarGrad: 'from-amber-600 to-orange-700 dark:from-amber-700 dark:to-orange-800' },
     };
-    const activeLeagueMeta = activeLeague === 'all'
-        ? null
-        : leagueCounts.find((league) => league.name === activeLeague);
-    const mePlayer = visiblePlayers.find((player) => player.isMe) || players.find((player) => player.isMe);
+    const mePlayer = myPosition || visiblePlayers.find((player) => player.isMe) || players.find((player) => player.isMe);
     const playerAboveMe = mePlayer?.displayRank > 1
         ? visiblePlayers.find((player) => player.displayRank === mePlayer.displayRank - 1)
         : null;
-    const xpToCatchUp = playerAboveMe ? Math.max(0, (playerAboveMe.xp || 0) - (mePlayer?.xp || 0) + 1) : 0;
+    const xpToCatchUp = myPosition?.xp_to_next_rank ?? (playerAboveMe ? Math.max(0, (playerAboveMe.xp || 0) - (mePlayer?.xp || 0) + 1) : 0);
     const sortedLeagues = [...leagues].sort((a, b) => Number(a.min_xp || 0) - Number(b.min_xp || 0));
     const currentLeagueIndex = mePlayer?.league
         ? sortedLeagues.findIndex((league) => league.name === mePlayer.league.name)
         : -1;
     const nextLeague = currentLeagueIndex >= 0 ? sortedLeagues[currentLeagueIndex + 1] : null;
-    const xpToNextLeague = nextLeague && mePlayer ? Math.max(0, Number(nextLeague.min_xp || 0) - Number(mePlayer.xp || 0)) : null;
+    const xpToNextLeague = nextLeague && mePlayer ? Math.max(0, Number(nextLeague.min_xp || 0) - Number(mePlayer.total_xp ?? mePlayer.xp ?? 0)) : null;
+
+    const changePeriod = (nextPeriod) => {
+        router.get(route('user.leaderboard'), { period: nextPeriod }, {
+            preserveScroll: true,
+            preserveState: false,
+            replace: true,
+        });
+    };
 
     return (
         <AuthenticatedLayout>
@@ -97,7 +106,7 @@ export default function Leaderboard({ players = [], leagues = [] }) {
                 <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(140deg,rgba(245,158,11,0.18)_0%,transparent_28%),linear-gradient(230deg,rgba(220,38,38,0.10)_0%,transparent_34%),repeating-linear-gradient(90deg,rgba(120,53,15,0.05)_0_1px,transparent_1px_74px),repeating-linear-gradient(0deg,rgba(120,53,15,0.04)_0_1px,transparent_1px_74px)] dark:bg-[linear-gradient(140deg,rgba(245,158,11,0.12)_0%,transparent_28%),linear-gradient(230deg,rgba(220,38,38,0.12)_0%,transparent_34%),repeating-linear-gradient(90deg,rgba(255,255,255,0.032)_0_1px,transparent_1px_74px),repeating-linear-gradient(0deg,rgba(255,255,255,0.026)_0_1px,transparent_1px_74px)]" />
                 <div className="pointer-events-none absolute left-8 top-32 hidden text-[12rem] font-black leading-none text-amber-900/[0.055] dark:text-white/[0.035] lg:block">勝</div>
                 <div className="pointer-events-none absolute right-8 top-[620px] hidden text-[12rem] font-black leading-none text-red-900/[0.04] dark:text-white/[0.03] lg:block">位</div>
-                {/* ── HERO ── */}
+                {/* HERO */}
                 <div className="relative z-10 px-4 pt-10 pb-8 transition-colors duration-300">
                     <div className="max-w-7xl mx-auto text-center">
                         <div className="flex items-center justify-center gap-2 mb-1">
@@ -109,11 +118,11 @@ export default function Leaderboard({ players = [], leagues = [] }) {
                         </div>
                         <p className="text-slate-500 dark:text-gray-400 text-sm mb-5 transition-colors duration-300">Bersaing dengan pemain lain dan raih posisi teratas!</p>
 
-                        <div className="mb-5 flex flex-wrap justify-center gap-2">
+                        <div className="-mx-4 mb-5 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:justify-center sm:px-0 sm:pb-0">
                             <button
                                 type="button"
                                 onClick={() => setActiveLeague('all')}
-                                className={`rounded-full px-4 py-2 text-xs font-black transition ${
+                                className={`min-h-11 shrink-0 rounded-full px-4 py-2 text-xs font-black transition ${
                                     activeLeague === 'all'
                                         ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20 dark:bg-white dark:text-slate-950'
                                         : 'bg-white/70 text-slate-600 hover:bg-white dark:bg-gray-900/70 dark:text-gray-300 dark:hover:bg-gray-800'
@@ -126,7 +135,7 @@ export default function Leaderboard({ players = [], leagues = [] }) {
                                     key={league.name}
                                     type="button"
                                     onClick={() => setActiveLeague(league.name)}
-                                    className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-black transition ${
+                                    className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full px-4 py-2 text-xs font-black transition ${
                                         activeLeague === league.name
                                             ? 'bg-gradient-to-r from-amber-400 to-red-500 text-white shadow-lg shadow-red-500/20'
                                             : 'bg-white/70 text-slate-600 hover:bg-white dark:bg-gray-900/70 dark:text-gray-300 dark:hover:bg-gray-800'
@@ -139,17 +148,6 @@ export default function Leaderboard({ players = [], leagues = [] }) {
                             ))}
                         </div>
 
-                        {/* Stats mini */}
-                        <div className="mx-auto flex max-w-2xl justify-center gap-4 rounded-[1.5rem] border border-white/70 bg-white/55 p-3 shadow-xl shadow-amber-900/5 backdrop-blur-md dark:border-gray-800 dark:bg-gray-900/55">
-                            <div className="flex-1 rounded-2xl bg-white/75 px-5 py-3 text-center shadow-sm transition-colors duration-300 dark:bg-gray-950/70">
-                                <p className="text-xl font-bold text-slate-800 dark:text-white transition-colors duration-300">{visiblePlayers.length}</p>
-                                <p className="text-xs text-slate-500 dark:text-gray-400 transition-colors duration-300">Peserta Tampil</p>
-                            </div>
-                            <div className="flex-1 rounded-2xl bg-white/75 px-5 py-3 text-center shadow-sm transition-colors duration-300 dark:bg-gray-950/70">
-                                <p className="text-xl font-bold text-amber-500 dark:text-amber-400 transition-colors duration-300">{totalXP.toLocaleString()}</p>
-                                <p className="text-xs text-slate-500 dark:text-gray-400 transition-colors duration-300">Total XP Terdistribusi</p>
-                            </div>
-                        </div>
                     </div>
                 </div>
 
@@ -162,24 +160,26 @@ export default function Leaderboard({ players = [], leagues = [] }) {
                             message="Peringkat naik dari XP dan konsistensi. Selesaikan quest modul mingguan untuk mengejar posisi podium."
                         />
                     </div>
-                    {/* ── TABS ── */}
+                    {/* Period tabs */}
                     <div className="flex gap-2 my-6 rounded-2xl border border-white/70 bg-white/60 p-1.5 shadow-xl shadow-amber-900/5 backdrop-blur-md transition-colors duration-300 dark:border-gray-800 dark:bg-gray-900/60">
                         {TABS.map(tab => (
                             <button
-                                key={tab}
-                                onClick={() => setActiveTab(tab)}
-                                className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all duration-300 ${
-                                    activeTab === tab
+                                key={tab.key}
+                                type="button"
+                                onClick={() => changePeriod(tab.key)}
+                                aria-pressed={period === tab.key}
+                                className={`min-h-11 flex-1 rounded-lg py-2 text-sm font-semibold transition-all duration-300 ${
+                                    period === tab.key
                                         ? 'bg-gradient-to-r from-amber-400 to-yellow-500 dark:from-amber-500 dark:to-yellow-500 text-slate-900 dark:text-gray-950 shadow-lg shadow-amber-500/30'
                                         : 'text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-white'
                                 }`}
                             >
-                                {tab}
+                                {tab.label}
                             </button>
                         ))}
                     </div>
 
-                    {/* ── PODIUM ── */}
+                    {/* PODIUM */}
                     {podiumOrder.length >= 3 && (
                         <div className="relative mb-8 flex items-end justify-center gap-3 rounded-[2rem] border border-white/70 bg-white/35 px-4 pt-8 shadow-2xl shadow-amber-900/5 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/35">
                             {podiumOrder.map((player) => {
@@ -234,7 +234,7 @@ export default function Leaderboard({ players = [], leagues = [] }) {
                         </div>
                     )}
 
-                    {/* ── RANKING TABLE ── */}
+                    {/* RANKING TABLE */}
                     {podiumOrder.length > 0 && podiumOrder.length < 3 && (
                         <div className="mb-8 grid gap-3 sm:grid-cols-2">
                             {podiumOrder.map((player, index) => {
@@ -391,41 +391,6 @@ export default function Leaderboard({ players = [], leagues = [] }) {
                     </main>
 
                     <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
-                        <div className="overflow-hidden rounded-[2rem] border border-white/70 bg-white/72 shadow-2xl shadow-amber-900/5 backdrop-blur-md dark:border-gray-800 dark:bg-gray-900/72">
-                            <div className="bg-gradient-to-br from-amber-500 via-orange-500 to-red-500 p-5 text-white">
-                                <p className="text-xs font-black uppercase tracking-[0.25em] text-white/75">Liga Aktif</p>
-                                <div className="mt-3 flex items-center gap-3">
-                                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 backdrop-blur">
-                                        {activeLeagueMeta ? <LeagueIcon iconKey={activeLeagueMeta.icon} className="h-7 w-7" /> : <EmojiEventsIcon />}
-                                    </div>
-                                    <div>
-                                        <h2 className="text-xl font-black">{activeLeagueMeta?.name || 'Semua Liga'}</h2>
-                                        <p className="text-sm font-semibold text-white/75">{visiblePlayers.length} peserta tampil</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="space-y-3 p-4">
-                                {leagueCounts.map((league) => (
-                                    <button
-                                        key={`side-${league.name}`}
-                                        type="button"
-                                        onClick={() => setActiveLeague(league.name)}
-                                        className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition ${
-                                            activeLeague === league.name
-                                                ? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300'
-                                                : 'border-slate-100 bg-white/70 text-slate-600 hover:border-amber-200 hover:bg-amber-50/60 dark:border-gray-800 dark:bg-gray-950/50 dark:text-gray-300 dark:hover:bg-gray-800'
-                                        }`}
-                                    >
-                                        <span className="flex items-center gap-3 text-sm font-black">
-                                            <LeagueIcon iconKey={league.icon} className="h-5 w-5" />
-                                            {league.name}
-                                        </span>
-                                        <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black dark:bg-gray-800">{league.count}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
                         <div className="rounded-[2rem] border border-white/70 bg-white/72 p-5 shadow-2xl shadow-amber-900/5 backdrop-blur-md dark:border-gray-800 dark:bg-gray-900/72">
                             <p className="text-xs font-black uppercase tracking-[0.25em] text-amber-600 dark:text-amber-400">Posisi Saya</p>
                             {mePlayer ? (
@@ -465,7 +430,11 @@ export default function Leaderboard({ players = [], leagues = [] }) {
                                 <div className="rounded-2xl bg-slate-50 p-4 dark:bg-gray-950/60">
                                     <p className="text-sm font-black text-slate-900 dark:text-white">Kejar Peringkat</p>
                                     <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-gray-400">
-                                        {playerAboveMe ? `${xpToCatchUp.toLocaleString()} XP lagi untuk mengejar ${playerAboveMe.name}.` : 'Kamu sudah di posisi teratas pada filter ini.'}
+                                        {myPosition?.next_rank_name
+                                            ? `${xpToCatchUp.toLocaleString()} XP lagi untuk mengejar ${myPosition.next_rank_name}.`
+                                            : playerAboveMe
+                                            ? `${xpToCatchUp.toLocaleString()} XP lagi untuk mengejar ${playerAboveMe.name}.`
+                                            : 'Kamu sudah di posisi teratas pada filter ini.'}
                                     </p>
                                 </div>
                                 <div className="rounded-2xl bg-slate-50 p-4 dark:bg-gray-950/60">

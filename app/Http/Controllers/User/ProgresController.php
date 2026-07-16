@@ -31,7 +31,8 @@ class ProgresController extends Controller
         Request $request,
         AksesKuisPenggunaService $aksesKuis,
         RepetisiPembelajaranService $repetisi,
-        GamifikasiConfigService $gamifikasiConfig
+        GamifikasiConfigService $gamifikasiConfig,
+        RingkasanProgresPenggunaService $summary
     ) {
         $validated = $request->validate([
             'quiz_id' => ['required', 'exists:quizzes,id'],
@@ -160,6 +161,7 @@ class ProgresController extends Controller
         }
 
         event(new KuisSelesai($user, $quiz->id, $attempt->score, $attempt->xp_earned));
+        $summary->forget($user);
 
         if ($request->expectsJson()) {
             $finishUrl = $module?->programPembelajaran
@@ -188,7 +190,11 @@ class ProgresController extends Controller
         return redirect()->back()->with('success', 'Jawaban kuis berhasil dikirim.');
     }
 
-    public function completeModule(Request $request, AksesPremiumService $aksesPremium)
+    public function completeModule(
+        Request $request,
+        AksesPremiumService $aksesPremium,
+        RingkasanProgresPenggunaService $summary
+    )
     {
         $validated = $request->validate([
             'module_id' => ['required', 'exists:modules,id'],
@@ -212,6 +218,7 @@ class ProgresController extends Controller
             'score' => $validated['score'] ?? null,
             'completed_at' => now(),
         ]);
+        $summary->forget($user);
 
         return redirect()->back()->with('success', $progress->wasRecentlyCreated ? 'Modul ditandai selesai.' : 'Progress modul sudah tercatat.');
     }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Head, Link } from '@inertiajs/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
@@ -29,14 +29,8 @@ const nodeStyles = {
     unavailable: { bg: '#f3f4f6', shadow: '#d1d5db', text: '#9ca3af' },
 };
 
-function WeekTooltip({ week, onStart, placement = 'right' }) {
+function WeekTooltip({ week, placement = 'right' }) {
     const hasContent = week.has_content ?? Boolean(week.flashcard_set_id || week.quiz_id);
-    const primaryStudyUrl = week.primary_url || week.flashcard_url || week.quiz_url;
-    const hasStudyContent = Boolean(primaryStudyUrl);
-    const canOpenStudy = ['active', 'done'].includes(week.status) && hasStudyContent;
-    const actionButtonClass = week.status === 'done'
-        ? 'bg-green-600 hover:bg-green-700'
-        : 'bg-red-600 hover:bg-red-700';
     const lockedText = week.lock_reason || 'Selesaikan minggu sebelumnya';
     const unavailableText = week.lock_reason || 'Konten belum tersedia';
     const desktopPosition = placement === 'left'
@@ -52,7 +46,7 @@ function WeekTooltip({ week, onStart, placement = 'right' }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.96 }}
             transition={{ duration: 0.15 }}
-            className={`absolute z-50 top-full mt-4 left-1/2 w-[min(78vw,260px)] -translate-x-1/2 rounded-2xl border border-white/10 bg-gray-900 px-5 py-4 text-left text-white shadow-2xl shadow-gray-900/30 sm:top-1/2 sm:mt-0 sm:w-64 sm:-translate-y-1/2 sm:translate-x-0 ${desktopPosition}`}
+            className={`absolute z-50 hidden top-1/2 w-64 -translate-y-1/2 rounded-2xl border border-white/10 bg-gray-900 px-5 py-4 text-left text-white shadow-2xl shadow-gray-900/30 sm:block sm:translate-x-0 ${desktopPosition}`}
         >
             <p className="font-black text-sm mb-1">{week.title}</p>
             <p className="text-gray-400 text-xs mb-3">{week.subtitle}</p>
@@ -65,16 +59,8 @@ function WeekTooltip({ week, onStart, placement = 'right' }) {
                     <QuizIcon sx={{ fontSize: 10 }} /> Kuis
                 </span>
             </div>
-            {canOpenStudy && (
-                <button
-                    onClick={onStart}
-                    className={`w-full rounded-xl py-2 text-xs font-black text-white transition-colors ${actionButtonClass}`}
-                >
-                    {week.primary_label || (week.status === 'done' ? 'Ulangi Sesi' : 'Mulai Sekarang')}
-                </button>
-            )}
-            {week.status === 'active' && hasContent && !hasStudyContent && (
-                <span className="text-gray-500 text-xs font-bold">Buka detail untuk memilih PPT atau Konten N3.</span>
+            {week.status === 'active' && hasContent && (
+                <span className="text-gray-400 text-xs font-bold">Klik node untuk melihat materi dan mulai belajar.</span>
             )}
             {week.status === 'active' && !hasContent && (
                 <span className="text-gray-500 text-xs font-bold">Konten belum tersedia.</span>
@@ -96,6 +82,20 @@ function WeekTooltip({ week, onStart, placement = 'right' }) {
 }
 
 function ModulDetailPanel({ week, onClose }) {
+    const [isDesktopPanel, setIsDesktopPanel] = useState(() => (
+        typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches
+    ));
+
+    useEffect(() => {
+        const mediaQuery = window.matchMedia('(min-width: 640px)');
+        const syncPanelMode = () => setIsDesktopPanel(mediaQuery.matches);
+
+        syncPanelMode();
+        mediaQuery.addEventListener('change', syncPanelMode);
+
+        return () => mediaQuery.removeEventListener('change', syncPanelMode);
+    }, []);
+
     const hasContent = week.has_content ?? Boolean(week.flashcard_set_id || week.quiz_id);
     const canOpenResource = ['active', 'done'].includes(week.status);
     const primaryStudyUrl = week.primary_url || week.flashcard_url || week.quiz_url;
@@ -149,17 +149,17 @@ function ModulDetailPanel({ week, onClose }) {
 
     return (
         <motion.div
-            className="fixed inset-0 z-40 flex justify-end bg-black/30"
+            className="fixed inset-0 z-40 flex items-end bg-black/40 sm:justify-end"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
         >
             <motion.aside
-                className="h-full w-full max-w-md bg-white dark:bg-gray-950 shadow-2xl p-6 overflow-y-auto"
-                initial={{ x: '100%' }}
-                animate={{ x: 0 }}
-                exit={{ x: '100%' }}
+                className="max-h-[86dvh] w-full overflow-y-auto rounded-t-[2rem] bg-white p-5 shadow-2xl dark:bg-gray-950 sm:h-full sm:max-h-none sm:max-w-md sm:rounded-none sm:p-6"
+                initial={isDesktopPanel ? { x: '100%', y: 0 } : { x: 0, y: '100%' }}
+                animate={{ x: 0, y: 0 }}
+                exit={isDesktopPanel ? { x: '100%', y: 0 } : { x: 0, y: '100%' }}
                 transition={{ type: 'spring', stiffness: 260, damping: 28 }}
                 onClick={(event) => event.stopPropagation()}
             >
@@ -259,21 +259,21 @@ function ResourceBar({ resources = {} }) {
     ];
 
     return (
-        <section className="relative z-10 px-6 pb-6 lg:px-20">
-            <div className="mx-auto grid max-w-5xl gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="relative z-10 px-4 pb-6 sm:px-6 lg:px-20">
+            <div className="mx-auto grid max-w-5xl grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
                 {items.map((item) => {
                     const disabled = !item.href || item.count === 0;
-                    const className = `group flex items-center gap-3 rounded-2xl border border-white/70 bg-white/70 px-4 py-4 text-left shadow-xl shadow-red-900/5 backdrop-blur-md transition dark:border-gray-800 dark:bg-gray-900/70 ${
+                    const className = `group flex flex-col items-start gap-2 rounded-xl border border-white/70 bg-white/70 px-3 py-3 text-left shadow-xl shadow-red-900/5 backdrop-blur-md transition sm:flex-row sm:items-center sm:gap-3 sm:rounded-2xl sm:px-4 sm:py-4 dark:border-gray-800 dark:bg-gray-900/70 ${
                         disabled ? 'cursor-not-allowed opacity-55' : 'hover:-translate-y-1 hover:shadow-2xl'
                     }`;
                     const content = (
                         <>
-                            <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${item.tone} text-white shadow-lg`}>
+                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${item.tone} text-white shadow-lg sm:h-12 sm:w-12 sm:rounded-2xl`}>
                                 {item.icon}
                             </div>
                             <div className="min-w-0">
-                                <p className="truncate text-sm font-black text-gray-900 dark:text-white">{item.label}</p>
-                                <p className="text-xs font-bold text-gray-500 dark:text-gray-400">{item.count} item tersedia</p>
+                                <p className="truncate text-xs font-black text-gray-900 sm:text-sm dark:text-white">{item.label}</p>
+                                <p className="text-[10px] font-bold text-gray-500 sm:text-xs dark:text-gray-400">{item.count} item</p>
                             </div>
                         </>
                     );
@@ -296,23 +296,14 @@ function ResourceBar({ resources = {} }) {
 
 export default function DaftarModul({ weeks = [], userProgress = {}, program = null, back_url = null }) {
     const [openTooltip, setOpenTooltip] = useState(null);
-    const [clickedTooltip, setClickedTooltip] = useState(null);
     const [selectedWeek, setSelectedWeek] = useState(null);
 
     const handleMouseEnter = (i) => setOpenTooltip(i);
-    const handleMouseLeave = (i) => { if (clickedTooltip !== i) setOpenTooltip(null); };
-    const handleClick = (i, isLocked, week) => {
+    const handleMouseLeave = () => setOpenTooltip(null);
+    const handleClick = (_, __, week) => {
         setSelectedWeek(week);
-        if (isLocked) return;
-        if (clickedTooltip === i) {
-            setClickedTooltip(null);
-            setOpenTooltip(null);
-        } else {
-            setClickedTooltip(i);
-            setOpenTooltip(i);
-        }
+        setOpenTooltip(null);
     };
-    const isOpen = (i) => openTooltip === i || clickedTooltip === i;
 
     // Jika tidak ada data dari backend, tampilkan placeholder
     const displayWeeks = weeks.length > 0 ? weeks : [
@@ -323,11 +314,11 @@ export default function DaftarModul({ weeks = [], userProgress = {}, program = n
         <AuthenticatedLayout header={false}>
             <Head title={`${program?.title || 'Modul'} - Japanlingo`} />
 
-            <div className="relative min-h-screen overflow-hidden bg-[#f7efe6] pb-24 text-gray-900 transition-colors duration-300 sm:pb-0 dark:bg-gray-950">
+            <div className="relative min-h-[100dvh] overflow-hidden bg-[#f7efe6] text-gray-900 transition-colors duration-300 dark:bg-gray-950">
                 <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(220,38,38,0.10)_0%,transparent_28%),linear-gradient(240deg,rgba(245,158,11,0.12)_0%,transparent_30%),repeating-linear-gradient(90deg,rgba(120,53,15,0.055)_0_1px,transparent_1px_82px),repeating-linear-gradient(0deg,rgba(120,53,15,0.045)_0_1px,transparent_1px_82px)] dark:bg-[linear-gradient(120deg,rgba(220,38,38,0.14)_0%,transparent_28%),linear-gradient(240deg,rgba(245,158,11,0.08)_0%,transparent_30%),repeating-linear-gradient(90deg,rgba(255,255,255,0.035)_0_1px,transparent_1px_82px),repeating-linear-gradient(0deg,rgba(255,255,255,0.028)_0_1px,transparent_1px_82px)]" />
                 <div className="pointer-events-none absolute left-4 top-40 hidden text-[13rem] font-black leading-none text-red-900/[0.045] dark:text-white/[0.035] lg:block">道</div>
                 <div className="pointer-events-none absolute right-8 top-[560px] hidden text-[12rem] font-black leading-none text-amber-900/[0.05] dark:text-white/[0.03] lg:block">週</div>
-                <div className="relative z-10 px-6 pt-8 lg:px-20">
+                <div className="relative z-10 hidden px-4 pt-6 sm:block sm:px-6 sm:pt-8 lg:px-20">
                     <SeasonalScene
                         title={`Roadmap ${program?.title || 'Mingguan JLPT N3'}`}
                         subtitle="Setiap node adalah satu quest: flashcard untuk mengenal pola, kuis untuk mengunci mastery, lalu lanjut ke minggu berikutnya."
@@ -344,7 +335,7 @@ export default function DaftarModul({ weeks = [], userProgress = {}, program = n
                 </div>
 
                 {/* Hero Section */}
-                <div className="relative z-10 px-6 pt-12 pb-8 lg:px-20">
+                <div className="relative z-10 px-4 pb-6 pt-6 sm:px-6 sm:pb-8 sm:pt-12 lg:px-20">
                     <div className="max-w-2xl mx-auto text-center">
                         {back_url && (
                             <Link
@@ -359,27 +350,27 @@ export default function DaftarModul({ weeks = [], userProgress = {}, program = n
                             <AutoStoriesIcon sx={{ fontSize: 14 }} />
                             {program?.level ? `Kurikulum ${program.level}` : 'Kurikulum JLPT N3'}
                         </div>
-                        <h1 className="text-3xl lg:text-4xl font-black text-gray-900 dark:text-white mb-3 tracking-tight">
+                        <h1 className="mb-2 text-2xl font-black tracking-tight text-gray-900 sm:mb-3 sm:text-3xl lg:text-4xl dark:text-white">
                             {program?.title ? `Peta ${program.title}` : 'Peta Perjalanan Mingguan'}
                         </h1>
-                        <p className="text-gray-500 dark:text-gray-400 text-sm lg:text-base leading-relaxed">
+                        <p className="hidden text-sm leading-relaxed text-gray-500 sm:block lg:text-base dark:text-gray-400">
                             Setiap minggu berisi <strong>PPT/Konten N3</strong> sebagai penunjang, lalu <strong>Flashcard</strong> dan <strong>Kuis</strong> sebagai jalur utama. Selesaikan satu minggu untuk membuka minggu berikutnya.
                         </p>
 
                         {/* Stats mini */}
-                        <div className="mx-auto mt-6 flex max-w-xl items-center justify-center gap-4 rounded-[1.5rem] border border-white/70 bg-white/55 px-5 py-4 shadow-xl shadow-red-900/5 backdrop-blur-md dark:border-gray-800 dark:bg-gray-900/55">
+                        <div className="mx-auto mt-4 flex max-w-xl items-center justify-center gap-3 rounded-[1.25rem] border border-white/70 bg-white/55 px-4 py-3 shadow-xl shadow-red-900/5 backdrop-blur-md sm:mt-6 sm:gap-4 sm:rounded-[1.5rem] sm:px-5 sm:py-4 dark:border-gray-800 dark:bg-gray-900/55">
                             <div className="text-center">
-                                <p className="text-2xl font-black text-green-600">{displayWeeks.filter(w => w.status === 'done').length}</p>
+                                <p className="text-xl font-black text-green-600 sm:text-2xl">{displayWeeks.filter(w => w.status === 'done').length}</p>
                                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Selesai</p>
                             </div>
-                            <div className="w-px h-8 bg-gray-200 dark:bg-gray-700" />
+                            <div className="h-7 w-px bg-gray-200 sm:h-8 dark:bg-gray-700" />
                             <div className="text-center">
-                                <p className="text-2xl font-black text-red-600">{displayWeeks.length}</p>
+                                <p className="text-xl font-black text-red-600 sm:text-2xl">{displayWeeks.length}</p>
                                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Total Minggu</p>
                             </div>
-                            <div className="w-px h-8 bg-gray-200 dark:bg-gray-700" />
+                            <div className="h-7 w-px bg-gray-200 sm:h-8 dark:bg-gray-700" />
                             <div className="text-center">
-                                <p className="text-2xl font-black text-gray-700 dark:text-gray-300">
+                                <p className="text-xl font-black text-gray-700 sm:text-2xl dark:text-gray-300">
                                     {displayWeeks.filter(w => w.status === 'locked').length}
                                 </p>
                                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Terkunci</p>
@@ -387,7 +378,7 @@ export default function DaftarModul({ weeks = [], userProgress = {}, program = n
                         </div>
 
                         {program?.kloter ? (
-                            <div className="mx-auto mt-4 max-w-xl rounded-[1.5rem] border border-emerald-100 bg-emerald-50/80 px-5 py-4 text-left shadow-sm dark:border-emerald-900/35 dark:bg-emerald-900/20">
+                            <div className="mx-auto mt-3 max-w-xl rounded-[1.25rem] border border-emerald-100 bg-emerald-50/80 px-4 py-3 text-left shadow-sm sm:mt-4 sm:rounded-[1.5rem] sm:px-5 sm:py-4 dark:border-emerald-900/35 dark:bg-emerald-900/20">
                                 <p className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-300">Kloter aktif</p>
                                 <p className="mt-1 text-sm font-black text-gray-900 dark:text-white">{program.kloter.nama}</p>
                                 <p className="mt-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
@@ -395,7 +386,7 @@ export default function DaftarModul({ weeks = [], userProgress = {}, program = n
                                 </p>
                             </div>
                         ) : (
-                            <div className="mx-auto mt-4 max-w-xl rounded-[1.5rem] border border-amber-100 bg-amber-50/80 px-5 py-4 text-left shadow-sm dark:border-amber-900/35 dark:bg-amber-900/20">
+                            <div className="mx-auto mt-3 max-w-xl rounded-[1.25rem] border border-amber-100 bg-amber-50/80 px-4 py-3 text-left shadow-sm sm:mt-4 sm:rounded-[1.5rem] sm:px-5 sm:py-4 dark:border-amber-900/35 dark:bg-amber-900/20">
                                 <p className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-600 dark:text-amber-300">Belum masuk kloter</p>
                                 <p className="mt-1 text-xs font-semibold leading-5 text-gray-500 dark:text-gray-400">
                                     Roadmap masih memakai akses umum. Setelah masuk kloter, pembukaan week akan mengikuti tanggal mulai batch.
@@ -408,8 +399,8 @@ export default function DaftarModul({ weeks = [], userProgress = {}, program = n
                 <ResourceBar resources={program?.resources} />
 
                 {/* Path Section */}
-                <div className="relative z-10 px-6 py-10 pb-24">
-                    <div className="mx-auto mb-10 max-w-3xl">
+                <div className="relative z-10 px-4 py-8 pb-10 sm:px-6 sm:py-10 sm:pb-24">
+                    <div className="mx-auto mb-10 hidden max-w-3xl sm:block">
                         <MascotGuide
                             title="Tips Jalur Belajar"
                             message="Node abu-abu berarti belum saatnya dibuka. Node aktif bisa dimulai, dan node hijau sudah selesai. Klik node untuk melihat detail flashcard dan kuis."
@@ -423,18 +414,18 @@ export default function DaftarModul({ weeks = [], userProgress = {}, program = n
                             return acc;
                         }, {})
                     ).map(([weekNumber, groupWeeks], groupIdx) => (
-                        <div key={weekNumber} className="relative mb-24">
+                        <div key={weekNumber} className="relative mb-16 sm:mb-24">
                             {/* Week Header */}
-                            <div className="max-w-xl mx-auto mb-10 text-center relative z-10">
-                                <div className="inline-block bg-red-600 text-white font-black px-6 py-3 rounded-2xl shadow-[0_6px_0_#991b1b] transform hover:-translate-y-1 transition-transform cursor-default">
-                                    <h2 className="text-xl">Unit {weekNumber}</h2>
-                                    <p className="text-xs font-bold text-red-100 uppercase tracking-widest mt-1">
+                            <div className="relative z-10 mx-auto mb-6 max-w-xl text-center sm:mb-10">
+                                <div className="inline-block cursor-default rounded-xl bg-red-600 px-4 py-2 font-black text-white shadow-[0_5px_0_#991b1b] transition-transform hover:-translate-y-1 sm:rounded-2xl sm:px-6 sm:py-3 sm:shadow-[0_6px_0_#991b1b]">
+                                    <h2 className="text-lg sm:text-xl">Unit {weekNumber}</h2>
+                                    <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-red-100 sm:mt-1 sm:text-xs">
                                         Kumpulan Modul
                                     </p>
                                 </div>
                             </div>
                             
-                            <div className="max-w-lg mx-auto relative rounded-[2rem] border border-white/70 bg-white/35 py-10 shadow-2xl shadow-red-900/5 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/35" style={{ minHeight: `${groupWeeks.length * 130 + 160}px` }}>
+                            <div className="relative mx-auto max-w-lg rounded-[1.5rem] border border-white/70 bg-white/35 py-8 shadow-2xl shadow-red-900/5 backdrop-blur-sm sm:rounded-[2rem] sm:py-10 dark:border-gray-800 dark:bg-gray-900/35" style={{ minHeight: `${groupWeeks.length * 130 + 160}px` }}>
 
                                 {/* SVG Connector Lines */}
                                 <svg
@@ -491,18 +482,10 @@ export default function DaftarModul({ weeks = [], userProgress = {}, program = n
                                         >
                                             {/* Tooltip */}
                                             <AnimatePresence>
-                                                {(openTooltip === tooltipId || clickedTooltip === tooltipId) && (
+                                                {openTooltip === tooltipId && (
                                                     <WeekTooltip
                                                         week={week}
                                                         placement={parseFloat(left) > 50 ? 'left' : 'right'}
-                                                  onStart={() => {
-                                                      const target = week.primary_url || week.flashcard_url || week.quiz_url;
-                                                      if (target) {
-                                                          window.location.href = target;
-                                                      }
-                                                      setOpenTooltip(null);
-                                                      setClickedTooltip(null);
-                                                        }}
                                                     />
                                                 )}
                                             </AnimatePresence>
@@ -598,9 +581,9 @@ export default function DaftarModul({ weeks = [], userProgress = {}, program = n
                 </div>
 
                 {/* Legend */}
-                <div className="fixed bottom-4 left-4 right-4 z-20 sm:bottom-6 sm:left-1/2 sm:right-auto sm:-translate-x-1/2">
-                    <div className="max-w-full overflow-x-auto rounded-2xl bg-white shadow-xl dark:bg-gray-900 sm:overflow-visible">
-                    <div className="flex min-w-max items-center gap-4 rounded-2xl border border-gray-100 px-4 py-3 text-[11px] font-bold text-gray-500 dark:border-gray-800 sm:gap-5 sm:px-5 sm:text-xs">
+                <div className="relative z-20 mx-auto mt-1 w-[calc(100%-2rem)] max-w-lg sm:fixed sm:bottom-6 sm:left-1/2 sm:mt-0 sm:w-auto sm:max-w-none sm:-translate-x-1/2">
+                    <div className="rounded-2xl bg-white shadow-xl dark:bg-gray-900">
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-2xl border border-gray-100 px-4 py-3 text-[11px] font-bold text-gray-500 dark:border-gray-800 sm:flex sm:min-w-max sm:items-center sm:gap-5 sm:px-5 sm:text-xs">
                         <div className="flex items-center gap-1.5">
                             <span className="w-3 h-3 rounded-full bg-green-500 inline-block" />
                             Selesai

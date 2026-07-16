@@ -66,19 +66,25 @@ export default function LatihanFlashcard({ set, cards = [], back_url = null, nex
         <AuthenticatedLayout>
             <Head title={`Flashcard - ${set.title}`} />
 
-            <div className={`min-h-screen ${theme.bgColor || 'bg-[#FAFAF8]'} dark:bg-gray-950 transition-colors duration-300 relative overflow-hidden`}>
-                <div className="absolute top-10 right-10 text-[20rem] font-black text-orange-200/20 dark:text-gray-800/30 select-none pointer-events-none -z-10 rotate-12">
+            <div className={`relative min-h-[100dvh] overflow-x-hidden ${theme.bgColor || 'bg-[#FAFAF8]'} transition-colors duration-300 dark:bg-gray-950`}>
+                <div className="pointer-events-none absolute right-10 top-10 -z-10 hidden rotate-12 select-none text-[20rem] font-black text-orange-200/20 sm:block dark:text-gray-800/30">
                     REN
                 </div>
-                <div className="mx-auto flex min-h-screen max-w-4xl flex-col px-4 py-6 sm:px-6 lg:px-8 relative z-10">
-                    <div className="mb-6">
-                        <SeasonalScene
-                            title="Dojo Flashcard"
-                            subtitle="Balik kartu, jawab jujur, lalu biarkan repetisi mengatur kosakata mana yang perlu muncul lagi."
-                            label="Vocabulary Dojo"
-                            icon="scroll"
-                            compact
-                        />
+                <div className="relative z-10 mx-auto flex min-h-[100dvh] max-w-4xl flex-col px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
+                    <div className="mb-4 sm:mb-6">
+                        <div className="rounded-2xl border border-orange-100 bg-white/80 px-4 py-3 shadow-sm sm:hidden dark:border-gray-800 dark:bg-gray-900/80">
+                            <p className={`text-[10px] font-black uppercase tracking-[0.2em] ${theme.heroAccent || 'text-orange-600'} dark:text-orange-400`}>Vocabulary Dojo</p>
+                            <h1 className="mt-1 text-xl font-black text-gray-900 dark:text-white">Dojo Flashcard</h1>
+                        </div>
+                        <div className="hidden sm:block">
+                            <SeasonalScene
+                                title="Dojo Flashcard"
+                                subtitle="Balik kartu, jawab jujur, lalu biarkan repetisi mengatur kosakata mana yang perlu muncul lagi."
+                                label="Vocabulary Dojo"
+                                icon="scroll"
+                                compact
+                            />
+                        </div>
                     </div>
                     <div className="mb-4 flex items-center justify-between gap-3">
                         <Link href={back_url || route('user.flashcards.index')} className="rounded-full bg-white border border-gray-200 dark:border-gray-800 px-4 py-2 text-xs font-black uppercase tracking-wider text-gray-700 shadow-sm dark:bg-gray-900 dark:text-gray-300 transition-colors duration-300 hover:bg-gray-50 dark:hover:bg-gray-800">
@@ -125,7 +131,7 @@ export default function LatihanFlashcard({ set, cards = [], back_url = null, nex
                         </div>
                     ) : (
                         <div className="flex flex-1 flex-col">
-                            <div className="mt-6">
+                            <div className="mt-6 hidden sm:block">
                                 <MascotGuide
                                     tone="amber"
                                     title="Aturan Dojo"
@@ -133,36 +139,36 @@ export default function LatihanFlashcard({ set, cards = [], back_url = null, nex
                                 />
                             </div>
                             
-                            <div className="mt-6 relative h-[380px] w-full cursor-pointer [perspective:1000px] sm:h-[400px]" onClick={() => setFlipped(!flipped)}>
+                            <div className="relative mt-4 h-[clamp(320px,52dvh,400px)] w-full cursor-pointer [perspective:1000px] sm:mt-6 sm:h-[400px]" onClick={() => setFlipped(!flipped)}>
                                 <div className={`relative w-full h-full transition-transform duration-700 [transform-style:preserve-3d] ${flipped ? '[transform:rotateY(180deg)]' : ''}`}>
                                     
                                     {/* FRONT (Kanji/Text) */}
-                                    <section className="absolute inset-0 flex flex-col items-center justify-center rounded-[2rem] border-2 border-red-200 bg-gradient-to-br from-white to-red-50/50 p-5 shadow-xl [backface-visibility:hidden] sm:p-8 dark:border-gray-800 dark:from-gray-900">
-                                        <div className="absolute top-5 left-5 flex items-center gap-3">
+                                    <section className="absolute inset-0 flex flex-col items-center justify-center rounded-[1.5rem] border-2 border-red-200 bg-gradient-to-br from-white to-red-50/50 p-4 shadow-xl [backface-visibility:hidden] sm:rounded-[2rem] sm:p-8 dark:border-gray-800 dark:from-gray-900">
+                                        <div className="absolute left-4 top-4 flex items-center gap-2 sm:left-5 sm:top-5 sm:gap-3">
                                             <KatanaIcon className="w-8 h-8 text-red-500" />
                                             <span className="text-xs font-bold text-gray-500">{index + 1}/{cards.length}</span>
                                         </div>
-                                        <div className="absolute top-5 right-5 rounded-full bg-white/80 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-red-600 shadow-sm">
+                                        <div className="absolute right-4 top-4 rounded-full bg-white/80 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-red-600 shadow-sm sm:right-5 sm:top-5">
                                             Lv {card.mastery_level ?? 0}
                                         </div>
                                         <div onClick={(event) => event.stopPropagation()}>
                                             <JapaneseSpeechButton
                                                 text={card.front_text || card.reading}
                                                 audioUrl={card.audio_url}
-                                                className="absolute bottom-5 right-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-red-200 bg-white text-red-600 shadow-sm transition hover:bg-red-50"
+                                                className="absolute bottom-4 right-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-red-200 bg-white text-red-600 shadow-sm transition hover:bg-red-50 sm:bottom-5 sm:right-5"
                                             />
                                         </div>
-                                        <div className="max-h-[220px] max-w-full overflow-y-auto overscroll-contain px-2 text-center sm:max-h-[240px]">
-                                            <p className="break-words text-5xl font-black leading-tight text-gray-900 sm:text-7xl dark:text-white" style={{fontFamily: "'Noto Sans JP', sans-serif"}}>{card.front_text}</p>
+                                        <div className="max-h-[180px] max-w-full overflow-y-auto overscroll-contain px-2 text-center sm:max-h-[240px]">
+                                            <p className="break-words text-4xl font-black leading-tight text-gray-900 sm:text-7xl dark:text-white" style={{fontFamily: "'Noto Sans JP', sans-serif"}}>{card.front_text}</p>
                                         </div>
                                         <p className="mt-5 text-xs font-bold text-gray-400 animate-pulse sm:mt-8 sm:text-sm">Klik untuk membalik</p>
                                     </section>
 
                                     {/* BACK (Meaning/Reading) */}
-                                    <section className="absolute inset-0 flex flex-col rounded-[2rem] border-2 border-red-300 bg-gradient-to-br from-red-50 to-white p-5 text-center shadow-xl [backface-visibility:hidden] [transform:rotateY(180deg)] sm:p-8 dark:border-gray-700 dark:from-gray-800">
+                                    <section className="absolute inset-0 flex flex-col rounded-[1.5rem] border-2 border-red-300 bg-gradient-to-br from-red-50 to-white p-4 text-center shadow-xl [backface-visibility:hidden] [transform:rotateY(180deg)] sm:rounded-[2rem] sm:p-8 dark:border-gray-700 dark:from-gray-800">
                                         <div className="flex-1 overflow-y-auto overscroll-contain px-1">
                                             <p className="mb-2 break-words text-2xl font-bold text-gray-500 sm:text-3xl dark:text-gray-400">{card.reading || '-'}</p>
-                                            <h2 className="break-words text-3xl font-black leading-tight text-gray-900 sm:text-4xl dark:text-white" style={{fontFamily: "'Yuji Syuku', serif"}}>{card.back_text || 'Belum ada arti'}</h2>
+                                            <h2 className="break-words text-2xl font-black leading-tight text-gray-900 sm:text-4xl dark:text-white" style={{fontFamily: "'Yuji Syuku', serif"}}>{card.back_text || 'Belum ada arti'}</h2>
                                             <div className="mt-4 flex items-center justify-center gap-3 sm:mt-5" onClick={(event) => event.stopPropagation()}>
                                                 <JapaneseSpeechButton
                                                     text={card.front_text || card.reading}
@@ -187,11 +193,11 @@ export default function LatihanFlashcard({ set, cards = [], back_url = null, nex
                             </div>
 
 
-                            <section className="mt-6 grid grid-cols-2 gap-3 sm:mt-8 sm:gap-5">
+                            <section className="mt-5 grid grid-cols-2 gap-2 sm:mt-8 sm:gap-5">
                                 <button
                                     onClick={() => submitReview('learning')}
                                     disabled={isSubmitting}
-                                    className="rounded-[1.5rem] bg-[var(--btn-bg)] px-3 py-4 text-center text-sm font-black text-gray-950 shadow-[0_8px_0_var(--btn-shadow)] transition-all duration-300 active:translate-y-1 active:shadow-[0_4px_0_var(--btn-shadow)] disabled:cursor-wait disabled:opacity-70 sm:rounded-[2rem] sm:px-5 sm:py-5 sm:text-base dark:text-white"
+                                    className="min-h-[72px] rounded-[1.25rem] bg-[var(--btn-bg)] px-2 py-2 text-center text-sm font-black text-gray-950 shadow-[0_6px_0_var(--btn-shadow)] transition-all duration-300 active:translate-y-1 active:shadow-[0_3px_0_var(--btn-shadow)] disabled:cursor-wait disabled:opacity-70 sm:min-h-[88px] sm:rounded-[2rem] sm:px-5 sm:py-5 sm:text-base sm:shadow-[0_8px_0_var(--btn-shadow)] dark:text-white"
                                     style={{ '--btn-bg': theme.activeColor || '#fb923c', '--btn-shadow': theme.activeShadow || '#c2410c' }}
                                 >
                                     <span className="block text-2xl">?</span>
@@ -200,7 +206,7 @@ export default function LatihanFlashcard({ set, cards = [], back_url = null, nex
                                 <button
                                     onClick={() => submitReview('known')}
                                     disabled={isSubmitting}
-                                    className="rounded-[1.5rem] bg-[var(--btn-bg)] px-3 py-4 text-center text-sm font-black text-gray-950 shadow-[0_8px_0_var(--btn-shadow)] transition-all duration-300 active:translate-y-1 active:shadow-[0_4px_0_var(--btn-shadow)] disabled:cursor-wait disabled:opacity-70 sm:rounded-[2rem] sm:px-5 sm:py-5 sm:text-base dark:text-white"
+                                    className="min-h-[72px] rounded-[1.25rem] bg-[var(--btn-bg)] px-2 py-2 text-center text-sm font-black text-gray-950 shadow-[0_6px_0_var(--btn-shadow)] transition-all duration-300 active:translate-y-1 active:shadow-[0_3px_0_var(--btn-shadow)] disabled:cursor-wait disabled:opacity-70 sm:min-h-[88px] sm:rounded-[2rem] sm:px-5 sm:py-5 sm:text-base sm:shadow-[0_8px_0_var(--btn-shadow)] dark:text-white"
                                     style={{ '--btn-bg': theme.doneColor || '#a3e635', '--btn-shadow': theme.doneShadow || '#65a30d' }}
                                 >
                                     <span className="block text-2xl">OK</span>
@@ -208,7 +214,7 @@ export default function LatihanFlashcard({ set, cards = [], back_url = null, nex
                                 </button>
                             </section>
 
-                            <footer className="mt-auto pt-8">
+                            <footer className="mt-auto pt-6 sm:pt-8">
                                 <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-800 transition-colors duration-300">
                                     <div className="h-full rounded-full bg-[var(--progress-bg)] transition-all duration-300" style={{ width: `${((index + 1) / cards.length) * 100}%`, '--progress-bg': theme.activeColor || '#ef4444' }} />
                                 </div>

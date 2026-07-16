@@ -1,137 +1,127 @@
-import TranslateIcon from '@mui/icons-material/Translate';
-import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
-import React, { useEffect, useRef, useState } from 'react';
-import { Head } from '@inertiajs/react';
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { motion, useInView } from 'framer-motion';
-import ShowChartIcon from '@mui/icons-material/ShowChart';
-import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
-import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import AutoStoriesIcon from '@mui/icons-material/AutoStories';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import HelpCenterIcon from '@mui/icons-material/HelpCenter';
-import { MascotGuide } from '@/Components/User/UserVisuals';
+import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
+import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
+import ShowChartIcon from '@mui/icons-material/ShowChart';
+import TranslateIcon from '@mui/icons-material/Translate';
+import { Head, Link } from '@inertiajs/react';
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 
-/* ─── Animated counter ──────────────────────────────────────────── */
-function CountUp({ target, duration = 1200 }) {
-    const [count, setCount] = useState(0);
-    const ref = useRef(null);
-    const inView = useInView(ref, { once: true });
+const clamp = (value) => Math.min(100, Math.max(0, Number(value) || 0));
+const toList = (value) => {
+    if (Array.isArray(value)) {
+        return value;
+    }
 
-    useEffect(() => {
-        if (!inView) return;
-        const end = parseInt(target) || 0;
-        if (end === 0) { setCount(0); return; }
-        let start = 0;
-        const step = Math.ceil(end / (duration / 16));
-        const timer = setInterval(() => {
-            start += step;
-            if (start >= end) { setCount(end); clearInterval(timer); }
-            else setCount(start);
-        }, 16);
-        return () => clearInterval(timer);
-    }, [inView, target]);
+    if (value && typeof value === 'object') {
+        return Object.values(value);
+    }
 
-    return <span ref={ref}>{count.toLocaleString()}</span>;
-}
+    return [];
+};
 
-/* ─── Animated bar (skill) ──────────────────────────────────────── */
-function AnimBar({ value, color }) {
-    const ref = useRef(null);
-    const inView = useInView(ref, { once: true });
+function StatCard({ label, value, icon, accent }) {
     return (
-        <div ref={ref} className="h-3 bg-slate-100 dark:bg-gray-800 rounded-full overflow-hidden transition-colors duration-300">
-            <motion.div
-                className="h-full rounded-full"
-                style={{ background: color }}
-                initial={{ width: 0 }}
-                animate={inView ? { width: `${value}%` } : { width: 0 }}
-                transition={{ duration: 0.9, ease: 'easeOut' }}
-            />
+        <div className="relative overflow-hidden rounded-xl border border-white/70 bg-white/75 p-4 shadow-sm shadow-emerald-900/5 backdrop-blur-sm transition hover:-translate-y-0.5 hover:shadow-lg dark:border-gray-800 dark:bg-gray-900/75">
+            <div className={`absolute inset-x-0 top-0 h-1 ${accent}`} />
+            <div className="flex items-center gap-3">
+                <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white shadow-sm ${accent}`}>
+                    {icon}
+                </div>
+                <div className="min-w-0">
+                    <p className="text-2xl font-black leading-none text-slate-900 dark:text-white">
+                        {(Number(value) || 0).toLocaleString()}
+                    </p>
+                    <p className="mt-1 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-gray-400">
+                        {label}
+                    </p>
+                </div>
+            </div>
         </div>
     );
 }
 
-/* ─── Stagger container ─────────────────────────────────────────── */
-const stagger = {
-    hidden: {},
-    show: { transition: { staggerChildren: 0.08 } },
-};
-const fadeUp = {
-    hidden: { opacity: 0, y: 24 },
-    show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } },
-};
+function ProgressBar({ value, className = 'bg-emerald-500' }) {
+    return (
+        <div className="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-gray-800">
+            <div className={`h-full rounded-full ${className}`} style={{ width: `${clamp(value)}%` }} />
+        </div>
+    );
+}
 
-/* ═══════════════════════════════════════════════════════════════════
-   MAIN COMPONENT
-═══════════════════════════════════════════════════════════════════ */
+function ActivityIcon({ type }) {
+    if (type === 'lesson') {
+        return <AutoStoriesIcon sx={{ fontSize: 16 }} />;
+    }
+
+    if (type === 'quiz') {
+        return <HelpCenterIcon sx={{ fontSize: 16 }} />;
+    }
+
+    return <LocalFireDepartmentIcon sx={{ fontSize: 16 }} />;
+}
+
+function EmptyActivity() {
+    return (
+        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 p-6 text-center dark:border-gray-700 dark:bg-gray-800/40">
+            <LibraryBooksIcon className="mx-auto mb-2 text-slate-400" />
+            <p className="text-sm font-semibold text-slate-500 dark:text-gray-400">Belum ada aktivitas.</p>
+        </div>
+    );
+}
+
 export default function Progress({
     stats = {},
     weekActivity = [],
     jlptJourney = [],
     recentActivity = [],
     skills = [],
+    next_learning: nextLearning = null,
 }) {
-    const totalXP = weekActivity.reduce((a, c) => a + (c.xp || 0), 0);
+    const weekItems = toList(weekActivity);
+    const journeyItems = toList(jlptJourney);
+    const recentItems = toList(recentActivity);
+    const skillItems = toList(skills);
+    const totalXP = weekItems.reduce((total, day) => total + (Number(day.xp) || 0), 0);
+    const peakWeekXp = Math.max(1, ...weekItems.map((day) => Number(day.xp) || 0));
 
+    if (import.meta.env.DEV) {
+        console.debug('[Progress] weekActivity', weekItems);
+    }
     const statCards = [
         {
             label: 'Total XP',
-            value: stats.xp || 0,
-            icon: <EmojiEventsIcon sx={{ fontSize: 28 }} />,
-            gradient: 'from-amber-500 to-yellow-400',
-            glow: 'shadow-amber-500/30',
-            ring: 'ring-amber-200 dark:ring-amber-400/30',
+            value: stats.xp,
+            icon: <EmojiEventsIcon sx={{ fontSize: 26 }} />,
+            accent: 'bg-gradient-to-r from-amber-500 to-yellow-400',
         },
         {
-            label: 'Hari Beruntun',
-            value: stats.streak || 0,
-            icon: <LocalFireDepartmentIcon sx={{ fontSize: 28 }} />,
-            gradient: 'from-orange-500 to-rose-500',
-            glow: 'shadow-orange-500/30',
-            ring: 'ring-orange-200 dark:ring-orange-400/30',
+            label: 'Streak',
+            value: stats.streak,
+            icon: <LocalFireDepartmentIcon sx={{ fontSize: 26 }} />,
+            accent: 'bg-gradient-to-r from-orange-500 to-rose-500',
         },
         {
-            label: 'Pelajaran Selesai',
-            value: stats.lessonsDone || 0,
-            icon: <AutoStoriesIcon sx={{ fontSize: 28 }} />,
-            gradient: 'from-red-500 to-rose-500',
-            glow: 'shadow-red-500/30',
-            ring: 'ring-red-200 dark:ring-red-400/30',
+            label: 'Modul Selesai',
+            value: stats.lessonsDone,
+            icon: <AutoStoriesIcon sx={{ fontSize: 26 }} />,
+            accent: 'bg-gradient-to-r from-red-500 to-rose-500',
         },
         {
             label: 'Kuis Selesai',
-            value: stats.quizzesDone || 0,
-            icon: <HelpCenterIcon sx={{ fontSize: 28 }} />,
-            gradient: 'from-emerald-500 to-teal-400',
-            glow: 'shadow-emerald-500/30',
-            ring: 'ring-emerald-200 dark:ring-emerald-400/30',
+            value: stats.quizzesDone,
+            icon: <HelpCenterIcon sx={{ fontSize: 26 }} />,
+            accent: 'bg-gradient-to-r from-emerald-500 to-teal-400',
         },
     ];
-
-    const activityIcon = (type) => {
-        if (type === 'lesson') return <AutoStoriesIcon sx={{ fontSize: 16 }} />;
-        if (type === 'quiz')   return <HelpCenterIcon  sx={{ fontSize: 16 }} />;
-        return <LocalFireDepartmentIcon sx={{ fontSize: 16 }} />;
-    };
-    const activityColor = (type) => {
-        if (type === 'lesson') return { bg: 'bg-red-100 dark:bg-red-500/20', text: 'text-red-600 dark:text-red-400', border: 'border-red-200 dark:border-red-500/30' };
-        if (type === 'quiz')   return { bg: 'bg-green-100 dark:bg-green-500/20', text: 'text-green-600 dark:text-green-400', border: 'border-green-200 dark:border-green-500/30' };
-        return { bg: 'bg-amber-100 dark:bg-amber-500/20', text: 'text-amber-600 dark:text-amber-400', border: 'border-amber-200 dark:border-amber-500/30' };
-    };
-
-    const skillColors = [
-        'linear-gradient(90deg,#6366f1,#8b5cf6)',
-        'linear-gradient(90deg,#f59e0b,#f97316)',
-        'linear-gradient(90deg,#10b981,#06b6d4)',
-        'linear-gradient(90deg,#ec4899,#f43f5e)',
-        'linear-gradient(90deg,#3b82f6,#06b6d4)',
-    ];
+    const skillColors = ['bg-indigo-500', 'bg-amber-500', 'bg-emerald-500', 'bg-rose-500', 'bg-sky-500'];
 
     return (
         <AuthenticatedLayout
             header={
-                <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2 transition-colors duration-300">
+                <h2 className="flex items-center gap-2 text-xl font-bold text-slate-900 dark:text-white">
                     <ShowChartIcon className="text-rose-500 dark:text-rose-400" />
                     Progres Saya
                 </h2>
@@ -139,302 +129,220 @@ export default function Progress({
         >
             <Head title="Progres - Japanlingo" />
 
-            <div className="relative min-h-screen overflow-hidden bg-[#eef6f2] pb-12 transition-colors duration-300 dark:bg-gray-950">
+            <div className="relative min-h-screen overflow-hidden bg-[#eef6f2] pb-12 dark:bg-gray-950">
                 <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(130deg,rgba(16,185,129,0.14)_0%,transparent_28%),linear-gradient(230deg,rgba(220,38,38,0.09)_0%,transparent_34%),repeating-linear-gradient(90deg,rgba(6,95,70,0.045)_0_1px,transparent_1px_78px),repeating-linear-gradient(0deg,rgba(6,95,70,0.035)_0_1px,transparent_1px_78px)] dark:bg-[linear-gradient(130deg,rgba(16,185,129,0.10)_0%,transparent_28%),linear-gradient(230deg,rgba(220,38,38,0.12)_0%,transparent_34%),repeating-linear-gradient(90deg,rgba(255,255,255,0.032)_0_1px,transparent_1px_78px),repeating-linear-gradient(0deg,rgba(255,255,255,0.026)_0_1px,transparent_1px_78px)]" />
-                <div className="pointer-events-none absolute left-6 top-36 hidden text-[12rem] font-black leading-none text-emerald-900/[0.045] dark:text-white/[0.035] lg:block">進</div>
-                <div className="pointer-events-none absolute right-8 top-[700px] hidden text-[12rem] font-black leading-none text-red-900/[0.04] dark:text-white/[0.03] lg:block">練</div>
-                <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
-                    {/* ── HERO SECTION ───────────────────────────────────────── */}
-                    <section className="relative overflow-hidden rounded-[2rem] mb-8 border border-white/70 bg-white/62 p-5 shadow-2xl shadow-emerald-900/5 backdrop-blur-md transition-colors duration-300 sm:p-8 dark:border-gray-800 dark:bg-gray-900/62">
-                        {/* Kanji Watermark */}
-                        <span
-                            aria-hidden="true"
-                            className="absolute right-6 top-1/2 -translate-y-1/2 text-[160px] font-black leading-none select-none pointer-events-none opacity-[0.03] dark:opacity-[0.04] text-rose-900 dark:text-white transition-colors duration-300"
-                            style={{ fontFamily: 'serif' }}
-                        >
-                            進
-                        </span>
 
-                        <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-500 via-red-500 to-amber-400" />
-                        <div className="pointer-events-none absolute inset-0 bg-[repeating-linear-gradient(135deg,rgba(15,23,42,0.035)_0_1px,transparent_1px_18px)] dark:bg-[repeating-linear-gradient(135deg,rgba(255,255,255,0.035)_0_1px,transparent_1px_18px)]" />
+                <main className="relative z-10 mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:px-8">
+                    <section className="mb-5 overflow-hidden rounded-xl border border-white/70 bg-white/70 p-5 shadow-xl shadow-emerald-900/5 backdrop-blur-md dark:border-gray-800 dark:bg-gray-900/70 sm:p-6">
+                        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                            <div>
+                                <p className="text-xs font-bold uppercase tracking-widest text-rose-600 dark:text-rose-300">
+                                    Dasbor Progres
+                                </p>
+                                <h1 className="mt-1 text-2xl font-black text-slate-900 dark:text-white">
+                                    Perjalanan Belajarmu <TranslateIcon className="inline-block text-rose-500" />
+                                </h1>
+                            </div>
+                            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-black text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
+                                7 hari: {totalXP.toLocaleString()} XP
+                            </div>
+                        </div>
 
-                        <div className="relative z-10">
-                        <p className="text-rose-600 dark:text-rose-300 text-xs font-bold uppercase tracking-widest mb-1 transition-colors duration-300">Dasbor Progres</p>
-                        <h1 className="text-2xl font-black text-slate-900 dark:text-white mb-6 transition-colors duration-300">Perjalanan Belajarmu <TranslateIcon className="w-6 h-6 inline-block" /></h1>
-
-                        <motion.div
-                            variants={stagger}
-                            initial="hidden"
-                            animate="show"
-                            className="grid grid-cols-2 xl:grid-cols-4 gap-4"
-                        >
-                            {statCards.map((s, i) => (
-                                <motion.div
-                                    key={i}
-                                    variants={fadeUp}
-                                    className={`relative rounded-2xl p-4 ring-1 ${s.ring} shadow-sm dark:shadow-xl ${s.glow} overflow-hidden bg-white/60 dark:bg-white/5 backdrop-blur-md transition-all duration-300 sm:p-5`}
-                                    whileHover={{ scale: 1.03, transition: { duration: 0.2 } }}
-                                >
-                                    {/* Gradient accent strip */}
-                                    <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${s.gradient}`} />
-                                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${s.gradient} flex items-center justify-center text-white mb-3 shadow-md dark:shadow-lg`}>
-                                        {s.icon}
-                                    </div>
-                                    <p className="text-2xl font-black text-slate-900 dark:text-white leading-none transition-colors duration-300 sm:text-3xl">
-                                        <CountUp target={s.value} />
-                                    </p>
-                                    <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-500 transition-colors duration-300 sm:text-[10px] sm:tracking-widest dark:text-gray-400">{s.label}</p>
-                                </motion.div>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                            {statCards.map((card) => (
+                                <StatCard key={card.label} {...card} />
                             ))}
-                        </motion.div>
                         </div>
                     </section>
 
-                    <div className="mb-8">
-                        <MascotGuide
-                            tone="green"
-                            title="Peta perkembangan"
-                            message="XP menunjukkan aktivitas, streak menunjukkan konsistensi, dan skill bar menunjukkan area yang perlu diperkuat minggu ini."
-                        />
-                    </div>
+                    <section className="mb-5 flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50/90 p-4 shadow-sm dark:border-emerald-900/50 dark:bg-emerald-950/20 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                            <p className="text-xs font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                                Langkah Berikutnya
+                            </p>
+                            <h2 className="mt-1 truncate text-base font-black text-slate-900 dark:text-white">
+                                {nextLearning?.title || 'Pilih kelas untuk mulai belajar'}
+                            </h2>
+                            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                                {nextLearning?.message || 'Pilih kelas aktif agar roadmap belajarmu dapat ditampilkan di sini.'}
+                            </p>
+                        </div>
+                        <Link
+                            href={nextLearning?.url || route('user.kelas.index')}
+                            className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-4 text-sm font-bold text-white transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:focus:ring-offset-gray-950"
+                        >
+                            {nextLearning?.action_label || 'Pilih kelas'}
+                        </Link>
+                    </section>
 
-                    {/* ── MAIN GRID ──────────────────────────────────────────── */}
-                    <div className="grid lg:grid-cols-3 gap-6">
-
-                        {/* ── LEFT COL (chart + skills) ───────────────────────── */}
-                        <div className="lg:col-span-2 space-y-6">
-
-                            {/* WEEKLY ACTIVITY CHART */}
-                            <motion.div
-                                initial={{ opacity: 0, y: 30 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.2, duration: 0.55 }}
-                                className="rounded-[2rem] border border-white/70 bg-white/72 p-6 shadow-2xl shadow-emerald-900/5 backdrop-blur-md transition-colors duration-300 dark:border-gray-800 dark:bg-gray-900/72"
-                            >
-                                <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+                    <div className="grid gap-6 lg:grid-cols-3">
+                        <div className="space-y-6 lg:col-span-2">
+                            <section className="rounded-xl border border-white/70 bg-white/75 p-5 shadow-xl shadow-emerald-900/5 backdrop-blur-md dark:border-gray-800 dark:bg-gray-900/75 sm:p-6">
+                                <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
                                     <div>
-                                        <h3 className="font-black text-slate-900 dark:text-white text-lg transition-colors duration-300">Aktivitas Mingguan</h3>
-                                        <p className="text-xs text-slate-500 dark:text-gray-500 mt-0.5 transition-colors duration-300">XP yang dikumpulkan 7 hari terakhir</p>
+                                        <h3 className="text-lg font-black text-slate-900 dark:text-white">Aktivitas Mingguan</h3>
+                                        <p className="mt-0.5 text-xs text-slate-500 dark:text-gray-500">
+                                            XP yang dikumpulkan 7 hari terakhir
+                                        </p>
                                     </div>
-                                    <span className="text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-3 py-1.5 rounded-xl transition-colors duration-300">
-                                        Total: {totalXP.toLocaleString()} XP
-                                    </span>
                                 </div>
 
-                                <div className="flex items-end gap-2 h-44">
-                                    {weekActivity.map((d, i) => (
-                                        <motion.div
-                                            key={i}
-                                            className="flex-1 flex flex-col items-center gap-1.5"
-                                            initial={{ opacity: 0, scaleY: 0 }}
-                                            animate={{ opacity: 1, scaleY: 1 }}
-                                            transition={{ delay: 0.3 + i * 0.07, duration: 0.5, ease: 'easeOut' }}
-                                            style={{ transformOrigin: 'bottom' }}
-                                        >
-                                            {d.xp > 0 && (
-                                                <span className={`text-[10px] font-bold ${d.today ? 'text-amber-600 dark:text-amber-500' : 'text-slate-400 dark:text-gray-500'} transition-colors duration-300`}>
-                                                    {d.xp}
+                                <div className="flex min-h-[180px] items-end gap-2">
+                                    {weekItems.map((day, index) => {
+                                        const xp = Number(day.xp) || 0;
+                                        const pct = xp > 0 ? Math.max(18, Math.round((xp / peakWeekXp) * 100)) : 0;
+
+                                        return (
+                                            <div key={`${day.day}-${index}`} className="flex flex-1 flex-col items-center gap-1.5">
+                                                <span className={`h-4 text-[10px] font-bold ${day.today ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400 dark:text-gray-500'}`}>
+                                                    {xp > 0 ? xp : ''}
                                                 </span>
-                                            )}
-                                            <div className="w-full relative" style={{ height: '120px' }}>
-                                                {/* Background track */}
-                                                <div className="absolute inset-0 bg-slate-100 dark:bg-gray-800 rounded-2xl transition-colors duration-300" />
-                                                {/* Bar */}
                                                 <div
-                                                    className="absolute bottom-0 left-0 right-0 rounded-2xl transition-all duration-700"
                                                     style={{
-                                                        height: d.height || '0%',
-                                                        minHeight: d.xp > 0 ? '8px' : '0',
-                                                        background: d.today
-                                                            ? 'linear-gradient(180deg,#fbbf24,#f59e0b)'
-                                                            : 'linear-gradient(180deg,#6366f1,#7c3aed)',
-                                                        boxShadow: d.today
-                                                            ? '0 0 12px rgba(251,191,36,0.4)'
-                                                            : '0 0 8px rgba(99,102,241,0.3)',
+                                                        height: 132,
+                                                        width: '100%',
+                                                        minWidth: 34,
+                                                        borderRadius: 18,
+                                                        border: '1px solid rgba(148, 163, 184, 0.35)',
+                                                        background: 'rgba(226, 232, 240, 0.78)',
+                                                        display: 'flex',
+                                                        alignItems: 'flex-end',
+                                                        overflow: 'hidden',
+                                                        boxShadow: 'inset 0 1px 3px rgba(15, 23, 42, 0.08)',
                                                     }}
+                                                >
+                                                    <div
+                                                        style={{
+                                                            width: '100%',
+                                                            height: `${pct}%`,
+                                                            minHeight: xp > 0 ? 24 : 0,
+                                                            background: day.today
+                                                                ? 'linear-gradient(180deg, #facc15 0%, #f59e0b 100%)'
+                                                                : 'linear-gradient(180deg, #818cf8 0%, #7c3aed 100%)',
+                                                            opacity: xp > 0 ? 1 : 0,
+                                                            borderRadius: 16,
+                                                            boxShadow: xp > 0 ? '0 -4px 16px rgba(245, 158, 11, 0.22)' : 'none',
+                                                        }}
+                                                    />
+                                                </div>
+                                                <p className={`text-[10px] font-bold uppercase ${day.today ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400 dark:text-gray-500'}`}>
+                                                    {day.day}
+                                                </p>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </section>
+
+                            <section className="rounded-xl border border-white/70 bg-white/75 p-5 shadow-xl shadow-emerald-900/5 backdrop-blur-md dark:border-gray-800 dark:bg-gray-900/75 sm:p-6">
+                                <h3 className="text-lg font-black text-slate-900 dark:text-white">Aktivitas per Topik</h3>
+                                <p className="mb-5 mt-1 text-xs text-slate-500 dark:text-gray-500">
+                                    Ringkasan aktivitas belajar per topik
+                                </p>
+
+                                <div className="space-y-4">
+                                    {skillItems.map((skill, index) => (
+                                        <div key={skill.label || index}>
+                                            <div className="mb-2 flex items-center justify-between">
+                                                <span className="text-sm font-bold text-slate-800 dark:text-gray-200">{skill.label}</span>
+                                                <span className="text-xs font-black tabular-nums text-slate-500 dark:text-gray-400">
+                                                    {clamp(skill.value)}%
+                                                </span>
+                                            </div>
+                                            <ProgressBar value={skill.value} className={skillColors[index % skillColors.length]} />
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+                        </div>
+
+                        <aside className="space-y-6">
+                            <section className="rounded-xl border border-white/70 bg-white/75 p-5 shadow-xl shadow-emerald-900/5 backdrop-blur-md dark:border-gray-800 dark:bg-gray-900/75 sm:p-6">
+                                <h3 className="text-lg font-black text-slate-900 dark:text-white">Perjalanan JLPT</h3>
+                                <p className="mb-5 mt-1 text-xs text-slate-500 dark:text-gray-500">
+                                    Level yang sudah dan belum tercapai
+                                </p>
+
+                                <div className="mb-6 grid grid-cols-5 gap-2">
+                                    {journeyItems.map((level, index) => {
+                                        const active = !level.done && clamp(level.pct) > 0;
+
+                                        return (
+                                            <div key={`${level.level}-${index}`} className="flex flex-col items-center gap-2">
+                                                <div
+                                                    className={`flex h-11 w-11 items-center justify-center rounded-full text-xs font-black ${
+                                                        level.done
+                                                            ? 'bg-emerald-500 text-white'
+                                                            : active
+                                                                ? 'bg-gradient-to-br from-rose-500 to-orange-500 text-white'
+                                                                : 'bg-slate-100 text-slate-400 dark:bg-gray-800 dark:text-gray-500'
+                                                    }`}
+                                                >
+                                                    {level.done ? <CheckCircleIcon sx={{ fontSize: 20 }} /> : level.level}
+                                                </div>
+                                                <span className="text-[10px] font-bold uppercase text-slate-500 dark:text-gray-400">
+                                                    {level.level}
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                <div className="space-y-3">
+                                    {journeyItems.map((level, index) => (
+                                        <div key={`${level.level}-bar-${index}`} className="flex items-center gap-3">
+                                            <span className="w-7 shrink-0 text-[10px] font-black text-slate-500 dark:text-gray-400">
+                                                {level.level}
+                                            </span>
+                                            <div className="flex-1">
+                                                <ProgressBar
+                                                    value={level.pct}
+                                                    className={level.done ? 'bg-emerald-500' : 'bg-gradient-to-r from-rose-500 to-orange-500'}
                                                 />
-                                                {/* Today ring */}
-                                                {d.today && (
-                                                    <div className="absolute inset-0 rounded-2xl ring-2 ring-amber-400/60 ring-offset-1 ring-offset-white dark:ring-offset-gray-900 transition-colors duration-300" />
+                                            </div>
+                                            <span className="w-9 text-right text-[10px] font-black tabular-nums text-slate-400 dark:text-gray-500">
+                                                {clamp(level.pct)}%
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+
+                            <section className="rounded-xl border border-white/70 bg-white/75 p-5 shadow-xl shadow-emerald-900/5 backdrop-blur-md dark:border-gray-800 dark:bg-gray-900/75 sm:p-6">
+                                <h3 className="text-lg font-black text-slate-900 dark:text-white">Aktivitas Terkini</h3>
+                                <p className="mb-5 mt-1 text-xs text-slate-500 dark:text-gray-500">Riwayat belajar kamu</p>
+
+                                <div className="space-y-4">
+                                    {recentItems.length > 0 ? recentItems.map((activity, index) => (
+                                        <div key={`${activity.text}-${index}`} className="flex items-start gap-3">
+                                            <div className="flex flex-col items-center">
+                                                <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-600 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300">
+                                                    <ActivityIcon type={activity.type} />
+                                                </div>
+                                                {index < recentItems.length - 1 && (
+                                                    <div className="mt-1 h-4 w-px bg-slate-200 dark:bg-gray-700" />
                                                 )}
                                             </div>
-                                            <p className={`text-[10px] font-bold uppercase ${d.today ? 'text-amber-600 dark:text-amber-500' : 'text-slate-400 dark:text-gray-500'} transition-colors duration-300`}>
-                                                {d.day}
-                                            </p>
-                                        </motion.div>
-                                    ))}
-                                </div>
-                            </motion.div>
-
-                            {/* SKILL BREAKDOWN */}
-                            <motion.div
-                                initial={{ opacity: 0, y: 30 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.35, duration: 0.55 }}
-                                className="rounded-[2rem] border border-white/70 bg-white/72 p-6 shadow-2xl shadow-emerald-900/5 backdrop-blur-md transition-colors duration-300 dark:border-gray-800 dark:bg-gray-900/72"
-                            >
-                                <h3 className="font-black text-slate-900 dark:text-white text-lg mb-1 transition-colors duration-300">Kemampuan Skill</h3>
-                                <p className="text-xs text-slate-500 dark:text-gray-500 mb-6 transition-colors duration-300">Persentase penguasaan per topik</p>
-
-                                <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-4">
-                                    {skills.map((s, i) => (
-                                        <motion.div key={i} variants={fadeUp}>
-                                            <div className="flex items-center justify-between mb-2">
-                                                <div className="flex items-center gap-2">
-                                                    <span
-                                                        className="w-2.5 h-2.5 rounded-full shrink-0"
-                                                        style={{ background: skillColors[i % skillColors.length].split(',')[1]?.replace(')', '').trim() || '#6366f1' }}
-                                                    />
-                                                    <span className="text-sm font-bold text-slate-800 dark:text-gray-200 transition-colors duration-300">{s.label}</span>
+                                            <div className="min-w-0 flex-1 pb-1">
+                                                <p className="line-clamp-2 text-xs font-semibold leading-snug text-slate-800 dark:text-white">
+                                                    {activity.text}
+                                                </p>
+                                                <div className="mt-1 flex items-center justify-between gap-2">
+                                                    <span className="text-[10px] text-slate-400 dark:text-gray-500">{activity.time}</span>
+                                                    <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-black text-emerald-600 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300">
+                                                        +{activity.xp} XP
+                                                    </span>
                                                 </div>
-                                                <span className="text-xs font-black text-slate-500 dark:text-gray-400 tabular-nums transition-colors duration-300">{s.value}%</span>
                                             </div>
-                                            <AnimBar value={s.value} color={skillColors[i % skillColors.length]} />
-                                        </motion.div>
-                                    ))}
-                                </motion.div>
-                            </motion.div>
-                        </div>
-
-                        {/* ── RIGHT COL (JLPT + activity) ─────────────────────── */}
-                        <div className="space-y-6">
-
-                            {/* JLPT JOURNEY */}
-                            <motion.div
-                                initial={{ opacity: 0, x: 30 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: 0.25, duration: 0.55 }}
-                                className="rounded-[2rem] border border-white/70 bg-white/72 p-6 shadow-2xl shadow-emerald-900/5 backdrop-blur-md transition-colors duration-300 dark:border-gray-800 dark:bg-gray-900/72"
-                            >
-                                <h3 className="font-black text-slate-900 dark:text-white text-lg mb-1 transition-colors duration-300">Perjalanan JLPT</h3>
-                                <p className="text-xs text-slate-500 dark:text-gray-500 mb-6 transition-colors duration-300">Level yang sudah & belum tercapai</p>
-
-                                {/* Badge row */}
-                                <div className="flex justify-between items-start gap-1 mb-6 px-1">
-                                    {jlptJourney.map((l, i) => {
-                                        const isActive = !l.done && l.pct > 0;
-                                        const isDone   = l.done;
-                                        return (
-                                            <motion.div
-                                                key={i}
-                                                className="flex flex-col items-center gap-2 flex-1"
-                                                initial={{ opacity: 0, scale: 0.6 }}
-                                                animate={{ opacity: 1, scale: 1 }}
-                                                transition={{ delay: 0.4 + i * 0.1, duration: 0.45, ease: [0.175, 0.885, 0.32, 1.275] }}
-                                            >
-                                                <div
-                                                    className={`
-                                                        relative w-12 h-12 rounded-full flex items-center justify-center font-black text-sm
-                                                        transition-all duration-300
-                                                        ${isDone
-                                                            ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/40'
-                                                            : isActive
-                                                            ? 'bg-gradient-to-br from-rose-500 to-orange-500 text-white shadow-lg shadow-rose-500/40 ring-4 ring-rose-400/30 ring-offset-2 ring-offset-white dark:ring-offset-gray-900'
-                                                            : 'bg-slate-100 dark:bg-gray-700 text-slate-400 dark:text-gray-500'
-                                                        }
-                                                    `}
-                                                >
-                                                    {isDone
-                                                        ? <CheckCircleIcon sx={{ fontSize: 22 }} />
-                                                        : l.level}
-                                                    {isActive && (
-                                                        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-amber-400 rounded-full border-2 border-white dark:border-gray-900 animate-pulse transition-colors duration-300" />
-                                                    )}
-                                                </div>
-                                                <span className={`text-[10px] font-bold uppercase transition-colors duration-300 ${isDone ? 'text-emerald-500' : isActive ? 'text-rose-500' : 'text-slate-400 dark:text-gray-500'}`}>
-                                                    {l.level}
-                                                </span>
-                                            </motion.div>
-                                        );
-                                    })}
-                                </div>
-
-                                {/* Connector line + individual progress */}
-                                <div className="space-y-3">
-                                    {jlptJourney.map((l, i) => {
-                                        const isActive = !l.done && l.pct > 0;
-                                        const isDone   = l.done;
-                                        return (
-                                            <div key={i} className="flex items-center gap-3">
-                                                <span className={`text-[10px] font-black w-6 shrink-0 transition-colors duration-300 ${isDone ? 'text-emerald-500' : isActive ? 'text-rose-500' : 'text-slate-400 dark:text-gray-500'}`}>
-                                                    {l.level}
-                                                </span>
-                                                <div className="flex-1 h-1.5 bg-slate-100 dark:bg-gray-800 rounded-full overflow-hidden transition-colors duration-300">
-                                                    <motion.div
-                                                        className={`h-full rounded-full transition-colors duration-300 ${!isDone && !isActive ? 'bg-slate-200 dark:bg-gray-700' : ''}`}
-                                                        style={{
-                                                            background: isDone
-                                                                ? 'linear-gradient(90deg,#10b981,#06b6d4)'
-                                                                : isActive
-                                                                ? 'linear-gradient(90deg,#f43f5e,#f97316)'
-                                                                : undefined,
-                                                        }}
-                                                        initial={{ width: 0 }}
-                                                        animate={{ width: `${l.pct}%` }}
-                                                        transition={{ delay: 0.5 + i * 0.1, duration: 0.8, ease: 'easeOut' }}
-                                                    />
-                                                </div>
-                                                <span className="text-[10px] font-black text-slate-400 dark:text-gray-500 w-8 text-right tabular-nums transition-colors duration-300">
-                                                    {l.pct}%
-                                                </span>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </motion.div>
-
-                            {/* RECENT ACTIVITY TIMELINE */}
-                            <motion.div
-                                initial={{ opacity: 0, x: 30 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: 0.4, duration: 0.55 }}
-                                className="rounded-[2rem] border border-white/70 bg-white/72 p-6 shadow-2xl shadow-emerald-900/5 backdrop-blur-md transition-colors duration-300 dark:border-gray-800 dark:bg-gray-900/72"
-                            >
-                                <h3 className="font-black text-slate-900 dark:text-white text-lg mb-1 transition-colors duration-300">Aktivitas Terkini</h3>
-                                <p className="text-xs text-slate-500 dark:text-gray-500 mb-5 transition-colors duration-300">Riwayat belajar kamu</p>
-
-                                <div className="space-y-4 max-h-72 overflow-y-auto pr-1 scrollbar-thin">
-                                    {recentActivity.length > 0 ? recentActivity.map((a, i) => {
-                                        const c = activityColor(a.type);
-                                        return (
-                                            <motion.div
-                                                key={i}
-                                                className="flex items-start gap-3"
-                                                initial={{ opacity: 0, x: 12 }}
-                                                animate={{ opacity: 1, x: 0 }}
-                                                transition={{ delay: 0.5 + i * 0.07, duration: 0.4 }}
-                                            >
-                                                {/* Timeline line */}
-                                                <div className="flex flex-col items-center">
-                                                    <div className={`w-8 h-8 rounded-xl ${c.bg} border ${c.border} ${c.text} flex items-center justify-center shrink-0 transition-colors duration-300`}>
-                                                        {activityIcon(a.type)}
-                                                    </div>
-                                                    {i < recentActivity.length - 1 && (
-                                                        <div className="w-px h-4 bg-slate-200 dark:bg-gray-700 mt-1 transition-colors duration-300" />
-                                                    )}
-                                                </div>
-                                                <div className="flex-1 min-w-0 pb-1">
-                                                    <p className="text-xs font-semibold text-slate-800 dark:text-white leading-snug line-clamp-2 transition-colors duration-300">{a.text}</p>
-                                                    <div className="flex items-center justify-between mt-1 gap-2">
-                                                        <span className="text-[10px] text-slate-400 dark:text-gray-500 transition-colors duration-300">{a.time}</span>
-                                                        <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-2 py-0.5 rounded-full shrink-0 transition-colors duration-300">
-                                                            +{a.xp} XP
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </motion.div>
-                                        );
-                                    }) : (
-                                        <div className="text-center py-8 transition-colors duration-300">
-                                            <p className="text-4xl mb-2"><LibraryBooksIcon className="w-8 h-8 text-gray-400 inline-block" /></p>
-                                            <p className="text-xs text-slate-400 dark:text-gray-500">Belum ada aktivitas.</p>
                                         </div>
+                                    )) : (
+                                        <EmptyActivity />
                                     )}
                                 </div>
-                            </motion.div>
-                        </div>
+                            </section>
+                        </aside>
                     </div>
-                </div>
+                </main>
             </div>
         </AuthenticatedLayout>
     );

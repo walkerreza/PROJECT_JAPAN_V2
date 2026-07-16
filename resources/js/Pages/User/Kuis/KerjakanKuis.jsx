@@ -352,7 +352,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
     // Jika tidak ada soal dari DB
     if (questions.length === 0) {
         return (
-            <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-red-50 via-white to-amber-50 p-6">
+            <div className="relative flex min-h-[100dvh] items-center justify-center bg-gradient-to-br from-red-50 via-white to-amber-50 px-4 py-8 sm:p-6">
                 <Head title="Quiz" />
                 <FloatingLearningDecor />
                 <div className="relative z-10 max-w-md text-center">
@@ -387,7 +387,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
         const retrySubmit = () => submitAttempt({ timeout: finishedByTimeout });
 
         return (
-            <div className="min-h-screen font-sans flex flex-col items-center justify-center p-6 relative overflow-hidden" 
+            <div className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-4 py-8 font-sans sm:p-6"
                  style={{ backgroundColor: theme.sectionBg }}>
                 <Head title="Hasil Kuis" />
                 
@@ -455,13 +455,10 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
 
     if (showFlashcard && activeFlashcard) {
         return (
-            <div className="min-h-screen font-sans flex flex-col items-center px-4 pb-10 pt-8 overflow-hidden bg-gradient-to-br from-orange-50 via-white to-lime-50">
+            <div className="flex min-h-[100dvh] flex-col items-center overflow-x-hidden bg-gradient-to-br from-orange-50 via-white to-lime-50 px-4 pb-8 pt-6 font-sans sm:pb-10 sm:pt-8">
                 <Head title="Kosakata Baru" />
-                <div className="pointer-events-none fixed -left-24 top-24 h-72 w-72 rounded-full bg-orange-300/30 blur-3xl" />
-                <div className="pointer-events-none fixed -right-24 bottom-24 h-72 w-72 rounded-full bg-lime-300/30 blur-3xl" />
-
-                <header className="relative z-10 mb-8 flex w-full max-w-4xl items-center gap-3 px-2 md:gap-5 md:px-4">
-                    <button onClick={confirmExit} className="text-gray-400 hover:text-gray-600 transition-colors p-2 -ml-2 rounded-full hover:bg-gray-100">
+                <header className="relative z-10 mb-4 flex w-full max-w-4xl items-center gap-3 px-2 sm:mb-6 md:mb-8 md:gap-5 md:px-4">
+                    <button onClick={confirmExit} className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600">
                         <CloseIcon />
                     </button>
                     <div className="h-3 min-w-0 flex-1 overflow-hidden rounded-full bg-gray-200">
@@ -496,30 +493,29 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -30 }}
                         transition={{ duration: 0.35 }}
-                        className="relative w-full overflow-hidden rounded-[2.5rem] border-2 border-orange-100 bg-white shadow-[0_30px_80px_-35px_rgba(234,88,12,0.65)]"
+                        className="relative w-full overflow-hidden rounded-[1.25rem] border-2 border-orange-100 bg-white shadow-[0_30px_80px_-35px_rgba(234,88,12,0.65)] sm:rounded-[2.5rem]"
                     >
-                        <div className="absolute -right-16 -top-16 h-44 w-44 rounded-full bg-gradient-to-br from-orange-300 to-lime-300 opacity-30" />
-                        <div className="relative border-b border-orange-100 bg-gradient-to-r from-orange-50 to-lime-50 px-6 py-5 sm:px-8">
+                        <div className="relative border-b border-orange-100 bg-gradient-to-r from-orange-50 to-lime-50 px-4 py-3 sm:px-8 sm:py-5">
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
-                                    <p className="text-xs font-black uppercase tracking-[0.3em] text-orange-600">Mini Lesson</p>
-                                    <h1 className="mt-2 text-xl font-black text-gray-900 sm:text-2xl">Kosakata baru sebelum lanjut soal</h1>
+                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-600 sm:text-xs sm:tracking-[0.3em]">Mini Lesson</p>
+                                    <h1 className="mt-1 text-lg font-black text-gray-900 sm:mt-2 sm:text-2xl">Kosakata sebelum lanjut soal</h1>
                                 </div>
-                                <span className="w-fit rounded-full bg-white px-4 py-2 text-xs font-black uppercase tracking-wider text-orange-700 shadow-sm">
+                                <span className="w-fit rounded-full bg-white px-3 py-1.5 text-[11px] font-black uppercase tracking-wider text-orange-700 shadow-sm sm:px-4 sm:py-2 sm:text-xs">
                                     {flashcardIndex + 1}/{flashcards.length}
                                 </span>
                             </div>
                         </div>
 
-                        <div className="relative max-h-[58vh] overflow-y-auto overscroll-contain px-5 py-8 text-center sm:px-10 sm:py-12">
-                            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-100 text-3xl font-black text-orange-700">
+                        <div className="relative max-h-[46dvh] overflow-y-auto overscroll-contain px-4 py-5 text-center sm:max-h-[58vh] sm:px-10 sm:py-12">
+                            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-2xl font-black text-orange-700 sm:mb-6 sm:h-16 sm:w-16 sm:rounded-3xl sm:text-3xl">
                                 あ
                             </div>
-                            <p className="break-words text-4xl font-black tracking-tight text-gray-950 sm:text-7xl">{activeFlashcard.front_text}</p>
-                            <p className="mt-4 break-words text-xl font-bold text-gray-500 sm:text-2xl">{activeFlashcard.reading || '-'}</p>
-                            <div className="mx-auto mt-5 h-px max-w-md bg-orange-200" />
+                            <p className="break-words text-3xl font-black tracking-tight text-gray-950 sm:text-7xl">{activeFlashcard.front_text}</p>
+                            <p className="mt-2 break-words text-lg font-bold text-gray-500 sm:mt-4 sm:text-2xl">{activeFlashcard.reading || '-'}</p>
+                            <div className="mx-auto mt-3 h-px max-w-md bg-orange-200 sm:mt-5" />
 
-                            <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+                            <div className="mt-3 flex flex-wrap items-center justify-center gap-2 sm:mt-5 sm:gap-3">
                                 <JapaneseSpeechButton
                                     text={activeFlashcard.front_text || activeFlashcard.reading}
                                     audioUrl={activeFlashcard.audio_url}
@@ -530,11 +526,11 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                                 )}
                             </div>
 
-                            <h2 className="mt-6 break-words text-2xl font-black text-gray-900 sm:text-3xl">{activeFlashcard.back_text || 'Belum ada arti'}</h2>
-                            <p className="mt-3 text-sm font-bold text-gray-400">Pilih jujur. Yang belum paham akan masuk ke Review Kosakata.</p>
+                            <h2 className="mt-4 break-words text-xl font-black text-gray-900 sm:mt-6 sm:text-3xl">{activeFlashcard.back_text || 'Belum ada arti'}</h2>
+                            <p className="mt-2 text-xs font-bold text-gray-400 sm:mt-3 sm:text-sm">Yang belum paham akan masuk ke Review Kosakata.</p>
 
                             {(activeFlashcard.example_sentence || activeFlashcard.example_meaning) && (
-                                <div className="mx-auto mt-8 max-w-2xl rounded-2xl bg-gray-50 p-5 text-left">
+                                <div className="mx-auto mt-5 max-w-2xl rounded-2xl bg-gray-50 p-3 text-left sm:mt-8 sm:p-5">
                                     <p className="break-words text-base font-bold text-gray-700">{activeFlashcard.example_sentence}</p>
                                     <p className="mt-2 break-words text-sm italic text-gray-500">{activeFlashcard.example_meaning}</p>
                                 </div>
@@ -542,20 +538,20 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                         </div>
                     </motion.div>
 
-                    <div className="mt-8 grid w-full max-w-2xl grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="mt-4 grid w-full max-w-2xl grid-cols-2 gap-2 sm:mt-8 sm:gap-4">
                         <button
                             onClick={() => handleFlashcardReview('learning')}
-                            className="rounded-[2rem] bg-orange-500 px-6 py-5 text-center text-lg font-black text-white shadow-[0_8px_0_#C2410C] transition hover:brightness-105 active:translate-y-1 active:shadow-[0_4px_0_#C2410C]"
+                            className="flex min-h-[56px] items-center justify-center gap-2 rounded-xl bg-orange-500 px-2 py-3 text-center text-sm font-black text-white shadow-[0_5px_0_#C2410C] transition hover:brightness-105 active:translate-y-1 active:shadow-[0_3px_0_#C2410C] sm:min-h-[72px] sm:rounded-2xl sm:px-5 sm:py-4 sm:text-base sm:shadow-[0_6px_0_#C2410C]"
                         >
-                            <span className="block text-2xl">?</span>
-                            Belum Paham
+                            <span className="text-lg leading-none sm:text-xl">?</span>
+                            <span>Belum Paham</span>
                         </button>
                         <button
                             onClick={() => handleFlashcardReview('known')}
-                            className="rounded-[2rem] bg-lime-400 px-6 py-5 text-center text-lg font-black text-gray-900 shadow-[0_8px_0_#65A30D] transition hover:brightness-105 active:translate-y-1 active:shadow-[0_4px_0_#65A30D]"
+                            className="flex min-h-[56px] items-center justify-center gap-2 rounded-xl bg-lime-400 px-2 py-3 text-center text-sm font-black text-gray-900 shadow-[0_5px_0_#65A30D] transition hover:brightness-105 active:translate-y-1 active:shadow-[0_3px_0_#65A30D] sm:min-h-[72px] sm:rounded-2xl sm:px-5 sm:py-4 sm:text-base sm:shadow-[0_6px_0_#65A30D]"
                         >
-                            <span className="block text-2xl">OK</span>
-                            Sudah Paham
+                            <span className="text-sm leading-none sm:text-base">OK</span>
+                            <span>Sudah Paham</span>
                         </button>
                     </div>
                 </main>
@@ -565,13 +561,13 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
 
     // === TAMPILAN KUIS AKTIF ===
     return (
-        <div className="min-h-screen font-sans flex flex-col items-center px-4 pb-56 pt-8 overflow-x-hidden sm:pb-40 md:pt-16"
+        <div className={`flex min-h-[100dvh] flex-col items-center overflow-x-hidden px-4 pt-6 font-sans sm:pt-8 md:pt-16 ${selectedAnswer !== null ? 'pb-56 sm:pb-40' : 'pb-10 sm:pb-12'}`}
              style={{ backgroundColor: theme.landingHeroBg }}>
             <Head title={`Quiz - Level 2`} />
 
             {/* Top Progress & Lives */}
-            <header className="relative z-10 mb-8 flex w-full max-w-4xl items-center gap-3 px-2 md:mb-12 md:gap-5 md:px-4">
-                <button onClick={confirmExit} className="text-gray-400 hover:text-gray-600 transition-colors p-2 -ml-2 rounded-full hover:bg-gray-100">
+            <header className="relative z-10 mb-6 flex w-full max-w-4xl items-center gap-3 px-2 md:mb-12 md:gap-5 md:px-4">
+                <button onClick={confirmExit} className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600">
                     <CloseIcon />
                 </button>
                 <div className="h-3 min-w-0 flex-1 overflow-hidden rounded-full bg-gray-200">
@@ -628,8 +624,8 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                         className="w-full flex flex-col items-center"
                     >
                         {/* Question Info */}
-                        <div className="text-center mb-8 w-full">
-                            <h2 className="mb-2 break-words px-1 text-xl font-black text-gray-900 md:text-3xl">{currentQ.question}</h2>
+                        <div className="mb-6 w-full text-center md:mb-8">
+                            <h2 className="mb-2 break-words px-1 text-lg font-black text-gray-900 sm:text-xl md:text-3xl">{currentQ.question}</h2>
                             <p className="text-sm font-bold text-gray-400 uppercase tracking-widest text-shadow">
                                 Soal {currentIndex + 1} dari {questions.length} - Terjawab {answeredCount}/{questions.length}
                             </p>
@@ -637,7 +633,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
 
                         {/* Flashcard Canvas / Media */}
                         {(currentQ.kanji || currentQ.audio_url || currentSpeechText) && (
-                            <div className="w-full max-w-[500px] aspect-video bg-white rounded-[2rem] shadow-sm border-2 border-gray-100 flex items-center justify-center relative mb-10 overflow-hidden">
+                            <div className="relative mb-7 flex aspect-video w-full max-w-[500px] items-center justify-center overflow-hidden rounded-[1.5rem] border-2 border-gray-100 bg-white shadow-sm sm:rounded-[2rem] md:mb-10">
                                 {currentQ.kanji ? (
                                     <span className="max-w-full break-words px-4 text-[64px] font-medium leading-none text-gray-900 select-none sm:text-[100px] md:text-[140px]">{currentQ.kanji}</span>
                                 ) : !currentQ.audio_url ? (
@@ -684,7 +680,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                             transition={{ duration: 0.4 }}
                         >
                             {currentType === 'multiple_choice' && currentQ.options.length > 0 ? (
-                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <div className="grid grid-cols-1 gap-3 sm:gap-4">
                                     {currentQ.options.map((option, index) => {
                                         const isSelected = selectedAnswer === index;
                                         let buttonStyle = {
@@ -722,7 +718,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                                                 key={index}
                                                 disabled={selectedAnswer !== null}
                                                 onClick={() => handleAnswerClick(index)}
-                                                className="relative w-full text-center py-5 px-6 rounded-2xl border-2 font-bold text-base transition-all active:translate-y-1 active:shadow-none disabled:cursor-default"
+                                                className="relative min-h-[56px] min-w-0 w-full break-words rounded-2xl border-2 px-4 py-4 text-center text-base font-bold leading-tight transition-all active:translate-y-1 active:shadow-none disabled:cursor-default sm:px-6 sm:py-5"
                                                 style={buttonStyle}
                                             >
                                                 {option}
@@ -743,7 +739,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                                         onChange={(e) => setTextAnswer(e.target.value)}
                                         disabled={selectedAnswer !== null}
                                         placeholder={currentType === 'listening' ? 'Ketik jawaban dari audio...' : 'Ketik jawaban yang tepat...'}
-                                        className="w-full rounded-2xl border-2 border-gray-200 bg-white px-5 py-5 text-center text-lg font-black text-gray-800 shadow-sm outline-none transition-all focus:border-red-400 focus:ring-4 focus:ring-red-500/10 disabled:bg-gray-50"
+                                        className="w-full rounded-2xl border-2 border-gray-200 bg-white px-4 py-4 text-center text-lg font-black text-gray-800 shadow-sm outline-none transition-all focus:border-red-400 focus:ring-4 focus:ring-red-500/10 disabled:bg-gray-50 sm:px-5 sm:py-5"
                                     />
                                     <button
                                         type="submit"
@@ -773,7 +769,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                         animate={{ y: 0 }}
                         exit={{ y: "100%" }}
                         transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                        className={`fixed bottom-0 left-0 right-0 border-t-2 z-50`}
+                        className="fixed bottom-0 left-0 right-0 z-50 max-h-[72dvh] overflow-y-auto border-t-2"
                         style={{ 
                             backgroundColor: answerFeedback?.status === 'wrong' ? '#fef2f2' : (theme.sectionBg || '#F0FDF4'),
                             borderColor: answerFeedback?.status === 'wrong' ? '#ef4444' : theme.activeColor

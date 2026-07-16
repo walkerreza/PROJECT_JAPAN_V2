@@ -59,25 +59,22 @@ export default function DaftarKuis({ quizzes = [] }) {
                     <div className={`absolute inset-0 bg-gradient-to-br ${theme.heroBg} dark:from-gray-900 dark:via-red-950/40 dark:to-gray-950 transition-colors duration-300`} />
                     <div className="pointer-events-none absolute inset-0 opacity-[0.03] dark:opacity-[0.07] transition-opacity duration-300"
                         style={{ backgroundImage: 'radial-gradient(currentColor 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
-                    <div className={`pointer-events-none absolute top-0 right-0 w-96 h-96 rounded-full ${theme.heroBlob1} dark:bg-red-600/10 blur-3xl transition-colors duration-300`} />
-                    <div className={`pointer-events-none absolute bottom-0 left-20 w-64 h-64 rounded-full ${theme.heroBlob2} dark:bg-amber-500/10 blur-3xl transition-colors duration-300`} />
-
                     {/* Giant kanji watermark */}
-                    <div className="pointer-events-none absolute right-8 top-1/2 -translate-y-1/2 text-[200px] sm:text-[280px] font-black text-black/[0.03] dark:text-white/[0.04] select-none leading-none transition-colors duration-300">
+                    <div className="pointer-events-none absolute right-8 top-1/2 hidden -translate-y-1/2 text-[280px] font-black leading-none text-black/[0.03] select-none transition-colors duration-300 sm:block dark:text-white/[0.04]">
                         試
                     </div>
 
-                    <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-8 py-12 sm:py-16">
+                    <div className="relative z-10 mx-auto max-w-6xl px-4 py-6 sm:px-8 sm:py-14">
                         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
                             className={`mb-5 inline-flex items-center gap-2 rounded-full ${theme.landingBadgeBg} dark:bg-red-500/20 border dark:border-red-500/30 px-4 py-1.5 text-xs font-black uppercase tracking-[0.2em] ${theme.landingBadgeText} dark:text-red-400 transition-colors duration-300`}>
                             <span className={`w-2 h-2 rounded-full ${theme.landingBadgeDot} dark:bg-red-400 animate-pulse transition-colors duration-300`} />
                             ARENA EVALUASI · JLPT N3
                         </motion.div>
 
-                        <div className="flex flex-col lg:flex-row lg:items-end gap-8">
+                        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:gap-8">
                             <div className="flex-1">
                                 <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-                                    className="text-4xl sm:text-6xl font-black text-gray-900 dark:text-white leading-tight tracking-tighter mb-3 transition-colors duration-300">
+                                    className="mb-2 text-2xl font-black leading-tight tracking-normal text-gray-900 transition-colors duration-300 sm:mb-3 sm:text-5xl lg:text-6xl dark:text-white">
                                     Uji <span className={`text-transparent bg-clip-text bg-gradient-to-r ${theme.landingGradText} dark:from-red-400 dark:to-amber-400`}>実力</span>mu
                                     <br className="hidden sm:block" /> Sekarang!
                                 </motion.h1>
@@ -108,7 +105,7 @@ export default function DaftarKuis({ quizzes = [] }) {
                 </div>
 
                 {/* ── CONTENT AREA ── */}
-                <div className="bg-white dark:bg-gray-950 rounded-t-[2.5rem] -mt-6 relative z-10 min-h-[60vh] transition-colors duration-300">
+                <div className="relative z-10 -mt-5 min-h-[60vh] rounded-t-3xl bg-white transition-colors duration-300 sm:-mt-6 sm:rounded-t-[2.5rem] dark:bg-gray-950">
                     <div className="max-w-6xl mx-auto px-4 sm:px-8 pt-8 pb-20">
 
                         {/* Filter bar */}
@@ -141,7 +138,7 @@ export default function DaftarKuis({ quizzes = [] }) {
                         )}
 
                         {/* Quiz grid */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
                             <AnimatePresence mode="popLayout">
                                 {filtered.map((quiz, idx) => {
                                     const meta = getQuizMeta(quiz.type);
@@ -176,7 +173,7 @@ export default function DaftarKuis({ quizzes = [] }) {
                                             {/* Top accent bar */}
                                             <div className={`h-1 w-full bg-gradient-to-r transition-colors duration-300 ${isLocked ? 'from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800' : meta.color}`} />
 
-                                            <div className={`p-5 sm:p-6 transition-opacity duration-300 ${isLocked ? 'opacity-70' : ''}`}>
+                                            <div className={`p-4 sm:p-6 transition-opacity duration-300 ${isLocked ? 'opacity-70' : ''}`}>
 
                                                 {/* Header */}
                                                 <div className="flex items-start justify-between mb-4 gap-3">
@@ -221,17 +218,17 @@ export default function DaftarKuis({ quizzes = [] }) {
                                                 {isLocked ? (
                                                     isPremiumLock ? (
                                                         <Link href={route('pricing')}
-                                                            className={`flex items-center justify-center gap-2 w-full py-3 rounded-2xl bg-gradient-to-r ${theme.ctaBg || 'from-yellow-400 to-amber-500'} dark:from-yellow-500 dark:to-amber-600 text-white font-black text-sm shadow-md shadow-amber-300/30 hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5`}>
+                                                            className={`flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r ${theme.ctaBg || 'from-yellow-400 to-amber-500'} px-4 py-3 text-sm font-black text-white shadow-md shadow-amber-300/30 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg dark:from-yellow-500 dark:to-amber-600`}>
                                                             <DiamondIcon sx={{ fontSize: 16 }} /> Upgrade Premium
                                                         </Link>
                                                     ) : (
-                                                        <div className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 font-black text-sm cursor-not-allowed transition-colors duration-300">
+                                                        <div className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl bg-gray-100 px-4 py-3 text-sm font-black text-gray-500 transition-colors duration-300 dark:bg-gray-800 dark:text-gray-400">
                                                             <LockIcon sx={{ fontSize: 14 }} /> {lockLabel}
                                                         </div>
                                                     )
                                                 ) : (
                                                     <Link href={route('user.quizzes.show', quiz.id)}
-                                                        className={`flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl text-white font-black text-sm transition-all duration-300 hover:brightness-110 active:scale-[0.98] bg-gradient-to-r ${meta.color} shadow-md ${meta.glow}`}
+                                                        className={`flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r ${meta.color} px-4 py-3.5 text-sm font-black text-white shadow-md transition-all duration-300 hover:brightness-110 active:scale-[0.98] ${meta.glow}`}
                                                     >
                                                         <PlayArrowIcon sx={{ fontSize: 18 }} />
                                                         Mulai Kuis
