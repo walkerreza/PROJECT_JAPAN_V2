@@ -62,7 +62,7 @@ test('a configured Mailtrap template receives the OTP variables through the back
             && $request['template_variables']['user_name'] === $user->username
             && $request['template_variables']['otp_code'] === '123456'
             && $request['template_variables']['expires_minutes'] === '10'
-            && $request->hasHeader('Api-Token', 'test-api-token');
+            && $request->hasHeader('Authorization', 'Bearer test-api-token');
     });
 });
 

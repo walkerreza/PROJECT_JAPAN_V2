@@ -25,9 +25,9 @@ class MailtrapTemplateService
      */
     public function send(Pengguna $recipient, string $template, array $variables): void
     {
-        $response = Http::withHeaders([
-            'Api-Token' => config('services.mailtrap.api_token'),
-        ])->acceptJson()->post($this->endpoint(), [
+        $response = Http::withToken((string) config('services.mailtrap.api_token'))
+            ->acceptJson()
+            ->post($this->endpoint(), [
             'from' => [
                 'email' => config('mail.from.address'),
                 'name' => config('mail.from.name'),
@@ -38,7 +38,7 @@ class MailtrapTemplateService
             ]],
             'template_uuid' => $this->templateUuid($template),
             'template_variables' => $variables,
-        ]);
+            ]);
 
         $response->throw();
     }
