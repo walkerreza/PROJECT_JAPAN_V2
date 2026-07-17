@@ -3,10 +3,29 @@ import { Head, Link, useForm } from '@inertiajs/react';
 import MarkEmailReadOutlinedIcon from '@mui/icons-material/MarkEmailReadOutlined';
 import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
+import { useEffect, useMemo, useState } from 'react';
 
-export default function VerifyEmail({ status }) {
-    const { post, processing } = useForm({});
+const COOLDOWN_SECONDS = 180;
+
+const remainingSeconds = (sentAt, now) => {
+    if (!sentAt) return 0;
+
+    return Math.max(0, Math.ceil((new Date(sentAt).getTime() + (COOLDOWN_SECONDS * 1000) - now) / 1000));
+};
+
+export default function VerifyEmail({ status, sentAt = null }) {
+    const [now, setNow] = useState(Date.now());
+    const { post, processing, errors } = useForm({});
     const sent = status === 'verification-link-sent';
+    const secondsLeft = useMemo(() => remainingSeconds(sentAt, now), [sentAt, now]);
+
+    useEffect(() => {
+        if (secondsLeft === 0) return undefined;
+
+        const interval = window.setInterval(() => setNow(Date.now()), 1000);
+
+        return () => window.clearInterval(interval);
+    }, [secondsLeft]);
 
     const submit = (event) => {
         event.preventDefault();
@@ -34,14 +53,24 @@ export default function VerifyEmail({ status }) {
                     </div>
                 )}
 
+                {errors.verification && (
+                    <div className="mb-5 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm leading-relaxed text-red-700">
+                        {errors.verification}
+                    </div>
+                )}
+
                 <form onSubmit={submit} className="space-y-3">
                     <button
                         type="submit"
-                        disabled={processing}
+                        disabled={processing || secondsLeft > 0}
                         className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         <RefreshOutlinedIcon sx={{ fontSize: 18 }} />
-                        {processing ? 'Mengirim ulang...' : 'Kirim ulang tautan verifikasi'}
+                        {processing
+                            ? 'Mengirim ulang...'
+                            : secondsLeft > 0
+                                ? `Kirim ulang dalam ${secondsLeft} detik`
+                                : 'Kirim ulang tautan verifikasi'}
                     </button>
                     <p className="px-2 text-center text-xs leading-relaxed text-gray-500">
                         Tidak menerima email? Pastikan alamat email benar dan periksa folder Spam atau Promosi.

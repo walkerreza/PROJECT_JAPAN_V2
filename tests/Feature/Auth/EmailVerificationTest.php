@@ -3,6 +3,8 @@
 use App\Models\Pengguna as User;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 
 test('email verification screen can be rendered', function () {
@@ -43,4 +45,38 @@ test('email is not verified with invalid hash', function () {
     $this->actingAs($user)->get($verificationUrl);
 
     expect($user->fresh()->hasVerifiedEmail())->toBeFalse();
+});
+
+test('verification resend has a three-minute cooldown', function () {
+    Notification::fake();
+    $user = User::factory()->unverified()->create();
+
+    $this->actingAs($user)
+        ->post(route('verification.send'))
+        ->assertRedirect()
+        ->assertSessionHas('status', 'verification-link-sent');
+
+    $this->actingAs($user)
+        ->post(route('verification.send'))
+        ->assertSessionHasErrors('verification');
+});
+
+test('verification resend locks for two hours after five sends', function () {
+    Notification::fake();
+    $user = User::factory()->unverified()->create();
+    $cooldownKey = 'email-verification:resend:cooldown:'.$user->id;
+
+    foreach (range(1, 5) as $attempt) {
+        $this->actingAs($user)
+            ->post(route('verification.send'))
+            ->assertRedirect();
+
+        RateLimiter::clear($cooldownKey);
+    }
+
+    $this->actingAs($user)
+        ->post(route('verification.send'))
+        ->assertSessionHasErrors('verification');
+
+    expect(RateLimiter::availableIn('email-verification:resend:lock:'.$user->id))->toBeGreaterThan(0);
 });
