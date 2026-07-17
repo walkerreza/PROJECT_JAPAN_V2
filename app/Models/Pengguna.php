@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Notifications\EmailVerificationNotification;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Contracts\Auth\MustVerifyEmail as MustVerifyEmailContract;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-class Pengguna extends Authenticatable
+class Pengguna extends Authenticatable implements MustVerifyEmailContract
 {
     protected $table = 'users';
 
@@ -23,6 +25,7 @@ class Pengguna extends Authenticatable
         'username',
         'email',
         'password',
+        'password_login_enabled',
         'role',
         'subscription_status',
         'auth_provider',
@@ -59,7 +62,13 @@ class Pengguna extends Authenticatable
             'last_activity_date' => 'date',
             'suspended_at' => 'datetime',
             'password' => 'hashed',
+            'password_login_enabled' => 'boolean',
         ];
+    }
+
+    public function sendEmailVerificationNotification(): void
+    {
+        $this->notify(new EmailVerificationNotification);
     }
 
     public function attempts(): \Illuminate\Database\Eloquent\Relations\HasMany

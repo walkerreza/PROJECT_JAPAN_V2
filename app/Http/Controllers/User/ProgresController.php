@@ -24,7 +24,7 @@ class ProgresController extends Controller
 {
     public function index(RingkasanProgresPenggunaService $summary)
     {
-        return Inertia::render('User/Progress', $summary->summary(Auth::user()));
+        return Inertia::render('User/Progress/Progress', $summary->summary(Auth::user()));
     }
 
     public function storeAttempt(

@@ -22,7 +22,7 @@ const IconWhatsApp = () => (
 const footerLinks = {
     Produk: [
         { href: '/roadmap', label: 'Roadmap JLPT N3' },
-        { href: '/user/flashcards', label: 'Flashcard Kosakata' },
+        { href: '/user/kelas', label: 'Flashcard Kosakata' },
         { href: '/user/quizzes', label: 'Arena Kuis' },
         { href: '/pricing', label: 'Harga Premium' },
     ],

@@ -43,6 +43,7 @@ class RegistrasiPenggunaController extends Controller
             'username' => $username,
             'email' => $request->email,
             'password' => Hash::make($request->password),
+            'password_login_enabled' => true,
         ]);
 
         event(new Registered($user));

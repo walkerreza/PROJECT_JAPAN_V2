@@ -104,6 +104,6 @@ test('progress summary keeps xp numeric and activity xp unformatted', function (
     $summary = app(RingkasanProgresPenggunaService::class)->summary($user);
 
     expect($summary['stats']['xp'])->toBe(1234)
-        ->and($summary['recentActivity']->first()['xp'])->toBe(15)
+        ->and($summary['recentActivity'][0]['xp'])->toBe(15)
         ->and($summary)->toHaveKey('next_learning');
 });

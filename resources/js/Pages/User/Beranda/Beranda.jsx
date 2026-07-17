@@ -4,7 +4,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { HitodamaIcon, KabutoIcon, ScrollIcon } from '@/Components/JapaneseIcons';
 import { MascotGuide } from '@/Components/User/UserVisuals';
 import theme from '@/Components/theme/themes';
-import MountFujiBg from '../../../Images/Mount-Fuji-New.jpg';
+import MountFujiBg from '../../../../Images/Mount-Fuji-New.jpg';
 
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import ArrowRightAltIcon from '@mui/icons-material/ArrowRightAlt';

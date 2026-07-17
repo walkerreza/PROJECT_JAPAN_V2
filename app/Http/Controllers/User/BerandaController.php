@@ -70,7 +70,7 @@ class BerandaController extends Controller
                 ];
             });
 
-        return Inertia::render('User/Beranda', [
+        return Inertia::render('User/Beranda/Beranda', [
             'user' => $user,
             'recentProgress' => $user->progress()->with('module')->latest()->take(5)->get(),
             'learningDashboard' => $this->learningDashboardPayload($user, $aksesPremium, $aksesKuis, $kloterBelajar),

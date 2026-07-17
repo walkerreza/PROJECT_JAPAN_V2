@@ -71,7 +71,7 @@ class HalamanController extends Controller
     {
         $user = Auth::user();
 
-        return Inertia::render('User/Profil', [
+        return Inertia::render('User/Profil/Profil', [
             'activeSubscription' => $user?->subscriptions()
                 ->with('paymentPlan:id,name')
                 ->where('status', 'active')
@@ -200,7 +200,7 @@ class HalamanController extends Controller
                 ];
             });
 
-        return Inertia::render('User/KelasPage', [
+        return Inertia::render('User/Kelas/KelasPage', [
             'programs' => $programs,
         ]);
     }
@@ -214,7 +214,7 @@ class HalamanController extends Controller
             ->where('transaction_code', $transactionCode)
             ->firstOrFail();
 
-        return Inertia::render('User/Checkout', [
+        return Inertia::render('User/Checkout/Checkout', [
             'transaction' => [
                 'transaction_code' => $transaction->transaction_code,
                 'amount' => $transaction->amount,
@@ -255,12 +255,12 @@ class HalamanController extends Controller
 
     public function adminProfile()
     {
-        return Inertia::render('Admin/Profil');
+        return Inertia::render('Admin/Profil/Profil');
     }
 
     public function superAdminProfile()
     {
-        return Inertia::render('SuperAdmin/Profil');
+        return Inertia::render('SuperAdmin/Profil/Profil');
     }
 
     private function thumbnailProgramUrl(?string $thumbnailUrl): ?string

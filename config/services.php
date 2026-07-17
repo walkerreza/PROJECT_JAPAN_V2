@@ -36,6 +36,18 @@ return [
         'is_3ds' => env('MIDTRANS_IS_3DS', true),
     ],
 
+    'mailtrap' => [
+        'templates_enabled' => env('MAILTRAP_TEMPLATES_ENABLED', false),
+        'api_token' => env('MAILTRAP_API_TOKEN'),
+        'api_endpoint' => env('MAILTRAP_API_ENDPOINT', 'https://send.api.mailtrap.io/api/send'),
+        'sandbox_inbox_id' => env('MAILTRAP_SANDBOX_INBOX_ID'),
+        'templates' => [
+            'password_reset_otp' => env('MAILTRAP_TEMPLATE_PASSWORD_RESET_OTP_UUID'),
+            'verify_email' => env('MAILTRAP_TEMPLATE_VERIFY_EMAIL_UUID'),
+            'purchase_receipt' => env('MAILTRAP_TEMPLATE_PURCHASE_RECEIPT_UUID'),
+        ],
+    ],
+
     'ses' => [
         'key' => env('AWS_ACCESS_KEY_ID'),
         'secret' => env('AWS_SECRET_ACCESS_KEY'),

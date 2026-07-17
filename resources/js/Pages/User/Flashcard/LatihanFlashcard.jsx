@@ -87,7 +87,7 @@ export default function LatihanFlashcard({ set, cards = [], back_url = null, nex
                         </div>
                     </div>
                     <div className="mb-4 flex items-center justify-between gap-3">
-                        <Link href={back_url || route('user.flashcards.index')} className="rounded-full bg-white border border-gray-200 dark:border-gray-800 px-4 py-2 text-xs font-black uppercase tracking-wider text-gray-700 shadow-sm dark:bg-gray-900 dark:text-gray-300 transition-colors duration-300 hover:bg-gray-50 dark:hover:bg-gray-800">
+                        <Link href={back_url || route('user.kelas.index')} className="rounded-full bg-white border border-gray-200 dark:border-gray-800 px-4 py-2 text-xs font-black uppercase tracking-wider text-gray-700 shadow-sm dark:bg-gray-900 dark:text-gray-300 transition-colors duration-300 hover:bg-gray-50 dark:hover:bg-gray-800">
                             Keluar
                         </Link>
                         <div className="text-right">
@@ -124,8 +124,8 @@ export default function LatihanFlashcard({ set, cards = [], back_url = null, nex
                                         Ulangi
                                     </button>
                                 )}
-                                <Link href={next_url || route('user.flashcards.index')} className="rounded-2xl bg-white border border-orange-200 px-6 py-3 text-sm font-black text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 transition-colors duration-300 hover:bg-orange-50 dark:hover:bg-gray-700 shadow-sm">
-                                    {next_url ? next_label : 'Pilih Set Lain'}
+                                <Link href={next_url || route('user.kelas.index')} className="rounded-2xl bg-white border border-orange-200 px-6 py-3 text-sm font-black text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 transition-colors duration-300 hover:bg-orange-50 dark:hover:bg-gray-700 shadow-sm">
+                                    {next_url ? next_label : 'Kembali ke Kelas'}
                                 </Link>
                             </div>
                         </div>

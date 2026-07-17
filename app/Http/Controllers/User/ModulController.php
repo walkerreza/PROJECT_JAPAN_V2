@@ -210,7 +210,7 @@ class ModulController extends Controller
             ->filter()
             ->values();
 
-        return Inertia::render('User/KosakataPage', [
+        return Inertia::render('User/Kosakata/KosakataPage', [
             'program' => [
                 'title' => $program->title,
                 'slug' => $program->slug,
@@ -286,7 +286,7 @@ class ModulController extends Controller
             })
             ->values();
 
-        return Inertia::render('User/PresentasiPage', [
+        return Inertia::render('User/Presentasi/PresentasiPage', [
             'program' => [
                 'title' => $program->title,
                 'slug' => $program->slug,

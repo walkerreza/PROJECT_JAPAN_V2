@@ -7,12 +7,24 @@ use App\Models\LogReward;
 use App\Models\Modul;
 use App\Models\PengerjaanKuis;
 use App\Models\Pengguna;
+use App\Models\ProgramPembelajaran;
 use App\Models\ReviewFlashcard;
 use App\Models\ReviewSoal;
 use App\Models\SetFlashcard;
 use App\Models\Soal;
 use App\Services\RepetisiPembelajaranService;
 use Inertia\Testing\AssertableInertia as Assert;
+
+function createPublishedProgram(LevelPembelajaran $level): ProgramPembelajaran
+{
+    return ProgramPembelajaran::create([
+        'level_id' => $level->id,
+        'title' => 'JLPT N3',
+        'slug' => 'jlpt-n3-'.str()->random(6),
+        'description' => 'Program N3',
+        'status' => 'published',
+    ]);
+}
 
 it('updates question mastery using spaced repetition rules', function () {
     $user = Pengguna::factory()->create();
@@ -178,9 +190,11 @@ it('marks empty weekly modules as unavailable instead of showing an actionable s
         'stage' => 1,
         'is_premium' => false,
     ]);
+    $program = createPublishedProgram($level);
 
     Modul::create([
         'level_id' => $level->id,
+        'program_pembelajaran_id' => $program->id,
         'title' => 'Week kosong',
         'week_number' => 1,
         'description' => 'Belum ada konten.',
@@ -188,7 +202,7 @@ it('marks empty weekly modules as unavailable instead of showing an actionable s
     ]);
 
     $this->actingAs($user)
-        ->get(route('user.modul.index'))
+        ->get(route('user.modul.program', $program))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('User/Modul/DaftarModul')
@@ -205,8 +219,10 @@ it('does not treat published quizzes without questions as available weekly conte
         'stage' => 1,
         'is_premium' => false,
     ]);
+    $program = createPublishedProgram($level);
     $module = Modul::create([
         'level_id' => $level->id,
+        'program_pembelajaran_id' => $program->id,
         'title' => 'Week tanpa soal',
         'week_number' => 1,
         'description' => 'Kuis belum siap.',
@@ -222,7 +238,7 @@ it('does not treat published quizzes without questions as available weekly conte
     ]);
 
     $this->actingAs($user)
-        ->get(route('user.modul.index'))
+        ->get(route('user.modul.program', $program))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('User/Modul/DaftarModul')
@@ -239,8 +255,10 @@ it('skips empty flashcard sets and sends weekly module users to the valid quiz',
         'stage' => 1,
         'is_premium' => false,
     ]);
+    $program = createPublishedProgram($level);
     $module = Modul::create([
         'level_id' => $level->id,
+        'program_pembelajaran_id' => $program->id,
         'title' => 'Week kuis saja',
         'week_number' => 1,
         'description' => 'Flashcard belum diisi.',
@@ -273,7 +291,7 @@ it('skips empty flashcard sets and sends weekly module users to the valid quiz',
     ]);
 
     $this->actingAs($user)
-        ->get(route('user.modul.index'))
+        ->get(route('user.modul.program', $program))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('User/Modul/DaftarModul')

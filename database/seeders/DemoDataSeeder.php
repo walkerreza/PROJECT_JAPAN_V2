@@ -2,26 +2,24 @@
 
 namespace Database\Seeders;
 
-use App\Models\KodeAkses;
-use App\Models\LogAktivitas;
-use App\Models\PengerjaanKuis;
-use App\Models\JawabanPengerjaanKuis;
-use App\Models\Flashcard;
-use App\Models\SetFlashcard;
-use App\Models\Kanji;
-use App\Models\Materi;
-use App\Models\LevelPembelajaran;
-use App\Models\Modul;
 use App\Models\Berita;
-use App\Models\PaketPembayaran;
-use App\Models\Progres;
-use App\Models\Soal;
-use App\Models\Kuis;
-use App\Models\LogReward;
-use App\Models\Langganan;
-use App\Models\Transaksi;
-use App\Models\Pengguna;
+use App\Models\Flashcard;
+use App\Models\JawabanPengerjaanKuis;
+use App\Models\KodeAkses;
 use App\Models\Kosakata;
+use App\Models\Kuis;
+use App\Models\Langganan;
+use App\Models\LevelPembelajaran;
+use App\Models\LogAktivitas;
+use App\Models\LogReward;
+use App\Models\Modul;
+use App\Models\PaketPembayaran;
+use App\Models\PengerjaanKuis;
+use App\Models\Pengguna;
+use App\Models\Progres;
+use App\Models\SetFlashcard;
+use App\Models\Soal;
+use App\Models\Transaksi;
 use Illuminate\Database\Seeder;
 
 class DemoDataSeeder extends Seeder
@@ -40,26 +38,15 @@ class DemoDataSeeder extends Seeder
         $module = Modul::updateOrCreate(
             ['level_id' => $level->id, 'week_number' => 1],
             [
-                'title' => 'Minggu 1: Kanji dan Kosakata Harian',
-                'description' => 'Demo modul N3 untuk validasi flow lesson, quiz, progress, dan premium lock.',
-                'status' => 'published',
-            ]
-        );
-
-        $lesson = Materi::updateOrCreate(
-            ['module_id' => $module->id, 'order' => 1],
-            [
-                'title' => 'Hari 1: Diskon dan Belanja',
-                'type' => 'text',
-                'content' => '<h2>Kanji Belanja</h2><p>Materi demo untuk memahami kanji 割引 dan 半額 dalam konteks supermarket.</p><blockquote>割引 = diskon, 半額 = setengah harga.</blockquote>',
-                'duration_minutes' => 15,
+                'title' => 'Minggu 1: Kosakata dan Kanji Harian',
+                'description' => 'Demo modul N3 untuk validasi kelas, kuis, flashcard, progress, dan premium lock.',
                 'status' => 'published',
             ]
         );
 
         $quiz = Kuis::updateOrCreate(
-            ['lesson_id' => $lesson->id],
-            ['type' => 'multiple_choice', 'time_limit' => 300, 'status' => 'published']
+            ['module_id' => $module->id, 'type' => 'multiple_choice'],
+            ['time_limit' => 300, 'passing_score' => 70, 'status' => 'published']
         );
 
         $questionOne = Soal::updateOrCreate(
@@ -80,41 +67,7 @@ class DemoDataSeeder extends Seeder
                 'question_text' => '半額 berarti apa?',
                 'correct_answer' => 'Setengah harga',
                 'options' => ['Setengah harga', 'Harga penuh', 'Barang baru', 'Tutup toko'],
-                'explanation' => '半 berarti setengah dan 額 berarti nominal/harga.',
-            ]
-        );
-
-        Kanji::updateOrCreate(
-            ['kanji' => '割'],
-            [
-                'onyomi' => 'カツ',
-                'kunyomi' => 'わ.る, わり',
-                'meaning' => 'divide, split, discount',
-                'indonesian_meaning' => 'membagi, diskon',
-                'jlpt_level' => 'N3',
-                'stroke_count' => 12,
-                'tags' => ['shopping', 'daily'],
-                'example_word' => '割引',
-                'example_reading' => 'わりびき',
-                'example_meaning' => 'diskon',
-                'status' => 'published',
-            ]
-        );
-
-        Kanji::updateOrCreate(
-            ['kanji' => '額'],
-            [
-                'onyomi' => 'ガク',
-                'kunyomi' => 'ひたい',
-                'meaning' => 'amount, sum, forehead',
-                'indonesian_meaning' => 'jumlah, nominal',
-                'jlpt_level' => 'N3',
-                'stroke_count' => 18,
-                'tags' => ['shopping', 'money'],
-                'example_word' => '半額',
-                'example_reading' => 'はんがく',
-                'example_meaning' => 'setengah harga',
-                'status' => 'published',
+                'explanation' => '半 berarti setengah dan 額 berarti nominal atau harga.',
             ]
         );
 
@@ -125,6 +78,7 @@ class DemoDataSeeder extends Seeder
                 'meaning_id' => 'rapat',
                 'meaning_en' => 'meeting',
                 'category' => 'noun',
+                'content_type' => 'kosakata',
                 'tags' => ['office', 'daily'],
                 'example_sentence' => '今日は一時から会議があります。',
                 'example_reading' => 'きょうはいちじからかいぎがあります。',
@@ -136,6 +90,7 @@ class DemoDataSeeder extends Seeder
                 'meaning_id' => 'diskon',
                 'meaning_en' => 'discount',
                 'category' => 'shopping',
+                'content_type' => 'kosakata',
                 'tags' => ['shopping', 'money'],
                 'example_sentence' => 'この店では学生に割引があります。',
                 'example_reading' => 'このみせではがくせいにわりびきがあります。',
@@ -147,23 +102,46 @@ class DemoDataSeeder extends Seeder
                 'meaning_id' => 'perlu',
                 'meaning_en' => 'necessary',
                 'category' => 'na-adjective',
+                'content_type' => 'kosakata',
                 'tags' => ['daily', 'n3'],
                 'example_sentence' => '予約が必要です。',
                 'example_reading' => 'よやくがひつようです。',
                 'example_meaning' => 'Reservasi diperlukan.',
             ],
-        ])->map(fn ($item) => Kosakata::updateOrCreate(
+            [
+                'word' => '割',
+                'reading' => 'わり',
+                'meaning_id' => 'membagi, rasio, diskon',
+                'meaning_en' => 'divide, ratio, discount',
+                'category' => 'kanji',
+                'content_type' => 'kanji',
+                'tags' => ['kanji', 'shopping'],
+                'example_sentence' => '割引の商品を買いました。',
+                'example_reading' => 'わりびきのしょうひんをかいました。',
+                'example_meaning' => 'Saya membeli barang diskon.',
+            ],
+            [
+                'word' => 'てもいい',
+                'reading' => 'てもいい',
+                'meaning_id' => 'boleh melakukan sesuatu',
+                'meaning_en' => 'may do something',
+                'category' => 'bunpo',
+                'content_type' => 'bunpo',
+                'tags' => ['grammar', 'permission'],
+                'example_sentence' => 'ここで写真を撮ってもいいですか。',
+                'example_reading' => 'ここでしゃしんをとってもいいですか。',
+                'example_meaning' => 'Bolehkah saya mengambil foto di sini?',
+            ],
+        ])->map(fn (array $item) => Kosakata::updateOrCreate(
             ['word' => $item['word'], 'reading' => $item['reading']],
-            $item + ['jlpt_level' => 'N3', 'status' => 'published']
+            $item + ['module_id' => $module->id, 'jlpt_level' => 'N3', 'status' => 'published']
         ));
 
         $flashcardSet = SetFlashcard::updateOrCreate(
-            ['title' => 'Kosakata N3 Demo: Daily Office'],
+            ['module_id' => $module->id, 'title' => 'Demo N3: Kosakata Minggu 1'],
             [
                 'level_id' => $level->id,
-                'module_id' => $module->id,
-                'lesson_id' => $lesson->id,
-                'description' => 'Set demo fast card untuk kosakata N3 yang terhubung ke latihan user dan generator quiz.',
+                'description' => 'Set flashcard demo yang terhubung ke modul mingguan dan generator kuis.',
                 'source_type' => 'vocabulary',
                 'status' => 'published',
             ]
@@ -194,7 +172,7 @@ class DemoDataSeeder extends Seeder
                 'description' => 'Akses premium 30 hari untuk demo.',
                 'price' => 99000,
                 'duration_days' => 30,
-                'features' => ['All N3 premium lessons', 'Priority access', 'Access key support'],
+                'features' => ['Akses semua kelas N3', 'Priority access', 'Access key support'],
                 'is_active' => true,
             ]
         );
@@ -208,7 +186,7 @@ class DemoDataSeeder extends Seeder
                 'description' => 'Akses dasar gratis.',
                 'price' => 0,
                 'duration_days' => 30,
-                'features' => ['Akses free content'],
+                'features' => ['Preview konten minggu pertama'],
                 'is_active' => true,
             ]
         );
@@ -238,7 +216,7 @@ class DemoDataSeeder extends Seeder
                     'created_by' => $superadmin->id,
                     'updated_by' => $superadmin->id,
                     'excerpt' => 'Berita demo untuk menguji portal berita user.',
-                    'body' => '<p>Ini adalah berita demo yang dibuat dari seeder untuk memastikan halaman berita user terhubung dengan konten superadmin.</p>',
+                    'body' => '<p>Ini adalah berita demo untuk memastikan halaman berita user terhubung dengan konten superadmin.</p>',
                     'status' => 'published',
                     'audience' => 'students',
                     'is_pinned' => true,
@@ -279,14 +257,14 @@ class DemoDataSeeder extends Seeder
                     'program_pembelajaran_id' => null,
                     'amount' => 99000,
                     'payment_method' => 'manual',
-                    'status' => 'approved',
-                    'notes' => 'Demo approved transaction.',
+                    'status' => 'success',
+                    'notes' => 'Demo successful transaction.',
                     'processed_at' => now(),
                 ]
             );
 
             Progres::updateOrCreate(
-                ['user_id' => $student->id, 'lesson_id' => $lesson->id],
+                ['user_id' => $student->id, 'module_id' => $module->id],
                 ['score' => 100, 'completed_at' => now()]
             );
 

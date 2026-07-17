@@ -16,7 +16,7 @@ class PapanPeringkatController extends Controller
         LeaderboardService $leaderboard
     )
     {
-        return Inertia::render('User/Leaderboard', $leaderboard->payload(
+        return Inertia::render('User/Peringkat/Leaderboard', $leaderboard->payload(
             $request->user(),
             $request->query('period'),
             $gamifikasiConfig->leagues(),

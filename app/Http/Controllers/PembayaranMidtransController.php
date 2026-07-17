@@ -6,6 +6,7 @@ use App\Models\LogTransaksi;
 use App\Models\PaketPembayaran;
 use App\Models\Pengguna;
 use App\Models\Transaksi;
+use App\Notifications\PurchaseReceiptNotification;
 use App\Services\AksesLanggananService;
 use App\Services\AksesPremiumService;
 use App\Services\NotifikasiPenggunaService;
@@ -302,8 +303,28 @@ class PembayaranMidtransController extends Controller
                         'Pembayaran berhasil',
                         "Akses {$scopeLabel} sudah aktif.",
                         route('user.kelas.index'),
-                        ['transaction_id' => $activatedTransaction->id, 'source' => 'midtrans']
+                        ['transaction_id' => $activatedTransaction->id, 'source' => 'midtrans'],
+                        'payment',
+                        'success',
+                        false,
                     );
+
+                    DB::afterCommit(function () use ($activatedTransaction, $scopeLabel): void {
+                        try {
+                            $activatedTransaction->user->notify(new PurchaseReceiptNotification(
+                                $activatedTransaction->transaction_code,
+                                $activatedTransaction->paymentPlan?->name ?? 'Akses belajar',
+                                $scopeLabel,
+                                (int) $activatedTransaction->amount,
+                                optional($activatedTransaction->processed_at)->format('d M Y H:i') ?? now()->format('d M Y H:i'),
+                            ));
+                        } catch (\Throwable $exception) {
+                            Log::error('Invoice pembayaran tidak dapat dimasukkan ke antrean.', [
+                                'transaction_id' => $activatedTransaction->id,
+                                'exception' => $exception->getMessage(),
+                            ]);
+                        }
+                    });
                 }
 
                 $this->notifySuperadminTransaction($activatedTransaction, 'payment_success', 'Pembayaran Midtrans berhasil', 'success');
@@ -323,7 +344,7 @@ class PembayaranMidtransController extends Controller
                         ['transaction_id' => $failedTransaction->id, 'source' => 'midtrans'],
                         'payment',
                         'danger',
-                        true
+                        false
                     );
                 }
 
@@ -349,7 +370,7 @@ class PembayaranMidtransController extends Controller
                         ['transaction_id' => $refundedTransaction->id, 'source' => 'midtrans'],
                         'payment',
                         'warning',
-                        true
+                        false
                     );
                 }
 

@@ -52,7 +52,6 @@ class LoginSosialController extends Controller
 
             $user->update([
                 'google_id' => $user->google_id ?: $googleUser->getId(),
-                'auth_provider' => 'google',
                 'avatar' => $googleUser->getAvatar(),
                 'email_verified_at' => $user->email_verified_at ?: now(),
             ]);
@@ -61,6 +60,7 @@ class LoginSosialController extends Controller
                 'username' => $this->usernameFromGoogle($googleUser->getName(), $googleUser->getEmail()),
                 'email' => $email,
                 'password' => Hash::make(Str::random(40)),
+                'password_login_enabled' => false,
                 'role' => 'user',
                 'subscription_status' => 'free',
                 'auth_provider' => 'google',

@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\KuisRequest;
 use App\Models\Kosakata;
 use App\Models\Kuis;
 use App\Models\Modul;
+use App\Models\Soal;
 use App\Services\ImportSpreadsheetService;
 use App\Services\NotifikasiPenggunaService;
 use App\Services\SoalKuisService;
@@ -95,6 +96,21 @@ class AdminKuisController extends Controller
         $quiz->delete();
 
         return redirect()->back()->with('success', 'Kuis berhasil dihapus');
+    }
+
+    public function legacyQuestionsIndex()
+    {
+        return redirect()->route('admin.quizzes.index');
+    }
+
+    public function legacyQuestionEdit(Soal $question)
+    {
+        return redirect()->route('admin.quizzes.builder', $question->quiz_id);
+    }
+
+    public function legacyQuestionsGone()
+    {
+        abort(410, 'Soal dikelola lewat Builder Kuis.');
     }
 
     public function builder(Kuis $quiz)

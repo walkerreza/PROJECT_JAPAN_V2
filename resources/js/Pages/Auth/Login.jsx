@@ -93,6 +93,7 @@ export default function Login({ status, canResetPassword }) {
                             <span>Masuk dengan Google</span>
                         </a>
                     </div>
+                    <p className="text-center text-xs text-gray-400">Akun Google menggunakan tombol Google dan tidak memakai OTP kata sandi.</p>
                 </form>
             </div>
 

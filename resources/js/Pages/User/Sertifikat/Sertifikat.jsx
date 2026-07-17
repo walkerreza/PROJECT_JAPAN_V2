@@ -242,7 +242,7 @@ export default function Certificate({ certificates = [] }) {
                                 Mulai perjalanan belajar Bahasa Jepang-mu sekarang.<br />
                                 Selesaikan materi dan kuis untuk mendapatkan sertifikat pertamamu!
                             </p>
-                            <Link href="/user/materi" className="inline-flex items-center gap-2 px-8 py-3.5 bg-gradient-to-br from-amber-500 to-amber-700 text-white font-extrabold rounded-xl text-[15px] shadow-[0_4px_0_#92400e,0_8px_24px_rgba(217,119,6,0.4)] transition-all duration-150 hover:brightness-110 hover:-translate-y-0.5">
+                            <Link href="/user/kelas" className="inline-flex items-center gap-2 px-8 py-3.5 bg-gradient-to-br from-amber-500 to-amber-700 text-white font-extrabold rounded-xl text-[15px] shadow-[0_4px_0_#92400e,0_8px_24px_rgba(217,119,6,0.4)] transition-all duration-150 hover:brightness-110 hover:-translate-y-0.5">
                                 <ScrollIcon className="w-5 h-5" /> Mulai Belajar Sekarang
                             </Link>
                         </div>

@@ -36,7 +36,7 @@ Route::middleware('guest')->group(function () {
         ->middleware('throttle:guest-sensitive')
         ->name('password.email');
 
-    Route::get('reset-password/{token}', [PasswordBaruController::class, 'create'])
+    Route::get('reset-password', [PasswordBaruController::class, 'create'])
         ->name('password.reset');
 
     Route::post('reset-password', [PasswordBaruController::class, 'store'])

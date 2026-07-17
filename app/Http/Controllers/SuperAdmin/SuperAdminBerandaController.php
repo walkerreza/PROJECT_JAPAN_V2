@@ -19,7 +19,7 @@ class SuperAdminBerandaController extends SuperAdminDasarController
 {
     public function __invoke()
     {
-        return Inertia::render('SuperAdmin/Beranda', [
+        return Inertia::render('SuperAdmin/Beranda/Beranda', [
             'metrics' => Cache::remember('superadmin.dashboard.metrics', 60, fn () => $this->metrics()),
             'alerts' => Cache::remember('superadmin.dashboard.alerts', 60, fn () => $this->dashboardAlerts()),
             'activities' => LogAktivitas::with('actor:id,username')

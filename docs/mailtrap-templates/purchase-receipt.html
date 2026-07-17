@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bukti pembayaran Japanlingo</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f7fb;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Pembayaran Japanlingo Anda berhasil diproses.</div>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f4f7fb;">
+    <tr><td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;background:#ffffff;border:1px solid #dbe4ef;border-radius:12px;overflow:hidden;">
+        <tr><td style="padding:28px 32px;background:#0f766e;color:#ffffff;">
+          <div style="font-size:22px;font-weight:700;">Japanlingo</div>
+          <div style="margin-top:6px;font-size:14px;line-height:20px;color:#d1fae5;">Bukti pembayaran</div>
+        </td></tr>
+        <tr><td style="padding:32px;">
+          <h1 style="margin:0 0 16px;font-size:24px;line-height:32px;color:#111827;">Pembayaran berhasil</h1>
+          <p style="margin:0 0 24px;font-size:16px;line-height:25px;">Halo {{user_name}}, akses belajar Anda telah diaktifkan. Simpan email ini sebagai bukti pembayaran.</p>
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #dbe4ef;border-radius:8px;overflow:hidden;font-size:14px;line-height:21px;">
+            <tr><td style="padding:12px 16px;background:#f8fafc;color:#6b7280;">Paket</td><td style="padding:12px 16px;text-align:right;font-weight:700;">{{plan_name}}</td></tr>
+            <tr><td style="padding:12px 16px;background:#f8fafc;color:#6b7280;">Akses</td><td style="padding:12px 16px;text-align:right;font-weight:700;">{{scope_label}}</td></tr>
+            <tr><td style="padding:12px 16px;background:#f8fafc;color:#6b7280;">Nominal</td><td style="padding:12px 16px;text-align:right;font-weight:700;">{{amount}}</td></tr>
+            <tr><td style="padding:12px 16px;background:#f8fafc;color:#6b7280;">Waktu pembayaran</td><td style="padding:12px 16px;text-align:right;">{{processed_at}}</td></tr>
+            <tr><td style="padding:12px 16px;background:#f8fafc;color:#6b7280;">Kode transaksi</td><td style="padding:12px 16px;text-align:right;font-family:monospace;">{{transaction_code}}</td></tr>
+          </table>
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin-top:24px;"><tr><td style="border-radius:8px;background:#0f766e;"><a href="{{invoice_url}}" style="display:inline-block;padding:13px 20px;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;">Lihat invoice</a></td></tr></table>
+        </td></tr>
+        <tr><td style="padding:20px 32px;background:#f8fafc;border-top:1px solid #e5e7eb;font-size:12px;line-height:18px;color:#6b7280;">Email otomatis Japanlingo. Mohon jangan membalas email ini.</td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>

@@ -22,7 +22,7 @@ class AdminBerandaController extends Controller
             })
             ->count();
 
-        return Inertia::render('Admin/Beranda', [
+        return Inertia::render('Admin/Beranda/Beranda', [
             'totalModules'   => Modul::count(),
             'totalLessons'   => Modul::count(),
             'totalQuizzes'   => Kuis::count(),

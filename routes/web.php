@@ -34,7 +34,6 @@ use App\Http\Controllers\User\PapanPeringkatController;
 use App\Http\Controllers\User\PembelajaranController;
 use App\Http\Controllers\User\ProgresController;
 use App\Http\Controllers\User\SertifikatController;
-use App\Models\Soal;
 use App\Services\AksesPremiumService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -110,7 +109,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::patch('/payments/transactions/{transaction}/reject', [SuperAdminPembayaranController::class, 'reject'])->name('payments.transactions.reject');
         Route::post('/payments/access-keys', [SuperAdminPembayaranController::class, 'storeAccessKey'])->name('payments.access-keys.store');
         Route::delete('/payments/access-keys/{accessKey}', [SuperAdminPembayaranController::class, 'revokeAccessKey'])->name('payments.access-keys.revoke');
-        Route::redirect('/pricing', '/superadmin/payments');
+        Route::redirect('/pricing', '/superadmin/payments')->name('pricing');
         Route::get('/system', SuperAdminSistemController::class)->name('system');
         Route::post('/system/theme', [SuperAdminSistemController::class, 'updateTheme'])->name('system.theme.update');
         Route::delete('/system/theme', [SuperAdminSistemController::class, 'resetTheme'])->name('system.theme.reset');
@@ -193,13 +192,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/modules/{module}', [AdminModulController::class, 'destroy'])->name('modules.destroy');
 
         // Soal lama diarahkan ke Builder Kuis agar tidak ada dua jalur edit soal.
-        Route::get('/questions', fn () => redirect()->route('admin.quizzes.index'))->name('questions.index');
-        Route::get('/questions/create', fn () => redirect()->route('admin.quizzes.index'))->name('questions.create');
-        Route::get('/questions/{question}/edit', fn (Soal $question) => redirect()->route('admin.quizzes.builder', $question->quiz_id))->name('questions.edit');
-        Route::post('/questions', fn () => abort(410, 'Soal dikelola lewat Builder Kuis.'))->name('questions.store');
-        Route::put('/questions/{question}', fn () => abort(410, 'Soal dikelola lewat Builder Kuis.'))->name('questions.update');
-        Route::delete('/questions/{question}', fn () => abort(410, 'Soal dikelola lewat Builder Kuis.'))->name('questions.destroy');
-        Route::post('/questions/reorder', fn () => abort(410, 'Soal dikelola lewat Builder Kuis.'))->name('questions.reorder');
+        Route::get('/questions', [AdminKuisController::class, 'legacyQuestionsIndex'])->name('questions.index');
+        Route::get('/questions/create', [AdminKuisController::class, 'legacyQuestionsIndex'])->name('questions.create');
+        Route::get('/questions/{question}/edit', [AdminKuisController::class, 'legacyQuestionEdit'])->name('questions.edit');
+        Route::post('/questions', [AdminKuisController::class, 'legacyQuestionsGone'])->name('questions.store');
+        Route::put('/questions/{question}', [AdminKuisController::class, 'legacyQuestionsGone'])->name('questions.update');
+        Route::delete('/questions/{question}', [AdminKuisController::class, 'legacyQuestionsGone'])->name('questions.destroy');
+        Route::post('/questions/reorder', [AdminKuisController::class, 'legacyQuestionsGone'])->name('questions.reorder');
 
         Route::get('/profile', [HalamanController::class, 'adminProfile'])->name('profile');
     });
