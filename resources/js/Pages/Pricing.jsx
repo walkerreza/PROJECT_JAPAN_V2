@@ -223,13 +223,20 @@ export default function Pricing({ paymentPlans = [] }) {
                   key={i}
                   className={`group bg-white rounded-2xl border transition-all duration-300 overflow-hidden ${isOpen ? 'border-red-500 shadow-lg shadow-red-500/5' : 'border-gray-100 hover:border-gray-300'}`}
                 >
-                  <button className="w-full flex items-center justify-between gap-3 px-4 py-4 sm:px-6 sm:py-5 text-left focus:outline-none" onClick={() => setOpenFaq(isOpen ? null : i)}>
+                  <button
+                    className="w-full flex items-center justify-between gap-3 px-4 py-4 sm:px-6 sm:py-5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                    onClick={() => setOpenFaq(isOpen ? null : i)}
+                    aria-expanded={isOpen}
+                    aria-controls={`faq-panel-${i}`}
+                  >
                     <span className={`text-sm sm:text-base font-bold transition-colors ${isOpen ? 'text-red-600' : 'text-gray-900'}`}>{faq.name}</span>
-                    <span className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 text-xl font-light leading-none ${isOpen ? 'bg-red-600 text-white rotate-[135deg]' : 'bg-gray-100 text-gray-400 group-hover:bg-gray-200'}`}>+</span>
+                    <span className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 text-xl font-light leading-none ${isOpen ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-400 group-hover:bg-gray-200'}`}>{isOpen ? '-' : '+'}</span>
                   </button>
-                  <div className={`transition-all duration-500 ease-in-out ${isOpen ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
-                    <div className="mx-4 border-t border-gray-50 px-0 pb-5 pt-2 text-sm sm:mx-6 sm:pb-6 text-gray-500 leading-relaxed">{faq.desc}</div>
-                  </div>
+                  {isOpen && (
+                    <div id={`faq-panel-${i}`} className="transition-all duration-300 ease-in-out">
+                      <div className="mx-4 border-t border-gray-50 px-0 pb-5 pt-2 text-sm sm:mx-6 sm:pb-6 text-gray-500 leading-relaxed">{faq.desc}</div>
+                    </div>
+                  )}
                 </div>
               );
             })}

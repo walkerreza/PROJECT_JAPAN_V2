@@ -61,8 +61,8 @@ export default function GuestAuthLayout({ children }) {
                 </div>
 
                 <div className="flex justify-center gap-4 px-6 py-4 text-center text-xs text-gray-400">
-                    <Link href="#" className="no-underline transition-colors hover:text-red-600">Kebijakan Privasi</Link>
-                    <Link href="#" className="no-underline transition-colors hover:text-red-600">Syarat & Ketentuan</Link>
+                    <Link href="/privacy-policy" className="no-underline transition-colors hover:text-red-600">Kebijakan Privasi</Link>
+                    <Link href="/terms" className="no-underline transition-colors hover:text-red-600">Syarat & Ketentuan</Link>
                 </div>
             </div>
         </div>

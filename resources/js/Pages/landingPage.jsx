@@ -41,9 +41,9 @@ const theme = {
 
 
 const steps = [
-  { icon: <AssignmentIcon />, title: 'Tes Penempatan', desc: 'Ikuti tes cepat 5 menit untuk mengetahui level Anda, atau mulai dari awal di level N5.' },
-  { icon: <BoltIcon />, title: 'Misi Harian', desc: 'Selesaikan materi singkat, kuis, dan latihan berbicara untuk mendapatkan XP serta menjaga streak Anda.' },
-  { icon: <EmojiEventsIcon />, title: 'Raih Sertifikat', desc: 'Lulus evaluasi tingkat untuk membuka sertifikat resmi Japanlingo dan lanjut ke jenjang JLPT berikutnya.' },
+  { icon: <AssignmentIcon />, title: 'Masuk Kelas N3', desc: 'Pilih kelas JLPT N3 dan mulai dari week yang tersedia untuk akun Anda.' },
+  { icon: <BoltIcon />, title: 'Misi Mingguan', desc: 'Selesaikan PPT, kosakata, flashcard, dan kuis dalam satu jalur belajar yang jelas.' },
+  { icon: <EmojiEventsIcon />, title: 'Kumpulkan Progress', desc: 'XP, streak, badge, dan leaderboard membantu siswa melihat perkembangan belajarnya.' },
 ];
 
 const testimonials = [
@@ -53,6 +53,10 @@ const testimonials = [
 ];
 
 const LandingPage = () => {
+  const scrollToDemo = () => {
+    document.getElementById('demo-belajar')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   return (
     <>
       <FallEffect />
@@ -86,14 +90,14 @@ const LandingPage = () => {
           </h1>
 
           <p className="text-lg lg:text-xl text-gray-500 mb-10 leading-relaxed max-w-lg">
-            Kuasai bahasa Jepang dari N5 hingga N1 dengan kurikulum terstruktur yang dirancang untuk orang sibuk. Menyenangkan, efektif, dan gratis untuk dicoba.
+            Kuasai JLPT N3 dengan roadmap mingguan, flashcard, kuis, PPT, dan progress belajar yang saling terhubung.
           </p>
 
           <div className="flex flex-wrap gap-4 mb-10">
             <Button size="lg" href="/register" className="!rounded-full !px-8 !py-4 shadow-lg">
               Mulai Belajar Gratis ➔
             </Button>
-            <Button size="lg" variant="outline" className="!rounded-full !px-8 !py-4 !bg-white">
+            <Button size="lg" variant="outline" type="button" onClick={scrollToDemo} className="!rounded-full !px-8 !py-4 !bg-white">
               <PlayCircleIcon className="mr-2" sx={{ fontSize: 24 }} />
               Lihat Demo
             </Button>
@@ -191,22 +195,52 @@ const LandingPage = () => {
         </div>
       </section>
 
+      <section id="demo-belajar" className="scroll-mt-24 bg-white px-6 py-16 lg:px-24 lg:py-24">
+        <div className="mx-auto max-w-6xl">
+          <div className="mb-10 max-w-2xl">
+            <Badge color="red" className="mb-4">Demo Alur Belajar</Badge>
+            <h2 className="text-3xl font-black tracking-tight text-gray-950 sm:text-4xl">
+              Satu jalur belajar dari kelas sampai progress
+            </h2>
+            <p className="mt-4 text-sm leading-7 text-gray-500 sm:text-base">
+              Preview ini menunjukkan cara Japanlingo menghubungkan kelas, roadmap mingguan, flashcard, kuis, dan progress tanpa membuat siswa berpindah-pindah konteks.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-4">
+            {[
+              ['1', 'Pilih Kelas', 'Siswa masuk ke kelas JLPT N3 yang tersedia atau aktif setelah pembayaran/access key.'],
+              ['2', 'Ikuti Roadmap', 'Setiap week berisi PPT, kosakata, flashcard, dan kuis yang dibuka bertahap.'],
+              ['3', 'Latihan Repetisi', 'Flashcard dan kuis memakai review berulang agar kosakata yang belum kuat muncul lagi.'],
+              ['4', 'Pantau Progress', 'XP, streak, modul selesai, kuis selesai, dan aktivitas belajar tersimpan otomatis.'],
+            ].map(([step, title, desc]) => (
+              <div key={step} className="rounded-xl border border-gray-200 bg-gray-50 p-5 shadow-sm">
+                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-red-600 text-sm font-black text-white">
+                  {step}
+                </div>
+                <h3 className="text-base font-black text-gray-950">{title}</h3>
+                <p className="mt-3 text-sm leading-6 text-gray-500">{desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Roadmap Section */}
       <section className="px-6 lg:px-20 py-16 sm:py-24 bg-white overflow-hidden">
         <div className="max-w-7xl mx-auto text-center">
           <Badge color="red" className="mb-4">PETA PERJALANAN</Badge>
-          <h2 className="text-3xl sm:text-4xl font-black text-gray-900 mb-4">Pilih Titik Awal Anda</h2>
+          <h2 className="text-3xl sm:text-4xl font-black text-gray-900 mb-4">Roadmap JLPT N3 Mingguan</h2>
           <p className="text-gray-500 max-w-2xl mx-auto mb-10 sm:mb-16">
-            Dari pemula absolut hingga fasih tingkat lanjut. Kurikulum kami diselaraskan dengan standar resmi JLPT.
+            Fokus belajar dibuat per minggu agar siswa tahu urutan PPT, kosakata, flashcard, dan kuis yang harus diselesaikan.
           </p>
 
-          <div className="-mx-6 flex snap-x snap-mandatory gap-4 overflow-x-auto px-6 pb-5 text-left sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-6 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-5">
+          <div className="-mx-6 flex snap-x snap-mandatory gap-4 overflow-x-auto px-6 pb-5 text-left sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-6 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-4">
             {[
-              { level: 'N5', title: 'Pemula', desc: 'Salam dasar, hiragana, katakana, dan struktur kalimat sederhana.', color: 'bg-green-500', label: 'Dasar Sekali' },
-              { level: 'N4', title: 'Dasar', desc: 'Percakapan harian, kanji dasar, dan membaca bacaan sederhana.', color: 'bg-red-500', label: 'Fondasi' },
-              { level: 'N3', title: 'Menengah', desc: 'Jembatan menuju kefasihan. Tata bahasa kompleks dan percakapan santai.', color: 'bg-red-600', label: 'Paling Populer', highlight: true },
-              { level: 'N2', title: 'Pra-Lanjut', desc: 'Bahasa Jepang bisnis, pemahaman berita, dan topik abstrak.', color: 'bg-purple-500', label: 'Tingkat Bisnis' },
-              { level: 'N1', title: 'Mahir', desc: 'Kefasihan setara penutur asli. Tulisan kompleks dan diskusi akademis.', color: 'bg-gray-800', label: 'Kemahiran' },
+              { level: 'W1', title: 'Fondasi N3', desc: 'Preview awal berisi pengantar kelas, pola belajar, kosakata dasar N3, dan kuis pembuka.', color: 'bg-red-500', label: 'Preview Gratis', highlight: true },
+              { level: 'W2', title: 'Grammar & Kotoba', desc: 'Latihan pola kalimat dan kosakata harian dengan flashcard repetisi.', color: 'bg-orange-500', label: 'Premium' },
+              { level: 'W3', title: 'Kanji & Bacaan', desc: 'Penguatan kanji, contoh kalimat, dan latihan membaca bertahap.', color: 'bg-amber-500', label: 'Premium' },
+              { level: 'W4', title: 'Review & Kuis', desc: 'Rekap materi mingguan, kuis adaptif, dan evaluasi progress siswa.', color: 'bg-gray-800', label: 'Premium' },
             ].map((item, i) => (
               <div
                 key={i}
@@ -232,7 +266,7 @@ const LandingPage = () => {
                   <div className={`h-1.5 w-full rounded-full mb-4 ${item.color} opacity-80`}></div>
                   {item.highlight ? (
                     <Button className={`w-full !rounded-xl !py-2 ${theme.highlightBtnBg} !text-white !text-xs !font-bold`} href="/register">
-                      Mulai {item.level}
+                      Mulai Week 1
                     </Button>
                   ) : (
                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{item.label}</span>

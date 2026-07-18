@@ -101,14 +101,14 @@ export default function Roadmap() {
       <GuestNavbar />
 
       {/* Hero */}
-      <section className="px-6 lg:px-40 py-16 lg:py-24 bg-gradient-to-b from-red-600/5 to-transparent">
+      <section className="px-6 lg:px-40 py-16 lg:py-24 bg-gradient-to-b from-red-600/5 to-white dark:from-red-500/10 dark:to-slate-950">
         <div className="max-w-5xl mx-auto flex flex-col lg:flex-row items-center gap-12">
           <div className="flex flex-col gap-6 flex-1 text-center lg:text-left">
-            <div className="inline-flex items-center self-center lg:self-start px-3 py-1 rounded-full bg-red-600/10 text-red-600 text-xs font-bold uppercase tracking-wider">
+            <div className="inline-flex items-center self-center lg:self-start px-3 py-1 rounded-full bg-red-600/10 text-red-600 dark:text-red-400 text-xs font-bold uppercase tracking-wider">
               Kurikulum JLPT N3
             </div>
             <h1 className="text-slate-900 dark:text-slate-100 text-4xl lg:text-6xl font-black leading-tight tracking-tight">
-              Taklukkan <span className="text-red-600">JLPT N3</span> dengan<br />Metode Interaktif
+              Taklukkan <span className="text-red-600 dark:text-red-400">JLPT N3</span> dengan<br />Metode Interaktif
             </h1>
             <p className="text-slate-600 dark:text-slate-400 text-lg lg:text-xl font-normal leading-relaxed max-w-2xl">
               Kurikulum khusus N3 yang dirancang seperti permainan. Pelajari pola kalimat, kanji, dan percakapan bisnis dalam langkah-langkah kecil yang menyenangkan.
@@ -117,7 +117,7 @@ export default function Roadmap() {
               <Button href="/register" className="flex items-center justify-center rounded-xl h-14 px-8 !bg-red-600 !text-white text-lg font-bold shadow-xl shadow-red-600/30 hover:-translate-y-1 transition-all w-full sm:w-auto">
                 Mulai Gratis →
               </Button>
-              <Button href="/pricing" variant="outline" className="flex items-center justify-center rounded-xl h-14 px-8 !bg-white dark:bg-slate-800 border-2 !border-red-600/20 !text-slate-700 dark:!text-slate-200 text-lg font-bold hover:!bg-slate-50 transition-all w-full sm:w-auto">
+              <Button href="/pricing" variant="outline" className="flex items-center justify-center rounded-xl h-14 px-8 !bg-white dark:!bg-slate-800 border-2 !border-red-600/20 !text-slate-700 dark:!text-slate-200 text-lg font-bold hover:!bg-slate-50 dark:hover:!bg-slate-700 transition-all w-full sm:w-auto">
                 Lihat Paket
               </Button>
             </div>

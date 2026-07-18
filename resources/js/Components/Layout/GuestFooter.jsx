@@ -29,8 +29,8 @@ const footerLinks = {
     Perusahaan: [
         { href: '/about', label: 'Tentang Kami' },
         { href: '/user/news', label: 'Blog & Berita' },
-        { href: '#', label: 'Kebijakan Privasi' },
-        { href: '#', label: 'Syarat & Ketentuan' },
+        { href: '/privacy-policy', label: 'Kebijakan Privasi' },
+        { href: '/terms', label: 'Syarat & Ketentuan' },
     ],
 };
 
@@ -93,8 +93,8 @@ export default function Footer() {
                 <div className="pt-12 border-t border-slate-800 flex flex-col md:flex-row justify-between items-center gap-6 text-xs">
                     <span>© {new Date().getFullYear()} Japanlingo. Seluruh hak cipta dilindungi.</span>
                     <div className="flex gap-6 text-xs">
-                        <Link href="#" className="hover:text-white transition-colors no-underline">Syarat &amp; Ketentuan</Link>
-                        <Link href="#" className="hover:text-white transition-colors no-underline">Cookies</Link>
+                        <Link href="/terms" className="hover:text-white transition-colors no-underline">Syarat &amp; Ketentuan</Link>
+                        <Link href="/cookie-policy" className="hover:text-white transition-colors no-underline">Cookies</Link>
                     </div>
                 </div>
             </div>

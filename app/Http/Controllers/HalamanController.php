@@ -67,6 +67,87 @@ class HalamanController extends Controller
         return Inertia::render('Roadmap');
     }
 
+    public function privacyPolicy()
+    {
+        return Inertia::render('Legal/LegalPage', [
+            'title' => 'Kebijakan Privasi',
+            'updatedAt' => '18 Juli 2026',
+            'intro' => 'Dokumen operasional awal ini menjelaskan bagaimana Japanlingo mengelola data akun dan aktivitas belajar pengguna.',
+            'sections' => [
+                [
+                    'heading' => 'Data yang Kami Kelola',
+                    'body' => 'Kami menyimpan data akun seperti nama, email, role pengguna, status langganan, progress belajar, aktivitas kuis, flashcard, transaksi, dan notifikasi yang diperlukan untuk menjalankan layanan.',
+                ],
+                [
+                    'heading' => 'Penggunaan Data',
+                    'body' => 'Data digunakan untuk autentikasi, membuka akses kelas, mencatat progress, mengirim notifikasi penting, memproses pembayaran, dan meningkatkan pengalaman belajar.',
+                ],
+                [
+                    'heading' => 'Keamanan',
+                    'body' => 'Akses data dibatasi berdasarkan role. File pembelajaran yang dilindungi tidak dipublikasikan sebagai direct public link dan aksesnya diperiksa melalui otorisasi aplikasi.',
+                ],
+                [
+                    'heading' => 'Kontak',
+                    'body' => 'Pertanyaan terkait privasi dapat dikirim melalui kontak resmi Japanlingo yang tersedia di footer website.',
+                ],
+            ],
+        ]);
+    }
+
+    public function terms()
+    {
+        return Inertia::render('Legal/LegalPage', [
+            'title' => 'Syarat & Ketentuan',
+            'updatedAt' => '18 Juli 2026',
+            'intro' => 'Dokumen operasional awal ini mengatur penggunaan akun, kelas, konten belajar, dan fitur pembayaran Japanlingo.',
+            'sections' => [
+                [
+                    'heading' => 'Penggunaan Akun',
+                    'body' => 'Pengguna wajib memakai data akun yang benar dan menjaga keamanan aksesnya. Akun tidak boleh digunakan untuk aktivitas yang merusak layanan atau mengganggu pengguna lain.',
+                ],
+                [
+                    'heading' => 'Akses Kelas',
+                    'body' => 'Akses kelas diberikan berdasarkan paket aktif, pembayaran yang berhasil, atau access key yang sah. Beberapa materi dapat dibatasi per minggu atau per kloter belajar.',
+                ],
+                [
+                    'heading' => 'Konten Pembelajaran',
+                    'body' => 'Materi, PPT, kosakata, flashcard, dan kuis disediakan untuk kebutuhan belajar pengguna. Penyebaran ulang konten tanpa izin tidak diperbolehkan.',
+                ],
+                [
+                    'heading' => 'Pembayaran',
+                    'body' => 'Pembayaran diproses melalui Midtrans. Akses akan aktif setelah status pembayaran berhasil diterima dan diproses oleh sistem.',
+                ],
+            ],
+        ]);
+    }
+
+    public function cookiePolicy()
+    {
+        return Inertia::render('Legal/LegalPage', [
+            'title' => 'Kebijakan Cookies',
+            'updatedAt' => '18 Juli 2026',
+            'intro' => 'Dokumen operasional awal ini menjelaskan penggunaan cookie dan penyimpanan lokal untuk menjaga sesi dan preferensi pengguna.',
+            'sections' => [
+                [
+                    'heading' => 'Cookie Sesi',
+                    'body' => 'Japanlingo menggunakan cookie sesi untuk login, keamanan CSRF, dan menjaga pengguna tetap berada pada sesi yang valid.',
+                ],
+                [
+                    'heading' => 'Preferensi Tampilan',
+                    'body' => 'Preferensi seperti mode gelap dapat disimpan di browser agar tampilan tetap konsisten saat pengguna kembali membuka website.',
+                ],
+                [
+                    'heading' => 'Pembayaran dan Integrasi',
+                    'body' => 'Integrasi pihak ketiga seperti Midtrans atau Google dapat memakai mekanisme sesi atau token sesuai kebutuhan autentikasi dan pembayaran.',
+                ],
+                [
+                    'heading' => 'Kontrol Pengguna',
+                    'body' => 'Pengguna dapat menghapus cookie melalui pengaturan browser, tetapi beberapa fitur seperti login dan checkout mungkin tidak berjalan normal tanpa cookie.',
+                ],
+            ],
+        ]);
+    }
+
     public function userProfile(GamifikasiConfigService $gamifikasiConfig)
     {
         $user = Auth::user();

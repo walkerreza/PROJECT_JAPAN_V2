@@ -8,6 +8,17 @@ test('login screen can be rendered', function () {
     $response->assertStatus(200);
 });
 
+test('login validation messages use Indonesian locale', function () {
+    $response = $this->from('/login')->post('/login', []);
+
+    $response
+        ->assertRedirect('/login')
+        ->assertSessionHasErrors([
+            'email' => 'Email wajib diisi.',
+            'password' => 'Kata sandi wajib diisi.',
+        ]);
+});
+
 test('users can authenticate using the login screen', function () {
     $user = User::factory()->create();
 

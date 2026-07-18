@@ -109,7 +109,7 @@ export default function Register() {
                                 required
                             />
                             <span className="text-sm text-gray-500">
-                                Saya menyetujui <Link href="#" className="font-medium text-red-600 hover:underline">Syarat & Ketentuan</Link> dan <Link href="#" className="font-medium text-red-600 hover:underline">Kebijakan Privasi</Link>.
+                                Saya menyetujui <Link href="/terms" className="font-medium text-red-600 hover:underline">Syarat & Ketentuan</Link> dan <Link href="/privacy-policy" className="font-medium text-red-600 hover:underline">Kebijakan Privasi</Link>.
                             </span>
                         </label>
                         {errors.terms_accepted && <p className="mt-1 text-xs text-red-600">{errors.terms_accepted}</p>}

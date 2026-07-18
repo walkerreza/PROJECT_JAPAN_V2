@@ -67,6 +67,24 @@ const applyDocumentTheme = (mode = resolveThemeMode()) => {
 export default function AuthenticatedLayout({ children }) {
     const { user } = usePage().props.auth;
     const flash = usePage().props.flash || {};
+    const flashNotice = [
+        ['error', flash.error],
+        ['warning', flash.warning],
+        ['success', flash.success],
+        ['info', flash.info],
+    ].find(([, message]) => typeof message === 'string' && message.trim().length > 0);
+    const flashNoticeStyle = {
+        error: 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/70 dark:bg-red-950/70 dark:text-red-100',
+        warning: 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/70 dark:text-amber-100',
+        success: 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/70 dark:text-emerald-100',
+        info: 'border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-900/70 dark:bg-sky-950/70 dark:text-sky-100',
+    };
+    const flashNoticeLabel = {
+        error: 'Tidak bisa melanjutkan',
+        warning: 'Perhatian',
+        success: 'Berhasil',
+        info: 'Informasi',
+    };
     const [profileMenuOpen, setProfileMenuOpen] = useState(false);
     const [notificationOpen, setNotificationOpen] = useState(false);
     const [themeMode, setThemeMode] = useState(resolveThemeMode);
@@ -672,6 +690,18 @@ export default function AuthenticatedLayout({ children }) {
                     {renderUtilityControls(false)}
                 </header>
                 <main className="min-h-screen bg-slate-50 dark:bg-[#0b1121] text-slate-900 dark:text-slate-100 shadow-[-5px_0_30px_-10px_rgba(0,0,0,0.05)] relative z-0 transition-colors duration-300">
+                    {flashNotice && (
+                        <div className="pointer-events-none fixed inset-x-3 top-20 z-40 flex justify-center lg:left-[260px] lg:right-6 lg:top-20">
+                            <div className={`pointer-events-auto w-full max-w-3xl rounded-xl border px-4 py-3 text-sm shadow-lg backdrop-blur ${flashNoticeStyle[flashNotice[0]]}`}>
+                                <p className="text-xs font-black uppercase tracking-[0.18em]">
+                                    {flashNoticeLabel[flashNotice[0]]}
+                                </p>
+                                <p className="mt-1 font-semibold leading-6">
+                                    {flashNotice[1]}
+                                </p>
+                            </div>
+                        </div>
+                    )}
                     {children}
                 </main>
                 {isUser && (
