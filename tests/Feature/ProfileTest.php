@@ -1,6 +1,9 @@
 <?php
 
+use App\Http\Controllers\Auth\LoginSosialController;
 use App\Models\Pengguna as User;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Http;
 
 test('profile page is displayed', function () {
     $user = User::factory()->create();
@@ -123,4 +126,33 @@ test('Google-only account requires recent Google confirmation to delete account'
         ->assertRedirect('/profile');
 
     $this->assertNotNull($user->fresh());
+});
+
+test('Google token revocation failure does not prevent local account deletion', function () {
+    Http::fake([
+        'https://oauth2.googleapis.com/revoke' => Http::response(['error' => 'temporarily_unavailable'], 503),
+    ]);
+
+    $user = User::factory()->create([
+        'password_login_enabled' => false,
+        'auth_provider' => 'google',
+        'google_id' => 'google-user-123',
+    ]);
+
+    $response = $this
+        ->actingAs($user)
+        ->withSession([
+            LoginSosialController::ACCOUNT_DELETION_CONFIRMED_AT => now()->timestamp,
+            LoginSosialController::ACCOUNT_DELETION_CONFIRMED_USER_ID => $user->id,
+            LoginSosialController::ACCOUNT_DELETION_GOOGLE_TOKEN => Crypt::encryptString('google-access-token'),
+        ])
+        ->delete('/profile', [
+            'confirmation_username' => $user->username,
+        ]);
+
+    $response
+        ->assertSessionHasNoErrors()
+        ->assertRedirect('/');
+    $this->assertGuest();
+    $this->assertNull($user->fresh());
 });

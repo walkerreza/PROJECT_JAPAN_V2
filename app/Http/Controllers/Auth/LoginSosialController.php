@@ -8,6 +8,7 @@ use App\Models\RiwayatLogin;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
@@ -26,12 +27,16 @@ class LoginSosialController extends Controller
 
     public const ACCOUNT_DELETION_CONFIRMED_USER_ID = 'profile.account_deletion.google_confirmed_user_id';
 
+    public const ACCOUNT_DELETION_GOOGLE_TOKEN = 'profile.account_deletion.google_token';
+
     public function redirectToGoogle(Request $request): RedirectResponse
     {
         $request->session()->put(self::OAUTH_INTENT, self::OAUTH_INTENT_LOGIN);
         $request->session()->forget(self::OAUTH_INTENT_USER_ID);
 
-        return Socialite::driver('google')->redirect();
+        return Socialite::driver('google')
+            ->with(['prompt' => 'select_account'])
+            ->redirect();
     }
 
     public function handleGoogleCallback(Request $request): RedirectResponse
@@ -154,6 +159,7 @@ class LoginSosialController extends Controller
         $request->session()->forget([
             self::ACCOUNT_DELETION_CONFIRMED_AT,
             self::ACCOUNT_DELETION_CONFIRMED_USER_ID,
+            self::ACCOUNT_DELETION_GOOGLE_TOKEN,
         ]);
 
         return Socialite::driver('google')
@@ -185,6 +191,7 @@ class LoginSosialController extends Controller
         $request->session()->put([
             self::ACCOUNT_DELETION_CONFIRMED_AT => now()->timestamp,
             self::ACCOUNT_DELETION_CONFIRMED_USER_ID => $user->id,
+            self::ACCOUNT_DELETION_GOOGLE_TOKEN => Crypt::encryptString((string) $googleUser->token),
         ]);
 
         return redirect()->route('profile.edit')

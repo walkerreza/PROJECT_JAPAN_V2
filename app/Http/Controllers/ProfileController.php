@@ -7,8 +7,11 @@ use App\Http\Requests\ProfileUpdateRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class ProfileController extends Controller
 {
@@ -59,6 +62,8 @@ class ProfileController extends Controller
 
         $user->delete();
 
+        $this->revokeGoogleAccess($request);
+
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
@@ -73,5 +78,26 @@ class ProfileController extends Controller
         return filled($request->user()->google_id)
             && $confirmedUserId === (int) $request->user()->id
             && $confirmedAt >= now()->subMinutes(5)->timestamp;
+    }
+
+    private function revokeGoogleAccess(Request $request): void
+    {
+        $encryptedToken = $request->session()->pull(LoginSosialController::ACCOUNT_DELETION_GOOGLE_TOKEN);
+
+        if (blank($encryptedToken)) {
+            return;
+        }
+
+        try {
+            $token = Crypt::decryptString((string) $encryptedToken);
+
+            Http::asForm()
+                ->connectTimeout(2)
+                ->timeout(5)
+                ->post('https://oauth2.googleapis.com/revoke', ['token' => $token])
+                ->throw();
+        } catch (Throwable $exception) {
+            report($exception);
+        }
     }
 }

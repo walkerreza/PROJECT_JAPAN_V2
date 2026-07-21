@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\LoginSosialController;
 use App\Models\Pengguna;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
 use Laravel\Socialite\Contracts\Provider;
 use Laravel\Socialite\Facades\Socialite;
@@ -27,6 +28,10 @@ function mockGoogleUser(array $attributes = []): void
 
 test('Google login redirect stores the login intent', function () {
     $provider = Mockery::mock(Provider::class);
+    $provider->shouldReceive('with')
+        ->once()
+        ->with(['prompt' => 'select_account'])
+        ->andReturnSelf();
     $provider->shouldReceive('redirect')
         ->once()
         ->andReturn(redirect()->away('https://accounts.google.test/oauth'));
@@ -202,6 +207,9 @@ test('suspended Google account cannot log in', function () {
 
 test('Google-only user can confirm identity and delete account without password', function () {
     Notification::fake();
+    Http::fake([
+        'https://oauth2.googleapis.com/revoke' => Http::response(status: 200),
+    ]);
     $user = Pengguna::factory()->create([
         'email' => 'google@example.com',
         'password_login_enabled' => false,
@@ -222,7 +230,8 @@ test('Google-only user can confirm identity and delete account without password'
         ->assertSessionMissing(LoginSosialController::OAUTH_INTENT)
         ->assertSessionMissing(LoginSosialController::OAUTH_INTENT_USER_ID)
         ->assertSessionHas('profile.account_deletion.google_confirmed_user_id', $user->id)
-        ->assertSessionHas('profile.account_deletion.google_confirmed_at');
+        ->assertSessionHas('profile.account_deletion.google_confirmed_at')
+        ->assertSessionHas(LoginSosialController::ACCOUNT_DELETION_GOOGLE_TOKEN);
 
     $deleteResponse = $this->delete(route('profile.destroy'), [
         'confirmation_username' => $user->username,
@@ -231,6 +240,8 @@ test('Google-only user can confirm identity and delete account without password'
     $deleteResponse->assertSessionHasNoErrors()->assertRedirect('/');
     $this->assertGuest();
     expect($user->fresh())->toBeNull();
+    Http::assertSent(fn ($request) => $request->url() === 'https://oauth2.googleapis.com/revoke'
+        && $request['token'] === 'fake-token');
     Notification::assertNothingSent();
 });
 
