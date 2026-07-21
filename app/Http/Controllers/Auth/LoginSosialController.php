@@ -22,7 +22,9 @@ class LoginSosialController extends Controller
     {
         try {
             $googleUser = Socialite::driver('google')->user();
-        } catch (\Throwable) {
+        } catch (\Throwable $exception) {
+            report($exception);
+
             return redirect()->route('login')->withErrors([
                 'email' => 'Login Google gagal. Coba lagi atau gunakan email dan password.',
             ]);
@@ -50,13 +52,13 @@ class LoginSosialController extends Controller
                 ]);
             }
 
-            $user->update([
+            $user->forceFill([
                 'google_id' => $user->google_id ?: $googleUser->getId(),
                 'avatar' => $googleUser->getAvatar(),
                 'email_verified_at' => $user->email_verified_at ?: now(),
-            ]);
+            ])->save();
         } else {
-            $user = Pengguna::create([
+            $user = new Pengguna([
                 'username' => $this->usernameFromGoogle($googleUser->getName(), $googleUser->getEmail()),
                 'email' => $email,
                 'password' => Hash::make(Str::random(40)),
@@ -66,8 +68,9 @@ class LoginSosialController extends Controller
                 'auth_provider' => 'google',
                 'google_id' => $googleUser->getId(),
                 'avatar' => $googleUser->getAvatar(),
-                'email_verified_at' => now(),
             ]);
+
+            $user->forceFill(['email_verified_at' => now()])->save();
         }
 
         if ($user->status === 'suspended') {
