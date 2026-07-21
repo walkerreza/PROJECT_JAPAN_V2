@@ -40,7 +40,7 @@ test('Google login redirect stores the login intent', function () {
 
     $response
         ->assertRedirect('https://accounts.google.test/oauth')
-        ->assertSessionHas(LoginSosialController::OAUTH_INTENT, 'login')
+        ->assertSessionHas(LoginSosialController::OAUTH_INTENT, LoginSosialController::OAUTH_INTENT_LOGIN)
         ->assertSessionMissing(LoginSosialController::OAUTH_INTENT_USER_ID);
 });
 
@@ -76,11 +76,36 @@ test('Google account deletion redirect reuses the configured callback and stores
         ->assertSessionHas(LoginSosialController::OAUTH_INTENT_USER_ID, $user->id);
 });
 
+test('authenticated Google callback without an OAuth intent never logs the user in again', function () {
+    $user = Pengguna::factory()->create([
+        'google_id' => 'google-user-123',
+    ]);
+
+    $response = $this->actingAs($user)
+        ->get(route('auth.google.callback'));
+
+    $response
+        ->assertRedirect(route('profile.edit'))
+        ->assertSessionHasErrors('google_confirmation');
+    $this->assertAuthenticatedAs($user);
+});
+
+test('guest Google callback without an OAuth intent is rejected', function () {
+    $response = $this->get(route('auth.google.callback'));
+
+    $response
+        ->assertRedirect(route('login'))
+        ->assertSessionHasErrors('email');
+    $this->assertGuest();
+});
+
 test('new Google user is verified and logged in without email notification', function () {
     Notification::fake();
     mockGoogleUser();
 
-    $response = $this->get(route('auth.google.callback'));
+    $response = $this
+        ->withSession([LoginSosialController::OAUTH_INTENT => LoginSosialController::OAUTH_INTENT_LOGIN])
+        ->get(route('auth.google.callback'));
 
     $user = Pengguna::where('email', 'google@example.com')->firstOrFail();
 
@@ -103,7 +128,9 @@ test('existing manual user can link Google and keeps password login enabled', fu
     ]);
     mockGoogleUser();
 
-    $response = $this->get(route('auth.google.callback'));
+    $response = $this
+        ->withSession([LoginSosialController::OAUTH_INTENT => LoginSosialController::OAUTH_INTENT_LOGIN])
+        ->get(route('auth.google.callback'));
 
     $user->refresh();
 
@@ -120,7 +147,10 @@ test('Google account with unverified email is rejected', function () {
     Notification::fake();
     mockGoogleUser(['email_verified' => false]);
 
-    $response = $this->from(route('login'))->get(route('auth.google.callback'));
+    $response = $this
+        ->withSession([LoginSosialController::OAUTH_INTENT => LoginSosialController::OAUTH_INTENT_LOGIN])
+        ->from(route('login'))
+        ->get(route('auth.google.callback'));
 
     $response->assertRedirect(route('login'))
         ->assertSessionHasErrors('email');
@@ -138,7 +168,10 @@ test('unlinked administrator account cannot be linked automatically', function (
     ]);
     mockGoogleUser();
 
-    $response = $this->from(route('login'))->get(route('auth.google.callback'));
+    $response = $this
+        ->withSession([LoginSosialController::OAUTH_INTENT => LoginSosialController::OAUTH_INTENT_LOGIN])
+        ->from(route('login'))
+        ->get(route('auth.google.callback'));
 
     $response->assertRedirect(route('login'))
         ->assertSessionHasErrors('email');
@@ -156,7 +189,10 @@ test('suspended Google account cannot log in', function () {
     ]);
     mockGoogleUser();
 
-    $response = $this->from(route('login'))->get(route('auth.google.callback'));
+    $response = $this
+        ->withSession([LoginSosialController::OAUTH_INTENT => LoginSosialController::OAUTH_INTENT_LOGIN])
+        ->from(route('login'))
+        ->get(route('auth.google.callback'));
 
     $response->assertRedirect(route('login'))
         ->assertSessionHasErrors('email');
@@ -183,6 +219,8 @@ test('Google-only user can confirm identity and delete account without password'
 
     $confirmationResponse
         ->assertRedirect(route('profile.edit'))
+        ->assertSessionMissing(LoginSosialController::OAUTH_INTENT)
+        ->assertSessionMissing(LoginSosialController::OAUTH_INTENT_USER_ID)
         ->assertSessionHas('profile.account_deletion.google_confirmed_user_id', $user->id)
         ->assertSessionHas('profile.account_deletion.google_confirmed_at');
 

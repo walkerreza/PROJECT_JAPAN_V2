@@ -18,6 +18,8 @@ class LoginSosialController extends Controller
 
     public const OAUTH_INTENT_USER_ID = 'auth.google.intent_user_id';
 
+    public const OAUTH_INTENT_LOGIN = 'login';
+
     public const OAUTH_INTENT_DELETE_ACCOUNT = 'delete_account';
 
     public const ACCOUNT_DELETION_CONFIRMED_AT = 'profile.account_deletion.google_confirmed_at';
@@ -26,7 +28,7 @@ class LoginSosialController extends Controller
 
     public function redirectToGoogle(Request $request): RedirectResponse
     {
-        $request->session()->put(self::OAUTH_INTENT, 'login');
+        $request->session()->put(self::OAUTH_INTENT, self::OAUTH_INTENT_LOGIN);
         $request->session()->forget(self::OAUTH_INTENT_USER_ID);
 
         return Socialite::driver('google')->redirect();
@@ -34,16 +36,23 @@ class LoginSosialController extends Controller
 
     public function handleGoogleCallback(Request $request): RedirectResponse
     {
-        $intent = (string) $request->session()->pull(self::OAUTH_INTENT, 'login');
-        $intentUserId = (int) $request->session()->pull(self::OAUTH_INTENT_USER_ID, 0);
+        $intent = (string) $request->session()->get(self::OAUTH_INTENT, '');
+        $intentUserId = (int) $request->session()->get(self::OAUTH_INTENT_USER_ID, 0);
+
+        if (! in_array($intent, [self::OAUTH_INTENT_LOGIN, self::OAUTH_INTENT_DELETE_ACCOUNT], true)) {
+            return $this->oauthContextFailure();
+        }
 
         try {
             $googleUser = Socialite::driver('google')->user();
         } catch (\Throwable $exception) {
             report($exception);
+            $this->clearOAuthIntent($request);
 
             return $this->oauthFailure($intent, 'Verifikasi Google gagal. Silakan coba kembali.');
         }
+
+        $this->clearOAuthIntent($request);
 
         if ($intent === self::OAUTH_INTENT_DELETE_ACCOUNT) {
             return $this->confirmAccountDeletion($request, $googleUser, $intentUserId);
@@ -193,6 +202,29 @@ class LoginSosialController extends Controller
 
         return redirect()->route('login')->withErrors([
             'email' => 'Login Google gagal. Coba lagi atau gunakan email dan password.',
+        ]);
+    }
+
+    private function oauthContextFailure(): RedirectResponse
+    {
+        if (Auth::check()) {
+            return redirect()->route('profile.edit')
+                ->with('reopen_delete_dialog', true)
+                ->withErrors([
+                    'google_confirmation' => 'Sesi verifikasi Google tidak ditemukan atau sudah kedaluwarsa. Mulai ulang dari tombol hapus akun.',
+                ]);
+        }
+
+        return redirect()->route('login')->withErrors([
+            'email' => 'Sesi login Google tidak ditemukan atau sudah kedaluwarsa. Silakan mulai ulang.',
+        ]);
+    }
+
+    private function clearOAuthIntent(Request $request): void
+    {
+        $request->session()->forget([
+            self::OAUTH_INTENT,
+            self::OAUTH_INTENT_USER_ID,
         ]);
     }
 
