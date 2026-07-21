@@ -16,6 +16,7 @@ function mockGoogleUser(array $attributes = []): void
     ], $attributes));
 
     $provider = Mockery::mock(Provider::class);
+    $provider->shouldReceive('redirectUrl')->zeroOrMoreTimes()->andReturnSelf();
     $provider->shouldReceive('user')->once()->andReturn($googleUser);
 
     Socialite::shouldReceive('driver')
@@ -109,5 +110,57 @@ test('suspended Google account cannot log in', function () {
     $response->assertRedirect(route('login'))
         ->assertSessionHasErrors('email');
     $this->assertGuest();
+    Notification::assertNothingSent();
+});
+
+test('Google-only user can confirm identity and delete account without password', function () {
+    Notification::fake();
+    $user = Pengguna::factory()->create([
+        'email' => 'google@example.com',
+        'password_login_enabled' => false,
+        'auth_provider' => 'google',
+        'google_id' => 'google-user-123',
+    ]);
+    mockGoogleUser();
+
+    $confirmationResponse = $this->actingAs($user)
+        ->get(route('profile.delete.google.callback'));
+
+    $confirmationResponse
+        ->assertRedirect(route('profile.edit'))
+        ->assertSessionHas('profile.account_deletion.google_confirmed_user_id', $user->id)
+        ->assertSessionHas('profile.account_deletion.google_confirmed_at');
+
+    $deleteResponse = $this->delete(route('profile.destroy'), [
+        'confirmation_username' => $user->username,
+    ]);
+
+    $deleteResponse->assertSessionHasNoErrors()->assertRedirect('/');
+    $this->assertGuest();
+    expect($user->fresh())->toBeNull();
+    Notification::assertNothingSent();
+});
+
+test('Google deletion confirmation rejects a different Google account', function () {
+    Notification::fake();
+    $user = Pengguna::factory()->create([
+        'email' => 'google@example.com',
+        'password_login_enabled' => false,
+        'auth_provider' => 'google',
+        'google_id' => 'google-user-123',
+    ]);
+    mockGoogleUser([
+        'id' => 'different-google-user',
+        'email' => 'different@example.com',
+    ]);
+
+    $response = $this->actingAs($user)
+        ->get(route('profile.delete.google.callback'));
+
+    $response
+        ->assertRedirect(route('profile.edit'))
+        ->assertSessionHasErrors('google_confirmation')
+        ->assertSessionMissing('profile.account_deletion.google_confirmed_at');
+    $this->assertAuthenticatedAs($user);
     Notification::assertNothingSent();
 });

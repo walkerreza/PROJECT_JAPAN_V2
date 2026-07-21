@@ -2,16 +2,18 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\PaketPembayaran;
+use App\Http\Controllers\Auth\LoginSosialController;
 use App\Models\DeckPresentasi;
 use App\Models\Kosakata;
 use App\Models\Modul;
+use App\Models\PaketPembayaran;
 use App\Models\ProgramPembelajaran;
 use App\Models\Transaksi;
 use App\Services\AksesLanggananService;
 use App\Services\AksesPremiumService;
 use App\Services\GamifikasiConfigService;
 use App\Services\KloterBelajarService;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
@@ -148,11 +150,26 @@ class HalamanController extends Controller
         ]);
     }
 
-    public function userProfile(GamifikasiConfigService $gamifikasiConfig)
+    public function userProfile(Request $request, GamifikasiConfigService $gamifikasiConfig)
     {
         $user = Auth::user();
+        $googleConfirmationAt = (int) $request->session()->get(
+            LoginSosialController::ACCOUNT_DELETION_CONFIRMED_AT,
+            0
+        );
+        $googleConfirmationUserId = (int) $request->session()->get(
+            LoginSosialController::ACCOUNT_DELETION_CONFIRMED_USER_ID,
+            0
+        );
 
         return Inertia::render('User/Profil/Profil', [
+            'deletionAuth' => [
+                'password_login_enabled' => $user?->password_login_enabled !== false,
+                'google_reauthenticated' => filled($user?->google_id)
+                    && $googleConfirmationUserId === (int) $user?->id
+                    && $googleConfirmationAt >= now()->subMinutes(5)->timestamp,
+                'open_dialog' => (bool) $request->session()->get('reopen_delete_dialog', false),
+            ],
             'activeSubscription' => $user?->subscriptions()
                 ->with('paymentPlan:id,name')
                 ->where('status', 'active')

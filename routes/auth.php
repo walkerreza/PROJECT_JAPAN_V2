@@ -56,6 +56,14 @@ Route::middleware('auth')->group(function () {
         ->middleware('throttle:6,1')
         ->name('verification.send');
 
+    Route::get('profile/delete/google/redirect', [LoginSosialController::class, 'redirectForAccountDeletion'])
+        ->middleware(['verified', 'throttle:5,1'])
+        ->name('profile.delete.google.redirect');
+
+    Route::get('profile/delete/google/callback', [LoginSosialController::class, 'handleAccountDeletionCallback'])
+        ->middleware(['verified', 'throttle:5,1'])
+        ->name('profile.delete.google.callback');
+
     Route::get('confirm-password', [KonfirmasiPasswordController::class, 'show'])
         ->name('password.confirm');
 

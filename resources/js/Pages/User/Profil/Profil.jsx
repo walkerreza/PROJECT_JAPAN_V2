@@ -150,14 +150,19 @@ const resolveThemeLabel = () => {
     return 'System';
 };
 
-export default function Profile({ recentTransactions = [], achievements = [], gamificationSettings = {} }) {
+export default function Profile({ recentTransactions = [], achievements = [], gamificationSettings = {}, deletionAuth = {} }) {
     const { user } = usePage().props.auth;
-    const [activeTab, setActiveTab] = useState('stats');
+    const passwordLoginEnabled = deletionAuth.password_login_enabled !== false;
+    const googleReauthenticated = Boolean(deletionAuth.google_reauthenticated);
+    const [activeTab, setActiveTab] = useState(deletionAuth.open_dialog ? 'settings' : 'stats');
     const [saved, setSaved] = useState(false);
-    const [deleteConfirm, setDeleteConfirm] = useState(false);
+    const [deleteConfirm, setDeleteConfirm] = useState(Boolean(deletionAuth.open_dialog));
     const [themeLabel, setThemeLabel] = useState(resolveThemeLabel);
     const accessKeyForm = useForm({ code: '' });
-    const deleteAccountForm = useForm({ password: '' });
+    const deleteAccountForm = useForm({
+        confirmation_username: '',
+        password: '',
+    });
     const accessStatus = user.access_status || {};
     const transactionInvoices = recentTransactions.map((transaction) => ({
         id: transaction.code || transaction.transaction_code || null,
@@ -202,6 +207,15 @@ export default function Profile({ recentTransactions = [], achievements = [], ga
                 deleteAccountForm.reset();
             },
         });
+    };
+
+    const confirmAccountDeletion = () => {
+        if (!passwordLoginEnabled && !googleReauthenticated) {
+            window.location.assign(route('profile.delete.google.redirect'));
+            return;
+        }
+
+        deleteAccount();
     };
 
     const xp = user.xp || 0;
@@ -685,31 +699,76 @@ export default function Profile({ recentTransactions = [], achievements = [], ga
                 show={deleteConfirm}
                 variant="danger"
                 title="Hapus Akun Permanen?"
-                message="Masukkan password akun untuk menghapus akun. Progres belajar, XP, dan riwayat langganan akan ikut terhapus."
+                message={passwordLoginEnabled
+                    ? 'Ketik username dan masukkan password akun. Progres belajar, XP, dan riwayat langganan akan ikut terhapus.'
+                    : googleReauthenticated
+                        ? 'Identitas Google sudah terverifikasi. Ketik username untuk mengonfirmasi penghapusan permanen.'
+                        : 'Verifikasi kembali akun Google yang terhubung sebelum menghapus akun secara permanen.'}
                 details={[
                     { label: 'Akun', value: user.username },
                     { label: 'Email', value: user.email },
+                    { label: 'Verifikasi', value: passwordLoginEnabled ? 'Password akun' : 'Akun Google' },
                 ]}
-                confirmLabel="Ya, Hapus Permanen"
+                confirmLabel={!passwordLoginEnabled && !googleReauthenticated
+                    ? 'Verifikasi dengan Google'
+                    : 'Ya, Hapus Permanen'}
                 processing={deleteAccountForm.processing}
-                onConfirm={deleteAccount}
+                onConfirm={confirmAccountDeletion}
                 onCancel={() => {
                     setDeleteConfirm(false);
                     deleteAccountForm.reset();
                     deleteAccountForm.clearErrors();
                 }}
             >
-                <label className="block space-y-2">
-                    <span className="text-xs font-black uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">Password</span>
-                    <input
-                        type="password"
-                        value={deleteAccountForm.data.password}
-                        onChange={(event) => deleteAccountForm.setData('password', event.target.value)}
-                        className="w-full rounded-xl border border-rose-200 bg-white px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:ring-4 focus:ring-rose-500/10 dark:border-rose-900/40 dark:bg-gray-950 dark:text-white"
-                        placeholder="Masukkan password"
-                    />
-                    {deleteAccountForm.errors.password && <p className="text-xs font-bold text-rose-600 dark:text-rose-400">{deleteAccountForm.errors.password}</p>}
-                </label>
+                {!passwordLoginEnabled && !googleReauthenticated ? (
+                    <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold leading-6 text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-300">
+                        Google akan memastikan bahwa akun yang dipilih sama dengan akun Japanlingo ini. Anda akan kembali ke halaman profil setelah verifikasi.
+                        {deleteAccountForm.errors.google_confirmation && (
+                            <p className="mt-2 text-xs font-bold text-rose-600 dark:text-rose-400">{deleteAccountForm.errors.google_confirmation}</p>
+                        )}
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        {!passwordLoginEnabled && (
+                            <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300">
+                                <CheckCircleIcon sx={{ fontSize: 18 }} />
+                                Akun Google sudah diverifikasi
+                            </div>
+                        )}
+
+                        <label className="block space-y-2">
+                            <span className="text-xs font-black uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">Ketik Username</span>
+                            <input
+                                type="text"
+                                value={deleteAccountForm.data.confirmation_username}
+                                onChange={(event) => deleteAccountForm.setData('confirmation_username', event.target.value)}
+                                className="w-full rounded-xl border border-rose-200 bg-white px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:ring-4 focus:ring-rose-500/10 dark:border-rose-900/40 dark:bg-gray-950 dark:text-white"
+                                placeholder={user.username}
+                                autoComplete="off"
+                            />
+                            {deleteAccountForm.errors.confirmation_username && <p className="text-xs font-bold text-rose-600 dark:text-rose-400">{deleteAccountForm.errors.confirmation_username}</p>}
+                        </label>
+
+                        {passwordLoginEnabled && (
+                            <label className="block space-y-2">
+                                <span className="text-xs font-black uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">Password</span>
+                                <input
+                                    type="password"
+                                    value={deleteAccountForm.data.password}
+                                    onChange={(event) => deleteAccountForm.setData('password', event.target.value)}
+                                    className="w-full rounded-xl border border-rose-200 bg-white px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:ring-4 focus:ring-rose-500/10 dark:border-rose-900/40 dark:bg-gray-950 dark:text-white"
+                                    placeholder="Masukkan password"
+                                    autoComplete="current-password"
+                                />
+                                {deleteAccountForm.errors.password && <p className="text-xs font-bold text-rose-600 dark:text-rose-400">{deleteAccountForm.errors.password}</p>}
+                            </label>
+                        )}
+
+                        {deleteAccountForm.errors.google_confirmation && (
+                            <p className="text-xs font-bold text-rose-600 dark:text-rose-400">{deleteAccountForm.errors.google_confirmation}</p>
+                        )}
+                    </div>
+                )}
             </ConfirmActionDialog>
         </AuthenticatedLayout>
     );

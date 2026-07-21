@@ -56,6 +56,7 @@ test('user can delete their account', function () {
     $response = $this
         ->actingAs($user)
         ->delete('/profile', [
+            'confirmation_username' => $user->username,
             'password' => 'password',
         ]);
 
@@ -74,11 +75,51 @@ test('correct password must be provided to delete account', function () {
         ->actingAs($user)
         ->from('/profile')
         ->delete('/profile', [
+            'confirmation_username' => $user->username,
             'password' => 'wrong-password',
         ]);
 
     $response
         ->assertSessionHasErrors('password')
+        ->assertRedirect('/profile');
+
+    $this->assertNotNull($user->fresh());
+});
+
+test('matching username must be provided to delete account', function () {
+    $user = User::factory()->create();
+
+    $response = $this
+        ->actingAs($user)
+        ->from('/profile')
+        ->delete('/profile', [
+            'confirmation_username' => 'username-lain',
+            'password' => 'password',
+        ]);
+
+    $response
+        ->assertSessionHasErrors('confirmation_username')
+        ->assertRedirect('/profile');
+
+    $this->assertNotNull($user->fresh());
+});
+
+test('Google-only account requires recent Google confirmation to delete account', function () {
+    $user = User::factory()->create([
+        'password_login_enabled' => false,
+        'auth_provider' => 'google',
+        'google_id' => 'google-user-123',
+    ]);
+
+    $response = $this
+        ->actingAs($user)
+        ->from('/profile')
+        ->delete('/profile', [
+            'confirmation_username' => $user->username,
+        ]);
+
+    $response
+        ->assertSessionHasErrors('google_confirmation')
         ->assertRedirect('/profile');
 
     $this->assertNotNull($user->fresh());

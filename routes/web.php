@@ -54,7 +54,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Profile
     Route::get('/profile', [HalamanController::class, 'userProfile'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])
+        ->middleware('throttle:5,1')
+        ->name('profile.destroy');
     Route::post('/profile/access-keys/redeem', [UserDashboardController::class, 'redeemAccessKey'])->middleware(['role:user', 'throttle:access-keys'])->name('profile.access-keys.redeem');
     Route::get('/user/access-status', function (Request $request, AksesPremiumService $aksesPremium) {
         return response()->json($aksesPremium->statusAkses($request->user()));

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Pengguna;
 use App\Models\RiwayatLogin;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -13,6 +14,10 @@ use Laravel\Socialite\Facades\Socialite;
 
 class LoginSosialController extends Controller
 {
+    public const ACCOUNT_DELETION_CONFIRMED_AT = 'profile.account_deletion.google_confirmed_at';
+
+    public const ACCOUNT_DELETION_CONFIRMED_USER_ID = 'profile.account_deletion.google_confirmed_user_id';
+
     public function redirectToGoogle(): RedirectResponse
     {
         return Socialite::driver('google')->redirect();
@@ -111,6 +116,54 @@ class LoginSosialController extends Controller
         }
 
         return redirect()->route('user.dashboard');
+    }
+
+    public function redirectForAccountDeletion(Request $request): RedirectResponse
+    {
+        abort_unless(filled($request->user()->google_id), 403);
+
+        return Socialite::driver('google')
+            ->redirectUrl(route('profile.delete.google.callback'))
+            ->with(['prompt' => 'select_account'])
+            ->redirect();
+    }
+
+    public function handleAccountDeletionCallback(Request $request): RedirectResponse
+    {
+        try {
+            $googleUser = Socialite::driver('google')
+                ->redirectUrl(route('profile.delete.google.callback'))
+                ->user();
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return redirect()->route('profile.edit')
+                ->with('reopen_delete_dialog', true)
+                ->withErrors(['google_confirmation' => 'Verifikasi Google gagal. Silakan coba kembali.']);
+        }
+
+        $user = $request->user();
+        $email = $googleUser->getEmail();
+        $emailVerified = (bool) data_get($googleUser->user, 'email_verified');
+        $googleIdMatches = filled($user->google_id)
+            && hash_equals((string) $user->google_id, (string) $googleUser->getId());
+        $emailMatches = filled($email)
+            && hash_equals(Str::lower($user->email), Str::lower($email));
+
+        if (! $emailVerified || ! $googleIdMatches || ! $emailMatches) {
+            return redirect()->route('profile.edit')
+                ->with('reopen_delete_dialog', true)
+                ->withErrors(['google_confirmation' => 'Gunakan akun Google yang terhubung dengan akun Japanlingo ini.']);
+        }
+
+        $request->session()->put([
+            self::ACCOUNT_DELETION_CONFIRMED_AT => now()->timestamp,
+            self::ACCOUNT_DELETION_CONFIRMED_USER_ID => $user->id,
+        ]);
+
+        return redirect()->route('profile.edit')
+            ->with('reopen_delete_dialog', true)
+            ->with('success', 'Identitas Google berhasil diverifikasi. Konfirmasi berlaku selama lima menit.');
     }
 
     private function usernameFromGoogle(?string $name, ?string $email): string
