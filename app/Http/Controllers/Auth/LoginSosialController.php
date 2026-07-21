@@ -14,25 +14,39 @@ use Laravel\Socialite\Facades\Socialite;
 
 class LoginSosialController extends Controller
 {
+    public const OAUTH_INTENT = 'auth.google.intent';
+
+    public const OAUTH_INTENT_USER_ID = 'auth.google.intent_user_id';
+
+    public const OAUTH_INTENT_DELETE_ACCOUNT = 'delete_account';
+
     public const ACCOUNT_DELETION_CONFIRMED_AT = 'profile.account_deletion.google_confirmed_at';
 
     public const ACCOUNT_DELETION_CONFIRMED_USER_ID = 'profile.account_deletion.google_confirmed_user_id';
 
-    public function redirectToGoogle(): RedirectResponse
+    public function redirectToGoogle(Request $request): RedirectResponse
     {
+        $request->session()->put(self::OAUTH_INTENT, 'login');
+        $request->session()->forget(self::OAUTH_INTENT_USER_ID);
+
         return Socialite::driver('google')->redirect();
     }
 
-    public function handleGoogleCallback(): RedirectResponse
+    public function handleGoogleCallback(Request $request): RedirectResponse
     {
+        $intent = (string) $request->session()->pull(self::OAUTH_INTENT, 'login');
+        $intentUserId = (int) $request->session()->pull(self::OAUTH_INTENT_USER_ID, 0);
+
         try {
             $googleUser = Socialite::driver('google')->user();
         } catch (\Throwable $exception) {
             report($exception);
 
-            return redirect()->route('login')->withErrors([
-                'email' => 'Login Google gagal. Coba lagi atau gunakan email dan password.',
-            ]);
+            return $this->oauthFailure($intent, 'Verifikasi Google gagal. Silakan coba kembali.');
+        }
+
+        if ($intent === self::OAUTH_INTENT_DELETE_ACCOUNT) {
+            return $this->confirmAccountDeletion($request, $googleUser, $intentUserId);
         }
 
         $email = $googleUser->getEmail();
@@ -84,8 +98,8 @@ class LoginSosialController extends Controller
                 'email' => $user->email,
                 'role' => $user->role,
                 'status' => 'failed',
-                'ip_address' => request()->ip(),
-                'user_agent' => request()->userAgent(),
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
                 'logged_in_at' => now(),
             ]);
 
@@ -95,15 +109,15 @@ class LoginSosialController extends Controller
         }
 
         Auth::login($user, true);
-        request()->session()->regenerate();
+        $request->session()->regenerate();
 
         RiwayatLogin::create([
             'user_id' => $user->id,
             'email' => $user->email,
             'role' => $user->role,
             'status' => 'success',
-            'ip_address' => request()->ip(),
-            'user_agent' => request()->userAgent(),
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
             'logged_in_at' => now(),
         ]);
 
@@ -120,40 +134,43 @@ class LoginSosialController extends Controller
 
     public function redirectForAccountDeletion(Request $request): RedirectResponse
     {
-        abort_unless(filled($request->user()->google_id), 403);
+        $user = $request->user();
+
+        abort_unless(filled($user->google_id), 403);
+
+        $request->session()->put([
+            self::OAUTH_INTENT => self::OAUTH_INTENT_DELETE_ACCOUNT,
+            self::OAUTH_INTENT_USER_ID => $user->id,
+        ]);
+        $request->session()->forget([
+            self::ACCOUNT_DELETION_CONFIRMED_AT,
+            self::ACCOUNT_DELETION_CONFIRMED_USER_ID,
+        ]);
 
         return Socialite::driver('google')
-            ->redirectUrl(route('profile.delete.google.callback'))
-            ->with(['prompt' => 'select_account'])
+            ->with([
+                'prompt' => 'select_account',
+                'login_hint' => $user->email,
+            ])
             ->redirect();
     }
 
-    public function handleAccountDeletionCallback(Request $request): RedirectResponse
+    private function confirmAccountDeletion(Request $request, mixed $googleUser, int $intentUserId): RedirectResponse
     {
-        try {
-            $googleUser = Socialite::driver('google')
-                ->redirectUrl(route('profile.delete.google.callback'))
-                ->user();
-        } catch (\Throwable $exception) {
-            report($exception);
-
-            return redirect()->route('profile.edit')
-                ->with('reopen_delete_dialog', true)
-                ->withErrors(['google_confirmation' => 'Verifikasi Google gagal. Silakan coba kembali.']);
-        }
-
         $user = $request->user();
         $email = $googleUser->getEmail();
         $emailVerified = (bool) data_get($googleUser->user, 'email_verified');
-        $googleIdMatches = filled($user->google_id)
+        $userMatches = $user && $intentUserId === (int) $user->id;
+        $googleIdMatches = $userMatches && filled($user->google_id)
             && hash_equals((string) $user->google_id, (string) $googleUser->getId());
-        $emailMatches = filled($email)
+        $emailMatches = $userMatches && filled($email)
             && hash_equals(Str::lower($user->email), Str::lower($email));
 
-        if (! $emailVerified || ! $googleIdMatches || ! $emailMatches) {
-            return redirect()->route('profile.edit')
-                ->with('reopen_delete_dialog', true)
-                ->withErrors(['google_confirmation' => 'Gunakan akun Google yang terhubung dengan akun Japanlingo ini.']);
+        if (! $userMatches || ! $emailVerified || ! $googleIdMatches || ! $emailMatches) {
+            return $this->oauthFailure(
+                self::OAUTH_INTENT_DELETE_ACCOUNT,
+                'Gunakan akun Google yang terhubung dengan akun Japanlingo ini.'
+            );
         }
 
         $request->session()->put([
@@ -164,6 +181,19 @@ class LoginSosialController extends Controller
         return redirect()->route('profile.edit')
             ->with('reopen_delete_dialog', true)
             ->with('success', 'Identitas Google berhasil diverifikasi. Konfirmasi berlaku selama lima menit.');
+    }
+
+    private function oauthFailure(string $intent, string $message): RedirectResponse
+    {
+        if ($intent === self::OAUTH_INTENT_DELETE_ACCOUNT && Auth::check()) {
+            return redirect()->route('profile.edit')
+                ->with('reopen_delete_dialog', true)
+                ->withErrors(['google_confirmation' => $message]);
+        }
+
+        return redirect()->route('login')->withErrors([
+            'email' => 'Login Google gagal. Coba lagi atau gunakan email dan password.',
+        ]);
     }
 
     private function usernameFromGoogle(?string $name, ?string $email): string

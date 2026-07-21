@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Auth\LoginSosialController;
 use App\Models\Pengguna;
 use Illuminate\Support\Facades\Notification;
 use Laravel\Socialite\Contracts\Provider;
@@ -16,7 +17,6 @@ function mockGoogleUser(array $attributes = []): void
     ], $attributes));
 
     $provider = Mockery::mock(Provider::class);
-    $provider->shouldReceive('redirectUrl')->zeroOrMoreTimes()->andReturnSelf();
     $provider->shouldReceive('user')->once()->andReturn($googleUser);
 
     Socialite::shouldReceive('driver')
@@ -24,6 +24,57 @@ function mockGoogleUser(array $attributes = []): void
         ->with('google')
         ->andReturn($provider);
 }
+
+test('Google login redirect stores the login intent', function () {
+    $provider = Mockery::mock(Provider::class);
+    $provider->shouldReceive('redirect')
+        ->once()
+        ->andReturn(redirect()->away('https://accounts.google.test/oauth'));
+
+    Socialite::shouldReceive('driver')
+        ->once()
+        ->with('google')
+        ->andReturn($provider);
+
+    $response = $this->get(route('auth.google.redirect'));
+
+    $response
+        ->assertRedirect('https://accounts.google.test/oauth')
+        ->assertSessionHas(LoginSosialController::OAUTH_INTENT, 'login')
+        ->assertSessionMissing(LoginSosialController::OAUTH_INTENT_USER_ID);
+});
+
+test('Google account deletion redirect reuses the configured callback and stores its intent', function () {
+    $user = Pengguna::factory()->create([
+        'email' => 'google@example.com',
+        'google_id' => 'google-user-123',
+    ]);
+
+    $provider = Mockery::mock(Provider::class);
+    $provider->shouldReceive('with')
+        ->once()
+        ->with([
+            'prompt' => 'select_account',
+            'login_hint' => $user->email,
+        ])
+        ->andReturnSelf();
+    $provider->shouldReceive('redirect')
+        ->once()
+        ->andReturn(redirect()->away('https://accounts.google.test/oauth'));
+
+    Socialite::shouldReceive('driver')
+        ->once()
+        ->with('google')
+        ->andReturn($provider);
+
+    $response = $this->actingAs($user)
+        ->get(route('profile.delete.google.redirect'));
+
+    $response
+        ->assertRedirect('https://accounts.google.test/oauth')
+        ->assertSessionHas(LoginSosialController::OAUTH_INTENT, LoginSosialController::OAUTH_INTENT_DELETE_ACCOUNT)
+        ->assertSessionHas(LoginSosialController::OAUTH_INTENT_USER_ID, $user->id);
+});
 
 test('new Google user is verified and logged in without email notification', function () {
     Notification::fake();
@@ -124,7 +175,11 @@ test('Google-only user can confirm identity and delete account without password'
     mockGoogleUser();
 
     $confirmationResponse = $this->actingAs($user)
-        ->get(route('profile.delete.google.callback'));
+        ->withSession([
+            'auth.google.intent' => 'delete_account',
+            'auth.google.intent_user_id' => $user->id,
+        ])
+        ->get(route('auth.google.callback'));
 
     $confirmationResponse
         ->assertRedirect(route('profile.edit'))
@@ -155,7 +210,11 @@ test('Google deletion confirmation rejects a different Google account', function
     ]);
 
     $response = $this->actingAs($user)
-        ->get(route('profile.delete.google.callback'));
+        ->withSession([
+            'auth.google.intent' => 'delete_account',
+            'auth.google.intent_user_id' => $user->id,
+        ])
+        ->get(route('auth.google.callback'));
 
     $response
         ->assertRedirect(route('profile.edit'))

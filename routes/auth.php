@@ -26,9 +26,6 @@ Route::middleware('guest')->group(function () {
     Route::get('auth/google/redirect', [LoginSosialController::class, 'redirectToGoogle'])
         ->name('auth.google.redirect');
 
-    Route::get('auth/google/callback', [LoginSosialController::class, 'handleGoogleCallback'])
-        ->name('auth.google.callback');
-
     Route::get('forgot-password', [LinkResetPasswordController::class, 'create'])
         ->name('password.request');
 
@@ -43,6 +40,9 @@ Route::middleware('guest')->group(function () {
         ->middleware('throttle:guest-sensitive')
         ->name('password.store');
 });
+
+Route::get('auth/google/callback', [LoginSosialController::class, 'handleGoogleCallback'])
+    ->name('auth.google.callback');
 
 Route::middleware('auth')->group(function () {
     Route::get('verify-email', PromptVerifikasiEmailController::class)
@@ -59,10 +59,6 @@ Route::middleware('auth')->group(function () {
     Route::get('profile/delete/google/redirect', [LoginSosialController::class, 'redirectForAccountDeletion'])
         ->middleware(['verified', 'throttle:5,1'])
         ->name('profile.delete.google.redirect');
-
-    Route::get('profile/delete/google/callback', [LoginSosialController::class, 'handleAccountDeletionCallback'])
-        ->middleware(['verified', 'throttle:5,1'])
-        ->name('profile.delete.google.callback');
 
     Route::get('confirm-password', [KonfirmasiPasswordController::class, 'show'])
         ->name('password.confirm');
