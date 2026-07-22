@@ -263,7 +263,7 @@ export default function ManajemenKelas({ programs = {}, levels = [], filters = {
                                         <input value={form.data.title} onChange={(event) => form.setData('title', event.target.value)} placeholder="Contoh: JLPT N3 Mingguan" className={inputClass} />
                                     </Field>
                                     <Field label="Nama Pengajar">
-                                        <input value={form.data.instructor_name} onChange={(event) => form.setData('instructor_name', event.target.value)} placeholder="Contoh: Mas Fuad" className={inputClass} />
+                                        <input value={form.data.instructor_name} onChange={(event) => form.setData('instructor_name', event.target.value)} placeholder="Masukkan nama pengajar" className={inputClass} />
                                     </Field>
                                     <Field label="Level">
                                         <select value={form.data.level_id} onChange={(event) => form.setData('level_id', event.target.value)} className={inputClass}>
