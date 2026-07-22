@@ -85,6 +85,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/users/{user}/reset-password', [SuperAdminPenggunaController::class, 'resetPassword'])->name('users.reset-password');
         Route::get('/admins', SuperAdminPengelolaAdminController::class)->name('admins');
         Route::post('/admins', [SuperAdminPengelolaAdminController::class, 'store'])->name('admins.store');
+        Route::patch('/admins/{user}/scope', [SuperAdminPengelolaAdminController::class, 'updateScope'])->name('admins.scope');
         Route::patch('/admins/{user}/status', [SuperAdminPengelolaAdminController::class, 'updateStatus'])->name('admins.status');
         Route::post('/admins/{user}/reset-password', [SuperAdminPengelolaAdminController::class, 'resetPassword'])->name('admins.reset-password');
         Route::get('/content', SuperAdminKontenController::class)->name('content');
@@ -126,6 +127,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/dashboard', [AdminBerandaController::class, 'index'])->name('dashboard');
         Route::get('/users', [AdminPenggunaController::class, 'index'])->name('users');
         Route::get('/users/{user}', [AdminPenggunaController::class, 'show'])->name('users.show');
+        Route::patch('/kloters/{kloter}/schedule', [AdminPenggunaController::class, 'updateKloterSchedule'])->name('kloters.schedule.update');
+        Route::post('/kloters/{kloter}/users', [AdminPenggunaController::class, 'assignUser'])->name('kloters.users.store');
+        Route::delete('/kloters/{kloter}/users/{user}', [AdminPenggunaController::class, 'removeUser'])->name('kloters.users.destroy');
         Route::get('/analytics', AdminAnalitikController::class)->name('analytics');
         Route::get('/vocabulary', [AdminKosakataController::class, 'index'])->name('vocabulary.index');
         Route::post('/vocabulary', [AdminKosakataController::class, 'store'])->name('vocabulary.store');

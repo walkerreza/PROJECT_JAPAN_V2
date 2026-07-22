@@ -4,7 +4,7 @@ import { Head, Link } from '@inertiajs/react';
 import Card from '@/Components/UI/Card';
 import StatCard from '@/Components/Features/Dashboard/StatCard';
 
-export default function DetailUser({ student, levelProgress = [], recentProgress = [], recentAttempts = [], rewardHistory = [], certificates = [] }) {
+export default function DetailUser({ student, filters = {}, levelProgress = [], recentProgress = [], recentAttempts = [], rewardHistory = [], certificates = [] }) {
     return (
         <AuthenticatedLayout>
             <Head title={`${student.username} - Detail Murid`} />
@@ -12,7 +12,7 @@ export default function DetailUser({ student, levelProgress = [], recentProgress
             <div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <Link href={route('admin.users')} className="text-sm font-bold text-red-600 dark:text-red-400 hover:underline">Kembali ke Data Murid</Link>
+                        <Link href={route('admin.users', filters.kloter ? { kloter: filters.kloter } : {})} className="text-sm font-bold text-red-600 dark:text-red-400 hover:underline">Kembali ke Kloter & Siswa</Link>
                         <h1 className="mt-2 text-2xl font-black text-gray-900 dark:text-white">{student.username}</h1>
                         <p className="text-sm text-gray-500 dark:text-gray-400">{student.email}</p>
                     </div>

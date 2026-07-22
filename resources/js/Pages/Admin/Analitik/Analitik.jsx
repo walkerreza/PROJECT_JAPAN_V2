@@ -3,17 +3,21 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link } from '@inertiajs/react';
 import Card from '@/Components/UI/Card';
 import StatCard from '@/Components/Features/Dashboard/StatCard';
+import KloterFilter from '@/Components/Features/Admin/KloterFilter';
 
-export default function Analitik({ summary = {}, lowScoreQuizzes = [], popularModules = [], inactiveStudents = [], recentAttempts = [], questionPerformance = [] }) {
+export default function Analitik({ adminScope = 'global', kloters = [], filters = {}, summary = {}, lowScoreQuizzes = [], popularModules = [], inactiveStudents = [], recentAttempts = [], questionPerformance = [] }) {
     return (
         <AuthenticatedLayout>
             <Head title="Admin - Analitik Sensei" />
 
             <div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-                <div>
-                    <p className="text-xs font-black uppercase tracking-[0.3em] text-red-600 dark:text-red-400">Sensei Analytics</p>
-                    <h1 className="text-2xl font-black text-gray-900 dark:text-white">Analitik Pembelajaran</h1>
-                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Pantau quiz sulit, murid pasif, dan modul yang paling sering diselesaikan.</p>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                        <p className="text-xs font-black uppercase tracking-[0.3em] text-red-600 dark:text-red-400">Sensei Analytics</p>
+                        <h1 className="text-2xl font-black text-gray-900 dark:text-white">Analitik Pembelajaran</h1>
+                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Pantau quiz sulit, murid pasif, dan modul yang paling sering diselesaikan.</p>
+                    </div>
+                    <KloterFilter routeName="admin.analytics" kloters={kloters} filters={filters} adminScope={adminScope} />
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">

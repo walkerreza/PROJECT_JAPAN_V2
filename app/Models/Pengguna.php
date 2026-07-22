@@ -4,16 +4,23 @@ namespace App\Models;
 
 use App\Notifications\EmailVerificationNotification;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Database\Factories\PenggunaFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail as MustVerifyEmailContract;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 class Pengguna extends Authenticatable implements MustVerifyEmailContract
 {
+    public const ADMIN_SCOPE_GLOBAL = 'global';
+
+    public const ADMIN_SCOPE_KLOTER = 'kloter';
+
     protected $table = 'users';
 
-    /** @use HasFactory<\Database\Factories\PenggunaFactory> */
+    /** @use HasFactory<PenggunaFactory> */
     use HasFactory, Notifiable;
 
     /**
@@ -27,6 +34,7 @@ class Pengguna extends Authenticatable implements MustVerifyEmailContract
         'password',
         'password_login_enabled',
         'role',
+        'admin_scope',
         'subscription_status',
         'auth_provider',
         'google_id',
@@ -71,67 +79,82 @@ class Pengguna extends Authenticatable implements MustVerifyEmailContract
         $this->notify(new EmailVerificationNotification);
     }
 
-    public function attempts(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function attempts(): HasMany
     {
         return $this->hasMany(PengerjaanKuis::class, 'user_id');
     }
 
-    public function progress(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function progress(): HasMany
     {
         return $this->hasMany(Progres::class, 'user_id');
     }
 
-    public function certificates(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function certificates(): HasMany
     {
         return $this->hasMany(Sertifikat::class, 'user_id');
     }
 
-    public function achievements(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    public function achievements(): BelongsToMany
     {
         return $this->belongsToMany(Pencapaian::class, 'user_achievements', 'user_id', 'achievement_id')
             ->withPivot('unlocked_at')
             ->withTimestamps();
     }
 
-    public function createdNews(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function createdNews(): HasMany
     {
         return $this->hasMany(Berita::class, 'created_by');
     }
 
-    public function activityLogs(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function activityLogs(): HasMany
     {
         return $this->hasMany(LogAktivitas::class, 'actor_id');
     }
 
-    public function loginHistories(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function loginHistories(): HasMany
     {
         return $this->hasMany(RiwayatLogin::class, 'user_id');
     }
 
-    public function statusHistories(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function statusHistories(): HasMany
     {
         return $this->hasMany(RiwayatStatusPengguna::class, 'user_id');
     }
 
-    public function subscriptions(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function subscriptions(): HasMany
     {
         return $this->hasMany(Langganan::class, 'user_id');
     }
 
-    public function transactions(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function transactions(): HasMany
     {
         return $this->hasMany(Transaksi::class, 'user_id');
     }
 
-    public function anggotaKloter(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function anggotaKloter(): HasMany
     {
         return $this->hasMany(AnggotaKloter::class, 'user_id');
     }
 
-    public function kloterBelajar(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    public function kloterBelajar(): BelongsToMany
     {
         return $this->belongsToMany(KloterBelajar::class, 'anggota_kloter', 'user_id', 'kloter_belajar_id')
             ->withPivot(['subscription_id', 'transaction_id', 'access_key_id', 'joined_at', 'status', 'catatan'])
             ->withTimestamps();
+    }
+
+    public function kloterDikelola(): HasMany
+    {
+        return $this->hasMany(KloterBelajar::class, 'admin_id');
+    }
+
+    public function isAdminGlobal(): bool
+    {
+        return $this->role === 'admin' && $this->admin_scope !== self::ADMIN_SCOPE_KLOTER;
+    }
+
+    public function isAdminKloter(): bool
+    {
+        return $this->role === 'admin' && $this->admin_scope === self::ADMIN_SCOPE_KLOTER;
     }
 }

@@ -14,6 +14,15 @@ class PenggunaSeeder extends Seeder
             'username' => 'Admin Japanlingo',
             'password' => Hash::make('password'),
             'role' => 'admin',
+            'admin_scope' => Pengguna::ADMIN_SCOPE_GLOBAL,
+            'status' => 'active',
+        ]);
+
+        Pengguna::updateOrCreate(['email' => 'admin.kloter@japanlingo.com'], [
+            'username' => 'Admin Kloter Japanlingo',
+            'password' => Hash::make('password'),
+            'role' => 'admin',
+            'admin_scope' => Pengguna::ADMIN_SCOPE_KLOTER,
             'status' => 'active',
         ]);
 
@@ -21,6 +30,7 @@ class PenggunaSeeder extends Seeder
             'username' => 'SuperAdmin Japanlingo',
             'password' => Hash::make('password'),
             'role' => 'superadmin',
+            'admin_scope' => null,
             'status' => 'active',
         ]);
 

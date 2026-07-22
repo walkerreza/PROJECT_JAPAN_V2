@@ -266,7 +266,7 @@ export default function AuthenticatedLayout({ children }) {
 
     const adminMenu = [
         { href: '/admin/dashboard', icon: <DashboardIcon sx={{ fontSize: 24 }} />, label: 'Beranda' },
-        { href: '/admin/users', icon: <PeopleIcon sx={{ fontSize: 24 }} />, label: 'Data Pengguna' },
+        { href: '/admin/users', icon: <PeopleIcon sx={{ fontSize: 24 }} />, label: 'Kloter & Siswa' },
         {
             type: 'group',
             key: 'learning-structure',

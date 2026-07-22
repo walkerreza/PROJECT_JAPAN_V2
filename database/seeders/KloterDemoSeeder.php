@@ -12,7 +12,10 @@ class KloterDemoSeeder extends Seeder
 {
     public function run(): void
     {
-        $admin = Pengguna::where('role', 'admin')->orderBy('id')->first();
+        $admin = Pengguna::where('email', 'admin.kloter@japanlingo.com')
+            ->where('role', 'admin')
+            ->where('admin_scope', Pengguna::ADMIN_SCOPE_KLOTER)
+            ->first();
 
         ProgramPembelajaran::where('status', 'published')
             ->orderBy('sort_order')
@@ -20,11 +23,11 @@ class KloterDemoSeeder extends Seeder
             ->get()
             ->each(function (ProgramPembelajaran $program) use ($admin) {
                 KloterBelajar::updateOrCreate(
-                    ['kode' => 'KLT-' . strtoupper(Str::slug($program->slug ?: $program->title, ''))],
+                    ['kode' => 'KLT-'.strtoupper(Str::slug($program->slug ?: $program->title, ''))],
                     [
                         'program_pembelajaran_id' => $program->id,
                         'admin_id' => $admin?->id,
-                        'nama' => $program->title . ' - Kloter Aktif',
+                        'nama' => $program->title.' - Kloter Aktif',
                         'tanggal_mulai' => now()->subWeek()->toDateString(),
                         'tanggal_selesai' => now()->addMonths(2)->toDateString(),
                         'max_siswa' => 30,

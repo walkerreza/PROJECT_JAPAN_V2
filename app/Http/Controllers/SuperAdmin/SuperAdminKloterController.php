@@ -5,7 +5,6 @@ namespace App\Http\Controllers\SuperAdmin;
 use App\Models\AnggotaKloter;
 use App\Models\KloterBelajar;
 use App\Models\KodeAkses;
-use App\Models\PaketPembayaran;
 use App\Models\Pengguna;
 use App\Models\ProgramPembelajaran;
 use App\Models\Progres;
@@ -73,7 +72,8 @@ class SuperAdminKloterController extends SuperAdminDasarController
                 ->orderBy('title')
                 ->get(['id', 'title'])
                 ->map(fn (ProgramPembelajaran $program) => ['id' => $program->id, 'title' => $program->title]),
-            'admins' => Pengguna::whereIn('role', ['admin', 'superadmin'])
+            'admins' => Pengguna::where('role', 'admin')
+                ->where('admin_scope', Pengguna::ADMIN_SCOPE_KLOTER)
                 ->where('status', 'active')
                 ->orderBy('username')
                 ->get(['id', 'username', 'email'])
@@ -231,7 +231,13 @@ class SuperAdminKloterController extends SuperAdminDasarController
     {
         return $request->validate([
             'program_pembelajaran_id' => ['required', 'exists:program_pembelajaran,id'],
-            'admin_id' => ['nullable', 'exists:users,id'],
+            'admin_id' => [
+                'nullable',
+                Rule::exists('users', 'id')->where(fn ($query) => $query
+                    ->where('role', 'admin')
+                    ->where('admin_scope', Pengguna::ADMIN_SCOPE_KLOTER)
+                    ->where('status', 'active')),
+            ],
             'nama' => ['required', 'string', 'max:255'],
             'tanggal_mulai' => ['required', 'date'],
             'tanggal_selesai' => ['nullable', 'date', 'after_or_equal:tanggal_mulai'],
@@ -324,7 +330,7 @@ class SuperAdminKloterController extends SuperAdminDasarController
     private function generateKloterCode(): string
     {
         do {
-            $code = 'KLT-' . strtoupper(Str::random(6));
+            $code = 'KLT-'.strtoupper(Str::random(6));
         } while (KloterBelajar::where('kode', $code)->exists());
 
         return $code;
@@ -333,7 +339,7 @@ class SuperAdminKloterController extends SuperAdminDasarController
     private function generateAccessCode(): string
     {
         do {
-            $code = 'JL-' . strtoupper(Str::random(4)) . '-' . strtoupper(Str::random(4));
+            $code = 'JL-'.strtoupper(Str::random(4)).'-'.strtoupper(Str::random(4));
         } while (KodeAkses::where('code', $code)->exists());
 
         return $code;

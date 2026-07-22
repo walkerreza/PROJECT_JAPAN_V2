@@ -8,10 +8,106 @@ use App\Models\KodeAkses;
 use App\Models\Langganan;
 use App\Models\Pengguna;
 use App\Models\Transaksi;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
 class KloterBelajarService
 {
+    public function kloterDikelola(Pengguna $admin): Builder
+    {
+        abort_unless($admin->role === 'admin', 403);
+
+        return KloterBelajar::query()
+            ->when($admin->isAdminKloter(), fn (Builder $query) => $query->where('admin_id', $admin->id));
+    }
+
+    public function resolveKloterDikelola(Pengguna $admin, ?int $kloterId): ?KloterBelajar
+    {
+        if (! $kloterId) {
+            return null;
+        }
+
+        return $this->kloterDikelola($admin)->findOrFail($kloterId);
+    }
+
+    public function pilihanKloterAdmin(Pengguna $admin): Collection
+    {
+        return $this->kloterDikelola($admin)
+            ->with('programPembelajaran:id,title')
+            ->withCount(['anggota as anggota_aktif_count' => fn (Builder $query) => $query->where('status', 'active')])
+            ->orderByRaw("CASE status WHEN 'active' THEN 0 WHEN 'draft' THEN 1 ELSE 2 END")
+            ->orderByDesc('tanggal_mulai')
+            ->get()
+            ->map(fn (KloterBelajar $kloter) => [
+                'id' => $kloter->id,
+                'name' => $kloter->nama,
+                'program_name' => $kloter->programPembelajaran?->title,
+                'program_id' => $kloter->program_pembelajaran_id,
+                'status' => $kloter->status,
+                'tanggal_mulai' => optional($kloter->tanggal_mulai)->format('Y-m-d'),
+                'tanggal_selesai' => optional($kloter->tanggal_selesai)->format('Y-m-d'),
+                'anggota_aktif_count' => (int) $kloter->anggota_aktif_count,
+                'max_siswa' => $kloter->max_siswa,
+                'is_read_only' => $kloter->status === 'archived',
+            ]);
+    }
+
+    public function programIdsDikelola(Pengguna $admin, ?KloterBelajar $kloter = null): ?Collection
+    {
+        if ($kloter) {
+            return collect([(int) $kloter->program_pembelajaran_id]);
+        }
+
+        if ($admin->isAdminGlobal()) {
+            return null;
+        }
+
+        return $this->kloterDikelola($admin)
+            ->distinct()
+            ->pluck('program_pembelajaran_id')
+            ->map(fn ($id) => (int) $id)
+            ->values();
+    }
+
+    public function batasiSiswaDikelola(Builder $query, Pengguna $admin, ?KloterBelajar $kloter = null): Builder
+    {
+        if ($admin->isAdminGlobal() && ! $kloter) {
+            return $query;
+        }
+
+        return $query->whereHas('anggotaKloter', function (Builder $anggotaQuery) use ($admin, $kloter) {
+            $anggotaQuery
+                ->where('status', 'active')
+                ->whereHas('kloterBelajar', function (Builder $kloterQuery) use ($admin, $kloter) {
+                    $kloterQuery
+                        ->when($admin->isAdminKloter(), fn (Builder $query) => $query->where('admin_id', $admin->id))
+                        ->when($kloter, fn (Builder $query) => $query->whereKey($kloter->id));
+                });
+        });
+    }
+
+    public function abortJikaSiswaDiLuarCakupan(Pengguna $admin, Pengguna $student): void
+    {
+        abort_unless($student->role === 'user', 404);
+
+        $allowed = $this->batasiSiswaDikelola(
+            Pengguna::query()->whereKey($student->id),
+            $admin
+        )->exists();
+
+        abort_unless($allowed, 403, 'Siswa ini bukan anggota kloter yang Anda kelola.');
+    }
+
+    public function abortJikaKloterDiLuarCakupan(Pengguna $admin, KloterBelajar $kloter): void
+    {
+        abort_unless(
+            $admin->isAdminGlobal() || ($admin->isAdminKloter() && $kloter->admin_id === $admin->id),
+            403,
+            'Kloter ini berada di luar cakupan akun Anda.'
+        );
+    }
+
     public function kloterUntukPembayaran(?int $programPembelajaranId): ?KloterBelajar
     {
         $query = KloterBelajar::query()

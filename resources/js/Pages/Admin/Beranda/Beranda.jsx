@@ -4,8 +4,12 @@ import { Head, Link } from '@inertiajs/react';
 import StatCard from '@/Components/Features/Dashboard/StatCard';
 import ChartCard from '@/Components/Features/Dashboard/ChartCard';
 import Card from '@/Components/UI/Card';
+import KloterFilter from '@/Components/Features/Admin/KloterFilter';
 
 export default function BerandaAdmin({
+    adminScope = 'global',
+    kloters = [],
+    filters = {},
     totalModules = 0,
     totalLessons = 0,
     totalQuizzes = 0,
@@ -29,9 +33,12 @@ export default function BerandaAdmin({
                         <h1 className="text-2xl font-black text-gray-900 dark:text-white">Dashboard Pembelajaran</h1>
                         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Ringkasan konten, murid aktif, dan performa quiz dari data nyata.</p>
                     </div>
-                    <Link href={route('admin.analytics')} className="rounded-xl bg-red-600 px-5 py-3 text-sm font-black text-white shadow-md shadow-red-500/20">
-                        Buka Analitik
-                    </Link>
+                    <div className="flex w-full flex-col gap-3 sm:w-auto sm:items-end">
+                        <KloterFilter routeName="admin.dashboard" kloters={kloters} filters={filters} adminScope={adminScope} />
+                        <Link href={route('admin.analytics', filters.kloter ? { kloter: filters.kloter } : {})} className="rounded-xl bg-red-600 px-5 py-3 text-center text-sm font-black text-white shadow-md shadow-red-500/20">
+                            Buka Analitik
+                        </Link>
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">

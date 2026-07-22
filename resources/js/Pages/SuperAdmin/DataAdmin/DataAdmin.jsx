@@ -10,6 +10,7 @@ const emptyAdmin = {
     email: '',
     password: '',
     role: 'admin',
+    admin_scope: 'global',
 };
 
 export default function DataAdmin({
@@ -28,6 +29,7 @@ export default function DataAdmin({
         search: filters.search || '',
         status: filters.status || 'all',
         role: filters.role || 'all',
+        scope: filters.scope || 'all',
     });
 
     const items = admins?.data || [];
@@ -75,6 +77,14 @@ export default function DataAdmin({
         });
     };
 
+    const updateScope = (admin, adminScope) => {
+        router.patch(route('superadmin.admins.scope', admin.id), {
+            admin_scope: adminScope,
+        }, {
+            preserveScroll: true,
+        });
+    };
+
     const submitFilters = (e) => {
         e.preventDefault();
         router.get(route('superadmin.admins'), filterForm.data, { preserveState: true, preserveScroll: true });
@@ -109,7 +119,7 @@ export default function DataAdmin({
                 </div>
 
                 <Card>
-                    <form onSubmit={submitFilters} className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_180px_180px_120px]">
+                    <form onSubmit={submitFilters} className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[1fr_160px_160px_160px_110px]">
                         <input
                             value={filterForm.data.search}
                             onChange={(e) => filterForm.setData('search', e.target.value)}
@@ -125,6 +135,11 @@ export default function DataAdmin({
                             <option value="all">Semua role</option>
                             <option value="admin">Admin</option>
                             <option value="superadmin">Superadmin</option>
+                        </select>
+                        <select value={filterForm.data.scope} onChange={(e) => filterForm.setData('scope', e.target.value)} className="h-11 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 text-sm font-bold text-gray-900 dark:text-white">
+                            <option value="all">Semua cakupan</option>
+                            <option value="global">Admin Global</option>
+                            <option value="kloter">Admin Kloter</option>
                         </select>
                         <button className="rounded-xl bg-gray-900 text-sm font-black text-white dark:bg-white dark:text-gray-900">Filter</button>
                     </form>
@@ -151,9 +166,21 @@ export default function DataAdmin({
                                     <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                                         <div className="flex flex-wrap gap-2">
                                             <span className="rounded-full bg-red-50 dark:bg-red-900/20 px-3 py-1 text-xs font-black text-red-600 dark:text-red-400">{item.role}</span>
+                                            <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-black text-sky-700 dark:bg-sky-900/20 dark:text-sky-300">{item.scope}</span>
                                             <span className="rounded-full bg-gray-100 dark:bg-gray-800 px-3 py-1 text-xs font-bold text-gray-500 dark:text-gray-400">Update terakhir {item.updated}</span>
                                         </div>
                                         <div className="flex flex-wrap gap-2">
+                                            {item.raw_role === 'admin' && (
+                                                <select
+                                                    value={item.raw_scope || 'global'}
+                                                    onChange={(event) => updateScope(item, event.target.value)}
+                                                    className="h-9 rounded-lg border border-sky-200 bg-white px-2 text-xs font-black text-sky-700 dark:border-sky-900/40 dark:bg-gray-900 dark:text-sky-300"
+                                                    aria-label={`Cakupan ${item.name}`}
+                                                >
+                                                    <option value="global">Global</option>
+                                                    <option value="kloter">Kloter</option>
+                                                </select>
+                                            )}
                                             <button onClick={() => setStatusTarget(item)} className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 text-xs font-black text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">
                                                 {item.raw_status === 'suspended' ? 'Activate' : 'Suspend'}
                                             </button>
@@ -228,6 +255,17 @@ export default function DataAdmin({
                                     {errors.password && <p className="mt-1 text-xs font-bold text-red-500">{errors.password}</p>}
                                 </div>
                             </div>
+                            {data.role === 'admin' && (
+                                <div>
+                                    <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Cakupan Admin</label>
+                                    <select value={data.admin_scope} onChange={(e) => setData('admin_scope', e.target.value)} className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm font-bold text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white">
+                                        <option value="global">Admin Global</option>
+                                        <option value="kloter">Admin Kloter</option>
+                                    </select>
+                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Admin Kloter hanya melihat data siswa dari kloter yang ditugaskan, tetapi tetap dapat mengelola konten bersama.</p>
+                                    {errors.admin_scope && <p className="mt-1 text-xs font-bold text-red-500">{errors.admin_scope}</p>}
+                                </div>
+                            )}
                             <div className="flex justify-end gap-3 border-t border-gray-100 dark:border-gray-800 pt-5">
                                 <button type="button" onClick={() => setShowForm(false)} className="rounded-xl border border-gray-200 dark:border-gray-700 px-5 py-2.5 text-sm font-bold text-gray-600 dark:text-gray-300">Batal</button>
                                 <button disabled={processing} className="rounded-xl bg-red-600 px-5 py-2.5 text-sm font-black text-white disabled:opacity-60">{processing ? 'Menyimpan...' : 'Buat Admin'}</button>

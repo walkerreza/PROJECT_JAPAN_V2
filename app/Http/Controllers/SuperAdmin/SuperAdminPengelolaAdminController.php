@@ -8,6 +8,8 @@ use App\Models\RiwayatStatusPengguna;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class SuperAdminPengelolaAdminController extends SuperAdminDasarController
@@ -18,6 +20,7 @@ class SuperAdminPengelolaAdminController extends SuperAdminDasarController
             'search' => (string) $request->string('search'),
             'status' => $request->string('status')->value() ?: 'all',
             'role' => $request->string('role')->value() ?: 'all',
+            'scope' => $request->string('scope')->value() ?: 'all',
         ];
 
         $admins = Pengguna::query()
@@ -30,15 +33,18 @@ class SuperAdminPengelolaAdminController extends SuperAdminDasarController
             })
             ->when($filters['status'] !== 'all', fn ($query) => $query->where('status', $filters['status']))
             ->when($filters['role'] !== 'all', fn ($query) => $query->where('role', $filters['role']))
+            ->when($filters['scope'] !== 'all', fn ($query) => $query
+                ->where('role', 'admin')
+                ->where('admin_scope', $filters['scope']))
             ->latest()
             ->paginate(10)
             ->withQueryString();
 
         return Inertia::render('SuperAdmin/DataAdmin/DataAdmin', [
             'stats' => [
-                $this->stat('Admin Aktif', number_format(Pengguna::where('role', 'admin')->where('status', 'active')->count()), 'A'),
+                $this->stat('Admin Global', number_format(Pengguna::where('role', 'admin')->where('admin_scope', Pengguna::ADMIN_SCOPE_GLOBAL)->count()), 'G'),
+                $this->stat('Admin Kloter', number_format(Pengguna::where('role', 'admin')->where('admin_scope', Pengguna::ADMIN_SCOPE_KLOTER)->count()), 'K'),
                 $this->stat('Superadmin', number_format(Pengguna::where('role', 'superadmin')->count()), 'S'),
-                $this->stat('Aksi Hari Ini', number_format(LogAktivitas::whereDate('created_at', today())->count()), 'L'),
                 $this->stat('Nonaktif', number_format(Pengguna::whereIn('role', ['admin', 'superadmin'])->where('status', '!=', 'active')->count()), 'X', '0', 'down'),
             ],
             'admins' => $admins->through(fn (Pengguna $user) => [
@@ -46,9 +52,15 @@ class SuperAdminPengelolaAdminController extends SuperAdminDasarController
                 'name' => $user->username,
                 'email' => $user->email,
                 'raw_role' => $user->role,
+                'raw_scope' => $user->admin_scope,
                 'raw_status' => $user->status,
                 'role' => ucfirst($user->role),
-                'focus' => $user->role === 'superadmin' ? 'Platform oversight' : 'Content operations',
+                'scope' => $user->role === 'superadmin'
+                    ? 'Role terpisah'
+                    : ($user->isAdminKloter() ? 'Admin Kloter' : 'Admin Global'),
+                'focus' => $user->role === 'superadmin'
+                    ? 'Operasional platform'
+                    : ($user->isAdminKloter() ? 'Konten bersama dan siswa kloter' : 'Seluruh operasional admin'),
                 'updated' => optional($user->updated_at)->diffForHumans() ?? '-',
                 'status' => $this->displayStatus($user->status),
             ]),
@@ -70,6 +82,11 @@ class SuperAdminPengelolaAdminController extends SuperAdminDasarController
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['nullable', 'string', 'min:8'],
             'role' => ['required', 'in:admin,superadmin'],
+            'admin_scope' => [
+                'nullable',
+                Rule::requiredIf(fn () => $request->input('role') === 'admin'),
+                Rule::in([Pengguna::ADMIN_SCOPE_GLOBAL, Pengguna::ADMIN_SCOPE_KLOTER]),
+            ],
         ]);
 
         $password = $validated['password'] ?: Str::password(10, true, true, false, false);
@@ -79,6 +96,9 @@ class SuperAdminPengelolaAdminController extends SuperAdminDasarController
             'email' => $validated['email'],
             'password' => Hash::make($password),
             'role' => $validated['role'],
+            'admin_scope' => $validated['role'] === 'admin'
+                ? $validated['admin_scope']
+                : null,
             'status' => 'active',
             'subscription_status' => 'premium',
         ]);
@@ -86,6 +106,39 @@ class SuperAdminPengelolaAdminController extends SuperAdminDasarController
         $this->logActivity($request, 'admin.created', 'user', $admin->id, "Membuat {$admin->role} {$admin->username}");
 
         return redirect()->back()->with('generated_password', $validated['password'] ? null : $password);
+    }
+
+    public function updateScope(Request $request, Pengguna $user)
+    {
+        abort_unless($user->role === 'admin', 404);
+
+        $validated = $request->validate([
+            'admin_scope' => ['required', Rule::in([Pengguna::ADMIN_SCOPE_GLOBAL, Pengguna::ADMIN_SCOPE_KLOTER])],
+        ]);
+
+        if (
+            $validated['admin_scope'] === Pengguna::ADMIN_SCOPE_GLOBAL
+            && $user->isAdminKloter()
+            && $user->kloterDikelola()->exists()
+        ) {
+            throw ValidationException::withMessages([
+                'admin_scope' => 'Pindahkan seluruh kloter yang diampu sebelum mengubah akun ini menjadi Admin Global.',
+            ]);
+        }
+
+        $oldScope = $user->admin_scope ?: Pengguna::ADMIN_SCOPE_GLOBAL;
+        $user->update(['admin_scope' => $validated['admin_scope']]);
+
+        $this->logActivity(
+            $request,
+            'admin.scope_changed',
+            'user',
+            $user->id,
+            "Mengubah cakupan admin {$user->username} dari {$oldScope} ke {$validated['admin_scope']}",
+            ['old_scope' => $oldScope, 'new_scope' => $validated['admin_scope']]
+        );
+
+        return back()->with('success', 'Cakupan admin berhasil diperbarui.');
     }
 
     public function updateStatus(Request $request, Pengguna $user)
