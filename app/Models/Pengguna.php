@@ -31,6 +31,7 @@ class Pengguna extends Authenticatable implements MustVerifyEmailContract
     protected $fillable = [
         'username',
         'email',
+        'email_verified_at',
         'password',
         'password_login_enabled',
         'role',

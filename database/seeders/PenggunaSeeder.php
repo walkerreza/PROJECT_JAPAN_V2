@@ -10,33 +10,33 @@ class PenggunaSeeder extends Seeder
 {
     public function run(): void
     {
-        Pengguna::updateOrCreate(['email' => 'admin@japanlingo.com'], [
+        $this->seedAccount('admin@japanlingo.com', [
             'username' => 'Admin Japanlingo',
-            'password' => Hash::make('password'),
+            'email_verified_at' => now(),
             'role' => 'admin',
             'admin_scope' => Pengguna::ADMIN_SCOPE_GLOBAL,
             'status' => 'active',
         ]);
 
-        Pengguna::updateOrCreate(['email' => 'admin.kloter@japanlingo.com'], [
+        $this->seedAccount('admin.kloter@japanlingo.com', [
             'username' => 'Admin Kloter Japanlingo',
-            'password' => Hash::make('password'),
+            'email_verified_at' => now(),
             'role' => 'admin',
             'admin_scope' => Pengguna::ADMIN_SCOPE_KLOTER,
             'status' => 'active',
         ]);
 
-        Pengguna::updateOrCreate(['email' => 'superadmin@japanlingo.com'], [
+        $this->seedAccount('superadmin@japanlingo.com', [
             'username' => 'SuperAdmin Japanlingo',
-            'password' => Hash::make('password'),
+            'email_verified_at' => now(),
             'role' => 'superadmin',
             'admin_scope' => null,
             'status' => 'active',
         ]);
 
-        Pengguna::updateOrCreate(['email' => 'student@japanlingo.com'], [
+        $this->seedAccount('student@japanlingo.com', [
             'username' => 'Student Japanlingo',
-            'password' => Hash::make('password'),
+            'email_verified_at' => now(),
             'role' => 'user',
             'subscription_status' => 'premium',
             'status' => 'active',
@@ -46,9 +46,9 @@ class PenggunaSeeder extends Seeder
             'last_activity_date' => now(),
         ]);
 
-        Pengguna::updateOrCreate(['email' => 'student2@japanlingo.com'], [
+        $this->seedAccount('student2@japanlingo.com', [
             'username' => 'Student2 Japanlingo',
-            'password' => Hash::make('password'),
+            'email_verified_at' => now(),
             'role' => 'user',
             'subscription_status' => 'free',
             'status' => 'active',
@@ -57,5 +57,18 @@ class PenggunaSeeder extends Seeder
             'streak_count' => 1,
             'last_activity_date' => now(),
         ]);
+    }
+
+    private function seedAccount(string $email, array $attributes): Pengguna
+    {
+        $user = Pengguna::firstOrNew(['email' => $email]);
+
+        if (! $user->exists) {
+            $user->password = Hash::make('password');
+        }
+
+        $user->fill($attributes)->save();
+
+        return $user;
     }
 }

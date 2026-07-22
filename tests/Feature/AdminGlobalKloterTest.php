@@ -7,6 +7,9 @@ use App\Models\LevelPembelajaran;
 use App\Models\PaketPembayaran;
 use App\Models\Pengguna;
 use App\Models\ProgramPembelajaran;
+use Database\Seeders\KloterDemoSeeder;
+use Database\Seeders\PenggunaSeeder;
+use Illuminate\Support\Facades\Hash;
 use Inertia\Testing\AssertableInertia as Assert;
 
 function createAdminGlobalKloterFixture(): array
@@ -259,4 +262,31 @@ it('prevents removing kloter scope while an admin still owns a cohort', function
         ->assertSessionHasErrors('admin_scope');
 
     expect($fixture['kloterAdmin']->fresh()->admin_scope)->toBe(Pengguna::ADMIN_SCOPE_KLOTER);
+});
+
+it('seeds global and kloter admins and assigns demo cohorts to the kloter admin', function () {
+    Pengguna::factory()->unverified()->create([
+        'email' => 'admin@japanlingo.com',
+        'password' => Hash::make('password-client'),
+        'role' => 'admin',
+        'status' => 'active',
+    ]);
+
+    $this->seed(PenggunaSeeder::class);
+    $this->seed(PenggunaSeeder::class);
+
+    $globalAdmin = Pengguna::where('email', 'admin@japanlingo.com')->firstOrFail();
+    $kloterAdmin = Pengguna::where('email', 'admin.kloter@japanlingo.com')->firstOrFail();
+
+    expect($globalAdmin->admin_scope)->toBe(Pengguna::ADMIN_SCOPE_GLOBAL)
+        ->and($kloterAdmin->admin_scope)->toBe(Pengguna::ADMIN_SCOPE_KLOTER)
+        ->and($globalAdmin->hasVerifiedEmail())->toBeTrue()
+        ->and($kloterAdmin->hasVerifiedEmail())->toBeTrue()
+        ->and(Hash::check('password-client', $globalAdmin->password))->toBeTrue()
+        ->and(Pengguna::where('email', 'admin.kloter@japanlingo.com')->count())->toBe(1);
+
+    $this->seed(KloterDemoSeeder::class);
+
+    expect(KloterBelajar::where('admin_id', $kloterAdmin->id)->count())->toBeGreaterThan(0)
+        ->and(KloterBelajar::where('admin_id', $globalAdmin->id)->count())->toBe(0);
 });
