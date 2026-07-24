@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Flashcard;
 use App\Models\SetFlashcard;
 use App\Services\AksesFlashcardPenggunaService;
+use App\Services\ProgresRoadmapService;
 use App\Services\RepetisiPembelajaranService;
+use App\Services\RingkasanProgresPenggunaService;
 use App\Services\XpService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -18,7 +20,13 @@ class FlashcardController extends Controller
     {
         $user = Auth::user();
         $aksesFlashcard->abortJikaTerkunci($user, $flashcardSet);
-        $flashcardSet->load(['flashcards.vocabulary', 'flashcards.reviews' => fn ($query) => $query->where('user_id', $user->id)]);
+        $flashcardSet->load([
+            'day.module.programPembelajaran',
+            'flashcards.vocabulary',
+            'flashcards.reviews' => fn ($query) => $query->where('user_id', $user->id),
+        ]);
+        $program = $flashcardSet->day?->module?->programPembelajaran;
+        $roadmapUrl = $program ? route('user.modul.program', $program->slug) : null;
 
         $cards = $flashcardSet->flashcards->values()->map(function ($card) {
             $review = $card->reviews->first();
@@ -49,6 +57,9 @@ class FlashcardController extends Controller
                 'description' => $flashcardSet->description,
             ],
             'cards' => $cards,
+            'back_url' => $roadmapUrl,
+            'next_url' => $roadmapUrl,
+            'next_label' => $roadmapUrl ? 'Kembali ke Roadmap' : 'Kembali ke Kelas',
         ]);
     }
 
@@ -57,7 +68,9 @@ class FlashcardController extends Controller
         Flashcard $flashcard,
         RepetisiPembelajaranService $repetisi,
         AksesFlashcardPenggunaService $aksesFlashcard,
-        XpService $xpService
+        XpService $xpService,
+        ProgresRoadmapService $roadmapProgress,
+        RingkasanProgresPenggunaService $summary
     ) {
         $validated = $request->validate([
             'action' => ['required', 'in:known,learning'],
@@ -68,6 +81,7 @@ class FlashcardController extends Controller
         $aksesFlashcard->abortJikaKartuTerkunci($user, $flashcard);
         $repetisi->catatReviewFlashcard($user, $flashcard, $validated['action'] === 'known');
 
+        $completion = null;
         if ($request->boolean('completed')) {
             $xpService->awardXP(
                 $user,
@@ -76,8 +90,21 @@ class FlashcardController extends Controller
                 $flashcard->flashcard_set_id,
                 'Menyelesaikan sesi flashcard.'
             );
+
+            $flashcard->loadMissing('set.day.module.programPembelajaran');
+            $completion = $roadmapProgress->selesaikanDariFlashcard($user, $flashcard->set);
+
+            if ($completion['day_completed']) {
+                $summary->forget($user);
+            }
         }
 
-        return redirect()->back()->with('success', 'Progres flashcard disimpan.');
+        $message = match (true) {
+            (bool) ($completion['module_completed'] ?? false) => 'Flashcard selesai. Minggu berikutnya sudah terbuka.',
+            (bool) ($completion['day_completed'] ?? false) => 'Flashcard selesai. Hari berikutnya sudah terbuka.',
+            default => 'Progres flashcard disimpan.',
+        };
+
+        return redirect()->back()->with('success', $message);
     }
 }

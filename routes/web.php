@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\AdminAnalitikController;
 use App\Http\Controllers\Admin\AdminBerandaController;
 use App\Http\Controllers\Admin\AdminFlashcardController;
 use App\Http\Controllers\Admin\AdminGamifikasiController;
+use App\Http\Controllers\Admin\AdminHariModulController;
 use App\Http\Controllers\Admin\AdminKosakataController;
 use App\Http\Controllers\Admin\AdminKuisController;
 use App\Http\Controllers\Admin\AdminLevelController;
@@ -195,10 +196,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Modul CRUD
         Route::get('/modules', [AdminModulController::class, 'index'])->name('modules.index');
         Route::post('/modules', [AdminModulController::class, 'store'])->name('modules.store');
-        Route::get('/modules/{module}/builder', [AdminModulController::class, 'builder'])->name('modules.builder');
-        Route::post('/modules/{module}/builder', [AdminModulController::class, 'updateContent'])->name('modules.builder.update');
         Route::put('/modules/{module}', [AdminModulController::class, 'update'])->name('modules.update');
         Route::delete('/modules/{module}', [AdminModulController::class, 'destroy'])->name('modules.destroy');
+        Route::post('/modules/{module}/days', [AdminHariModulController::class, 'store'])->name('module-days.store');
+        Route::put('/module-days/{moduleDay}', [AdminHariModulController::class, 'update'])->name('module-days.update');
+        Route::delete('/module-days/{moduleDay}', [AdminHariModulController::class, 'destroy'])->name('module-days.destroy');
+        Route::put('/module-days/{moduleDay}/vocabulary', [AdminHariModulController::class, 'syncVocabulary'])->name('module-days.vocabulary.sync');
 
         // Soal lama diarahkan ke Builder Kuis agar tidak ada dua jalur edit soal.
         Route::get('/questions', [AdminKuisController::class, 'legacyQuestionsIndex'])->name('questions.index');

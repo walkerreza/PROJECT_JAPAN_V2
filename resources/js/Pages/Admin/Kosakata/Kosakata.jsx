@@ -14,6 +14,7 @@ import SearchIcon from '@mui/icons-material/Search';
 const emptyForm = {
     content_type: 'kosakata',
     module_id: '',
+    module_day_ids: [],
     word: '',
     reading: '',
     meaning_id: '',
@@ -49,6 +50,7 @@ const parseTags = (value) => value.split(',').map((tag) => tag.trim()).filter(Bo
 const toForm = (item) => ({
     content_type: item.content_type || 'kosakata',
     module_id: item.module_id || '',
+    module_day_ids: (item.days || []).map((day) => day.id),
     word: item.word || '',
     reading: item.reading || '',
     meaning_id: item.meaning_id || '',
@@ -84,9 +86,11 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
     const [jlptLevel, setJlptLevel] = useState(filters.jlpt_level || 'all');
     const [contentType, setContentType] = useState(filters.content_type || 'all');
     const [moduleId, setModuleId] = useState(filters.module_id || 'all');
+    const [moduleDayId, setModuleDayId] = useState(filters.module_day_id || 'all');
     const [showTemplateMenu, setShowTemplateMenu] = useState(false);
     const form = useForm(emptyForm);
     const { confirmState, openConfirm, closeConfirm } = useConfirmAction();
+    const contextualModule = modules.find((module) => String(module.id) === String(filters.module_id));
 
     const openCreate = () => {
         setEditing(null);
@@ -94,6 +98,7 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
             ...emptyForm,
             content_type: contentType !== 'all' ? contentType : 'kosakata',
             module_id: moduleId !== 'all' ? moduleId : '',
+            module_day_ids: moduleDayId !== 'all' ? [Number(moduleDayId)] : [],
         });
         setShowForm(true);
     };
@@ -118,6 +123,8 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
             jlpt_level: jlptLevel,
             content_type: contentType,
             module_id: moduleId,
+            program_id: filters.program_id,
+            module_day_id: moduleDayId,
         }, { preserveState: true, replace: true });
     };
 
@@ -126,6 +133,7 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
         form.transform((data) => ({
             ...data,
             module_id: data.module_id || null,
+            module_day_ids: data.module_day_ids || [],
             tags: parseTags(data.tags_text),
         }));
 
@@ -143,6 +151,7 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
         payload.append('source_type', 'import');
         if (contentType !== 'all') payload.append('content_type', contentType);
         if (moduleId !== 'all') payload.append('module_id', moduleId);
+        if (moduleDayId !== 'all') payload.append('module_day_id', moduleDayId);
 
         router.post(route('admin.vocabulary.import'), payload, {
             forceFormData: true,
@@ -180,6 +189,16 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
                 <section className="relative z-20 rounded-[1.5rem] border border-orange-100 bg-gradient-to-br from-orange-50 via-white to-amber-50 p-5 shadow-sm dark:border-orange-900/30 dark:from-gray-900 dark:via-gray-950 dark:to-gray-900">
                     <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                         <div>
+                            {contextualModule && (
+                                <Link href={route('admin.modules.index', {
+                                    program_id: contextualModule.program_pembelajaran_id,
+                                    week_id: contextualModule.id,
+                                    day_id: filters.module_day_id,
+                                    focus: 'roadmap',
+                                })} className="mb-2 inline-flex text-xs font-black uppercase tracking-[0.22em] text-orange-600">
+                                    Kembali ke Hari
+                                </Link>
+                            )}
                             <p className="text-xs font-black uppercase tracking-[0.3em] text-orange-600">Bank Konten N3</p>
                             <h1 className="mt-1 text-3xl font-black text-gray-900 dark:text-white">Konten N3</h1>
                             <p className="mt-2 max-w-2xl text-sm font-semibold text-gray-500 dark:text-gray-400">
@@ -216,7 +235,7 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
                 </section>
 
                 <Card className="shadow-sm">
-                    <form onSubmit={submitFilters} className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_150px_160px_180px_150px_auto]">
+                    <form onSubmit={submitFilters} className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_140px_140px_180px_180px_140px_auto]">
                         <label className="flex h-11 items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-4 dark:border-gray-700 dark:bg-gray-950">
                             <SearchIcon sx={{ fontSize: 18 }} className="text-gray-400" />
                             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari konten, reading, arti, sumber..." className="w-full border-0 bg-transparent text-sm font-semibold outline-none focus:ring-0 dark:text-white" />
@@ -233,10 +252,19 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
                             <option value="N4">N4</option>
                             <option value="N5">N5</option>
                         </select>
-                        <select value={moduleId} onChange={(event) => setModuleId(event.target.value)} className="h-11 rounded-2xl border border-gray-200 bg-gray-50 px-4 text-sm font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
+                        <select value={moduleId} onChange={(event) => {
+                            setModuleId(event.target.value);
+                            setModuleDayId('all');
+                        }} className="h-11 rounded-2xl border border-gray-200 bg-gray-50 px-4 text-sm font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
                             <option value="all">Semua Modul</option>
                             {modules.map((module) => (
                                 <option key={module.id} value={module.id}>W{module.week_number ?? '-'} - {module.title}</option>
+                            ))}
+                        </select>
+                        <select value={moduleDayId} onChange={(event) => setModuleDayId(event.target.value)} className="h-11 rounded-2xl border border-gray-200 bg-gray-50 px-4 text-sm font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
+                            <option value="all">Semua Day</option>
+                            {(modules.find((module) => String(module.id) === String(moduleId))?.days || []).map((day) => (
+                                <option key={day.id} value={day.id}>Day {day.day_number} - {day.title}</option>
                             ))}
                         </select>
                         <select value={status} onChange={(event) => setStatus(event.target.value)} className="h-11 rounded-2xl border border-gray-200 bg-gray-50 px-4 text-sm font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
@@ -259,6 +287,7 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
                                         <span className="rounded-full bg-orange-50 px-2.5 py-1 text-[10px] font-black text-orange-600 dark:bg-orange-900/20">{item.jlpt_level}</span>
                                         <span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${item.status === 'published' ? 'bg-green-50 text-green-600 dark:bg-green-900/20' : 'bg-yellow-50 text-yellow-600 dark:bg-yellow-900/20'}`}>{item.status}</span>
                                         {item.module && <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-black text-blue-600 dark:bg-blue-900/20">Week {item.module.week_number ?? '-'}</span>}
+                                        {(item.days || []).map((day) => <span key={day.id} className="rounded-full bg-cyan-50 px-2.5 py-1 text-[10px] font-black text-cyan-700 dark:bg-cyan-900/20 dark:text-cyan-300">Day {day.day_number}</span>)}
                                         {item.category && <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-black text-gray-600 dark:bg-gray-800 dark:text-gray-300">{item.category}</span>}
                                     </div>
                                     <h2 className="mt-4 break-words text-4xl font-black text-gray-900 dark:text-white">{item.word}</h2>
@@ -335,12 +364,25 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
                                             </select>
                                         </Field>
                                         <Field label="Modul Mingguan">
-                                            <select value={form.data.module_id} onChange={(event) => form.setData('module_id', event.target.value)} className={inputClass}>
+                                            <select value={form.data.module_id} onChange={(event) => form.setData((data) => ({ ...data, module_id: event.target.value, module_day_ids: [] }))} className={inputClass}>
                                                 <option value="">Global / belum dikunci modul</option>
                                                 {modules.map((module) => (
                                                     <option key={module.id} value={module.id}>Week {module.week_number ?? '-'} - {module.title}</option>
                                                 ))}
                                             </select>
+                                        </Field>
+                                        <Field label="Dipakai pada Day" wide>
+                                            <select
+                                                multiple
+                                                value={(form.data.module_day_ids || []).map(String)}
+                                                onChange={(event) => form.setData('module_day_ids', Array.from(event.target.selectedOptions, (option) => Number(option.value)))}
+                                                className={`${inputClass} min-h-28`}
+                                            >
+                                                {(modules.find((module) => String(module.id) === String(form.data.module_id))?.days || []).map((day) => (
+                                                    <option key={day.id} value={day.id}>Day {day.day_number} - {day.title}</option>
+                                                ))}
+                                            </select>
+                                            <span className="mt-1.5 block text-xs font-medium text-gray-500">Gunakan Ctrl/Command untuk memilih lebih dari satu Day.</span>
                                         </Field>
                                         <Field label="Konten Utama">
                                             <input value={form.data.word} onChange={(event) => form.setData('word', event.target.value)} placeholder="会議 / 割 / 〜ように" className={inputClass} />

@@ -3,6 +3,7 @@ import { Head, Link, router, useForm } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Card from '@/Components/UI/Card';
 import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
+import LearningResourceCreateDialog from '@/Components/Admin/LearningResourceCreateDialog';
 
 import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
@@ -17,6 +18,7 @@ const emptyForm = {
     description: '',
     level_id: '',
     module_id: '',
+    module_day_id: '',
     status: 'draft',
 };
 
@@ -33,6 +35,9 @@ function Field({ label, children, wide = false }) {
 
 export default function ManajemenPresentasi({ decks = {}, filters = {}, levels = [], modules = [] }) {
     const rows = decks.data || [];
+    const contextualModule = modules.find((module) => String(module.id) === String(filters.module_id));
+    const contextualDay = (contextualModule?.days || []).find((day) => String(day.id) === String(filters.module_day_id));
+    const [showCreateDialog, setShowCreateDialog] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [editing, setEditing] = useState(null);
     const [search, setSearch] = useState(filters.search || '');
@@ -66,12 +71,11 @@ export default function ManajemenPresentasi({ decks = {}, filters = {}, levels =
         ...data,
         level_id: data.level_id || null,
         module_id: data.module_id || null,
+        module_day_id: data.module_day_id || null,
     });
 
     const openCreate = () => {
-        setEditing(null);
-        form.setData(emptyForm);
-        setShowForm(true);
+        setShowCreateDialog(true);
     };
 
     const openEdit = (deck) => {
@@ -81,6 +85,7 @@ export default function ManajemenPresentasi({ decks = {}, filters = {}, levels =
             description: deck.description || '',
             level_id: deck.level_id || '',
             module_id: deck.module_id || '',
+            module_day_id: deck.module_day_id || '',
             status: deck.status || 'draft',
         });
         setShowForm(true);
@@ -103,7 +108,13 @@ export default function ManajemenPresentasi({ decks = {}, filters = {}, levels =
 
     const submitFilters = (event) => {
         event.preventDefault();
-        router.get(route('admin.presentations.index'), { search, status, module_id: moduleId }, { preserveState: true, replace: true });
+        router.get(route('admin.presentations.index'), {
+            search,
+            status,
+            program_id: filters.program_id,
+            module_id: moduleId,
+            module_day_id: filters.module_day_id,
+        }, { preserveState: true, replace: true });
     };
 
     const deleteDeck = (deck) => {
@@ -189,7 +200,7 @@ export default function ManajemenPresentasi({ decks = {}, filters = {}, levels =
                                                 <div className="flex flex-wrap gap-2">
                                                     <span className={`rounded-full px-3 py-1 text-[10px] font-black ${deck.status === 'published' ? 'bg-white text-green-700' : 'bg-white/20 text-white'}`}>{deck.status}</span>
                                                     <span className="rounded-full bg-white/20 px-3 py-1 text-[10px] font-black">{deck.slides_count || 0} slide</span>
-                                                    <span className="rounded-full bg-white/20 px-3 py-1 text-[10px] font-black">{deck.module ? `Week ${deck.module.week_number ?? '-'}` : 'No Week'}</span>
+                                                    <span className="rounded-full bg-white/20 px-3 py-1 text-[10px] font-black">{deck.module ? `Week ${deck.module.week_number ?? '-'} / Day ${deck.day?.day_number ?? '-'}` : 'No Week'}</span>
                                                 </div>
                                                 <h2 className="line-clamp-2 text-xl font-black">{deck.title}</h2>
                                             </div>
@@ -272,10 +283,18 @@ export default function ManajemenPresentasi({ decks = {}, filters = {}, levels =
                                                 {levels.map((level) => <option key={level.id} value={level.id}>{level.level_name}</option>)}
                                             </select>
                                         </Field>
-                                        <Field label="Modul Mingguan">
-                                            <select value={form.data.module_id} onChange={(event) => form.setData('module_id', event.target.value)} className={inputClass}>
-                                                <option value="">Tanpa Modul</option>
-                                                {modules.map((module) => <option key={module.id} value={module.id}>{module.title}</option>)}
+                                        <Field label="Week">
+                                            <select value={form.data.module_id} onChange={(event) => form.setData((data) => ({ ...data, module_id: event.target.value, module_day_id: '' }))} className={inputClass} required>
+                                                <option value="">Pilih Week</option>
+                                                {modules.map((module) => <option key={module.id} value={module.id}>Week {module.week_number ?? '-'} - {module.title}</option>)}
+                                            </select>
+                                        </Field>
+                                        <Field label="Day">
+                                            <select value={form.data.module_day_id} onChange={(event) => form.setData('module_day_id', event.target.value)} className={inputClass} required>
+                                                <option value="">Pilih Day</option>
+                                                {(modules.find((module) => String(module.id) === String(form.data.module_id))?.days || []).map((day) => (
+                                                    <option key={day.id} value={day.id}>Day {day.day_number} - {day.title}</option>
+                                                ))}
                                             </select>
                                         </Field>
                                         <Field label="Status">
@@ -298,6 +317,16 @@ export default function ManajemenPresentasi({ decks = {}, filters = {}, levels =
                     </div>
                 )}
             </div>
+            <LearningResourceCreateDialog
+                open={showCreateDialog}
+                onClose={() => setShowCreateDialog(false)}
+                resourceType="presentation"
+                module={contextualModule}
+                day={contextualDay}
+                modules={modules}
+                levels={levels}
+                lockContext={Boolean(contextualModule && contextualDay)}
+            />
             <ConfirmActionDialog {...confirmState} onCancel={closeConfirm} />
         </AuthenticatedLayout>
     );

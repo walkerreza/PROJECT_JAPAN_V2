@@ -61,6 +61,13 @@ class Kosakata extends Model
         return $this->hasMany(Flashcard::class, 'vocabulary_id');
     }
 
+    public function days()
+    {
+        return $this->belongsToMany(HariModul::class, 'module_day_vocabulary', 'vocabulary_id', 'module_day_id')
+            ->withPivot('sort_order')
+            ->withTimestamps();
+    }
+
     public function scopePublished($query)
     {
         return $query->where('status', 'published');

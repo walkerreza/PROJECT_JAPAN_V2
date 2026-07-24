@@ -226,6 +226,14 @@ function SlidePreview({ slide, small = false }) {
 }
 
 export default function BuilderPresentasi({ deck }) {
+    const builderReturnUrl = deck.module?.program_pembelajaran_id
+        ? route('admin.modules.index', {
+            program_id: deck.module.program_pembelajaran_id,
+            week_id: deck.module.id,
+            day_id: deck.day?.id,
+            focus: 'presentation',
+        })
+        : route('admin.presentations.index');
     const [slides, setSlides] = useState(mapDeckSlides(deck.slides || []));
     const [activeIndex, setActiveIndex] = useState(0);
     const [status, setStatus] = useState(deck.status || 'draft');
@@ -494,8 +502,11 @@ export default function BuilderPresentasi({ deck }) {
                 <header className="sticky top-0 z-30 border-b border-gray-200 bg-white px-3 py-2 dark:border-gray-800 dark:bg-gray-900 lg:px-4">
                     <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                         <div className="min-w-0">
-                            <Link href={route('admin.presentations.index')} className="text-[11px] font-black uppercase tracking-[0.22em] text-orange-600">Kembali</Link>
+                            <Link href={builderReturnUrl} className="text-[11px] font-black uppercase tracking-[0.22em] text-orange-600">Kembali ke Hari</Link>
                             <h1 className="mt-0.5 truncate text-lg font-black text-gray-900 dark:text-white">{deck.title}</h1>
+                            <p className="truncate text-[11px] font-bold text-gray-400">
+                                Week {deck.module?.week_number || '-'} → Day {deck.day?.day_number || '-'}
+                            </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                             <select value={status} onChange={(event) => setStatus(event.target.value)} className="h-9 rounded-xl border border-gray-200 bg-white px-3 text-xs font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">

@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\DeckPresentasi;
 use App\Models\Flashcard;
+use App\Models\HariModul;
 use App\Models\Kuis;
 use App\Models\LevelPembelajaran;
 use App\Models\Modul;
@@ -47,10 +48,29 @@ class KelasDemoSeeder extends Seeder
                     ]
                 );
 
+                $dayOne = HariModul::updateOrCreate(
+                    ['module_id' => $module->id, 'day_number' => 1],
+                    [
+                        'title' => 'Pengenalan Materi',
+                        'description' => 'Pelajari ringkasan, presentasi, dan flashcard sebelum masuk ke evaluasi.',
+                        'status' => 'published',
+                        'checkpoint_quiz_id' => null,
+                    ]
+                );
+                $dayTwo = HariModul::updateOrCreate(
+                    ['module_id' => $module->id, 'day_number' => 2],
+                    [
+                        'title' => 'Latihan dan Evaluasi',
+                        'description' => 'Uji pemahaman melalui kuis checkpoint untuk menyelesaikan Week.',
+                        'status' => 'published',
+                    ]
+                );
+
                 $flashcardSet = SetFlashcard::updateOrCreate(
                     ['module_id' => $module->id, 'title' => $moduleData['flashcard_title']],
                     [
                         'level_id' => $level->id,
+                        'module_day_id' => $dayOne->id,
                         'description' => $moduleData['flashcard_description'],
                         'source_type' => 'manual',
                         'status' => 'published',
@@ -74,6 +94,7 @@ class KelasDemoSeeder extends Seeder
                 $quiz = Kuis::updateOrCreate(
                     ['module_id' => $module->id],
                     [
+                        'module_day_id' => $dayTwo->id,
                         'type' => 'multiple_choice',
                         'time_limit' => $moduleData['time_limit'],
                         'status' => 'published',
@@ -93,10 +114,13 @@ class KelasDemoSeeder extends Seeder
                     );
                 }
 
+                $dayTwo->update(['checkpoint_quiz_id' => $quiz->id]);
+
                 $deck = DeckPresentasi::updateOrCreate(
                     ['module_id' => $module->id, 'title' => $moduleData['presentation_title']],
                     [
                         'level_id' => $level->id,
+                        'module_day_id' => $dayOne->id,
                         'description' => $moduleData['presentation_description'],
                         'status' => 'published',
                     ]
@@ -124,7 +148,7 @@ class KelasDemoSeeder extends Seeder
                 'slug' => 'jlpt-n3-mingguan',
                 'title' => 'JLPT N3 Mingguan',
                 'description' => 'Roadmap inti N3 untuk belajar bertahap dari kosakata, kanji, flashcard, kuis, dan PPT.',
-                'instructor_name' => 'Mas Fuad',
+                'instructor_name' => 'Guru gembul',
                 'thumbnail_url' => '/images/kelas-n3-mingguan.jpg',
                 'accent_color' => '#E64A19',
                 'modules' => [
@@ -178,24 +202,24 @@ class KelasDemoSeeder extends Seeder
     private function module(string $topic, string $focus, string $word, string $meaning, string $question, string $answer): array
     {
         return [
-            'title' => 'Minggu ' . $topic,
+            'title' => 'Minggu '.$topic,
             'description' => $focus,
-            'lesson_title' => 'Materi: ' . $topic,
-            'lesson_body' => $focus . '. Pelajari flashcard, baca ringkasan, lalu selesaikan kuis.',
+            'lesson_title' => 'Materi: '.$topic,
+            'lesson_body' => $focus.'. Pelajari flashcard, baca ringkasan, lalu selesaikan kuis.',
             'duration_minutes' => 15,
-            'flashcard_title' => 'Flashcard ' . $topic,
-            'flashcard_description' => 'Flashcard pendamping untuk ' . $topic . '.',
+            'flashcard_title' => 'Flashcard '.$topic,
+            'flashcard_description' => 'Flashcard pendamping untuk '.$topic.'.',
             'flashcards' => [
-                ['front' => $word, 'reading' => $word, 'back' => $meaning, 'hint' => $focus, 'example' => $word . ' o oboemashou.', 'meaning' => 'Ingat arti: ' . $meaning],
-                ['front' => $topic, 'reading' => null, 'back' => $focus, 'hint' => 'Topik modul', 'example' => $topic . ' no renshuu.', 'meaning' => 'Latihan ' . $topic],
+                ['front' => $word, 'reading' => $word, 'back' => $meaning, 'hint' => $focus, 'example' => $word.' o oboemashou.', 'meaning' => 'Ingat arti: '.$meaning],
+                ['front' => $topic, 'reading' => null, 'back' => $focus, 'hint' => 'Topik modul', 'example' => $topic.' no renshuu.', 'meaning' => 'Latihan '.$topic],
             ],
             'time_limit' => 300,
             'questions' => [
-                ['text' => $question, 'answer' => $answer, 'options' => [$answer, 'membeli', 'berangkat', 'menulis'], 'explanation' => $word . ' berarti ' . $answer . '.'],
-                ['text' => 'Apa fokus modul ini?', 'answer' => $focus, 'options' => [$focus, 'Latihan N1', 'Percakapan bisnis lanjut', 'Menulis sakubun'], 'explanation' => 'Modul ini fokus pada ' . $focus . '.'],
+                ['text' => $question, 'answer' => $answer, 'options' => [$answer, 'membeli', 'berangkat', 'menulis'], 'explanation' => $word.' berarti '.$answer.'.'],
+                ['text' => 'Apa fokus modul ini?', 'answer' => $focus, 'options' => [$focus, 'Latihan N1', 'Percakapan bisnis lanjut', 'Menulis sakubun'], 'explanation' => 'Modul ini fokus pada '.$focus.'.'],
             ],
-            'presentation_title' => 'PPT ' . $topic,
-            'presentation_description' => 'Slide pembuka untuk ' . $focus . '.',
+            'presentation_title' => 'PPT '.$topic,
+            'presentation_description' => 'Slide pembuka untuk '.$focus.'.',
         ];
     }
 }

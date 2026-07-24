@@ -1,80 +1,220 @@
-import React, { useState } from 'react';
-import { Head, useForm, router, Link } from '@inertiajs/react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
+import LearningResourceCreateDialog from '@/Components/Admin/LearningResourceCreateDialog';
+import ModuleDayDialog from '@/Components/Admin/ModuleDayDialog';
 
 import AddIcon from '@mui/icons-material/Add';
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
-import SearchIcon from '@mui/icons-material/Search';
+import QuizOutlinedIcon from '@mui/icons-material/QuizOutlined';
+import SlideshowIcon from '@mui/icons-material/Slideshow';
+import StyleIcon from '@mui/icons-material/Style';
 
-function StatusBadge({ status }) {
-    const isDraft = status === 'draft';
+const focusLabels = {
+    roadmap: 'Roadmap',
+    flashcard: 'Flashcard',
+    presentation: 'Presentasi',
+};
+
+const inputClass = 'w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 dark:border-gray-700 dark:bg-gray-950 dark:text-white dark:focus:ring-orange-900/30';
+
+function StatusBadge({ status = 'draft' }) {
+    const published = status === 'published';
 
     return (
-        <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-wider ${isDraft ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'}`}>
-            {status || 'published'}
+        <span className={`inline-flex shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${
+            published
+                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'
+                : 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300'
+        }`}>
+            {published ? 'Published' : 'Draft'}
         </span>
     );
 }
 
-function LevelBadge({ level }) {
+function ResourceStatus({ resources = [], emptyLabel = 'Belum dibuat' }) {
+    if (resources.length === 0) {
+        return <span className="text-xs font-bold text-gray-400">{emptyLabel}</span>;
+    }
+
+    const published = resources.filter((item) => item.status === 'published').length;
+    const totalItems = resources.reduce((total, item) => total + Number(item.item_count || 0), 0);
+
     return (
-        <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-black text-gray-600 dark:bg-gray-800 dark:text-gray-300">
-            {level?.level_name || '-'}
+        <span className="text-xs font-bold text-gray-500 dark:text-gray-400">
+            {resources.length} resource / {totalItems} item / {published} published
         </span>
     );
 }
 
-function ProgramBadge({ program }) {
+function ResourceRow({
+    type,
+    label,
+    icon,
+    tone,
+    module,
+    day,
+    resources = [],
+    vocabularyCount = 0,
+    focused = false,
+    onCreate,
+}) {
+    const routeNames = {
+        flashcard: 'admin.flashcards.builder',
+        quiz: 'admin.quizzes.builder',
+        presentation: 'admin.presentations.builder',
+    };
+    const toneClasses = {
+        blue: 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300',
+        teal: 'bg-teal-50 text-teal-700 dark:bg-teal-900/20 dark:text-teal-300',
+        red: 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300',
+        orange: 'bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-300',
+    };
+
+    if (type === 'vocabulary') {
+        return (
+            <Link
+                href={route('admin.vocabulary.index', {
+                    program_id: module.program?.id,
+                    module_id: module.id,
+                    module_day_id: day.id,
+                })}
+                className={`flex min-h-16 items-center gap-3 rounded-xl border px-3 py-3 transition hover:border-blue-300 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 ${
+                    focused ? 'border-blue-400 ring-2 ring-blue-100 dark:ring-blue-900/30' : 'border-gray-200 dark:border-gray-800'
+                }`}
+            >
+                <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${toneClasses.blue}`}>{icon}</span>
+                <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-black text-gray-900 dark:text-white">{label}</span>
+                    <span className="block text-xs font-bold text-gray-400">{vocabularyCount} item digunakan</span>
+                </span>
+                <span className="shrink-0 text-xs font-black text-blue-700 dark:text-blue-300">Kelola</span>
+            </Link>
+        );
+    }
+
     return (
-        <span className="inline-flex rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-black text-red-700 dark:bg-red-900/20 dark:text-red-300">
-            {program?.title || 'Belum masuk program'}
-        </span>
+        <div className={`rounded-xl border transition ${
+            focused ? 'border-orange-400 ring-2 ring-orange-100 dark:ring-orange-900/30' : 'border-gray-200 dark:border-gray-800'
+        }`}>
+            <div className="flex min-h-16 items-center gap-3 px-3 py-3">
+                <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${toneClasses[tone]}`}>{icon}</span>
+                <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-black text-gray-900 dark:text-white">{label}</span>
+                    <ResourceStatus resources={resources} />
+                </span>
+                {resources.length === 0 ? (
+                    <button type="button" onClick={() => onCreate(type, module, day)} className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg bg-gray-900 px-3 text-xs font-black text-white dark:bg-white dark:text-gray-900">
+                        <AddIcon sx={{ fontSize: 15 }} />
+                        Buat
+                    </button>
+                ) : resources.length === 1 ? (
+                    <Link href={route(routeNames[type], resources[0].id)} className="inline-flex h-9 shrink-0 items-center rounded-lg bg-gray-900 px-3 text-xs font-black text-white dark:bg-white dark:text-gray-900">
+                        Buka Editor
+                    </Link>
+                ) : (
+                    <span className="shrink-0 text-xs font-black text-gray-500 dark:text-gray-300">Pilih di bawah</span>
+                )}
+            </div>
+
+            {resources.length > 1 && (
+                <div className="space-y-1 border-t border-gray-100 p-2 dark:border-gray-800">
+                    {resources.map((resource) => (
+                        <Link key={resource.id} href={route(routeNames[type], resource.id)} className="flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm transition hover:bg-gray-50 dark:hover:bg-gray-800">
+                            <span className="min-w-0 truncate font-bold text-gray-700 dark:text-gray-200">{resource.title}</span>
+                            <span className="shrink-0 text-xs font-black text-orange-600">Edit</span>
+                        </Link>
+                    ))}
+                </div>
+            )}
+        </div>
     );
 }
 
 export default function ModulesIndex({ modules, levels = [], programs = [], filters = {} }) {
-    const [filterLevel, setFilterLevel] = useState('all');
-    const [filterProgram, setFilterProgram] = useState(filters?.program_id || 'all');
-    const [searchQuery, setSearchQuery] = useState(filters?.search || '');
-    const [showModuleModal, setShowModuleModal] = useState(false);
+    const moduleItems = modules?.data || modules || [];
+    const [selectedProgramId, setSelectedProgramId] = useState(filters.program_id || '');
+    const [openModuleId, setOpenModuleId] = useState(filters.week_id ? Number(filters.week_id) : null);
+    const [openDayId, setOpenDayId] = useState(filters.day_id ? Number(filters.day_id) : null);
+    const [showModuleDialog, setShowModuleDialog] = useState(false);
     const [editingModule, setEditingModule] = useState(null);
-    const [deleteConfirm, setDeleteConfirm] = useState(null);
+    const [dayDialog, setDayDialog] = useState(null);
+    const [resourceDialog, setResourceDialog] = useState(null);
     const { confirmState, openConfirm, closeConfirm } = useConfirmAction();
 
-    const { data, setData, processing, reset } = useForm({
-        program_pembelajaran_id: '',
-        level_id: '',
+    const selectedProgram = programs.find((program) => String(program.id) === String(selectedProgramId));
+    const focus = filters.focus || 'roadmap';
+
+    const moduleForm = useForm({
+        program_pembelajaran_id: selectedProgramId || '',
+        level_id: selectedProgram?.level_id || selectedProgram?.level?.id || '',
         title: '',
         week_number: '',
         description: '',
         status: 'published',
     });
 
-    const moduleItems = modules?.data || modules || [];
-    const filteredModules = filterLevel === 'all'
-        ? moduleItems
-        : moduleItems.filter((module) => module.level?.id == filterLevel);
+    useEffect(() => {
+        if (moduleItems.length === 0) {
+            setOpenModuleId(null);
+            setOpenDayId(null);
+            return;
+        }
 
-    const handleSearch = (e) => {
-        e.preventDefault();
+        const targetModule = moduleItems.find((module) => module.id === Number(filters.week_id))
+            || moduleItems.find((module) => (module.days || []).some((day) => day.id === Number(filters.day_id)))
+            || moduleItems[0];
+        setOpenModuleId((current) => {
+            if (filters.week_id || filters.day_id) return targetModule.id;
+
+            return current && moduleItems.some((module) => module.id === current) ? current : targetModule.id;
+        });
+
+        const targetDay = (targetModule.days || []).find((day) => day.id === Number(filters.day_id))
+            || targetModule.days?.[0];
+        setOpenDayId((current) => filters.day_id ? targetDay?.id || null : current || targetDay?.id || null);
+    }, [filters.day_id, filters.week_id, moduleItems.length]);
+
+    const currentModules = useMemo(
+        () => selectedProgramId ? moduleItems : [],
+        [moduleItems, selectedProgramId],
+    );
+
+    const chooseProgram = (programId) => {
+        setSelectedProgramId(programId);
         router.get(route('admin.modules.index'), {
-            search: searchQuery,
-            program_id: filterProgram === 'all' ? undefined : filterProgram,
-        }, { preserveState: true });
+            program_id: programId || undefined,
+            focus,
+        }, {
+            preserveState: false,
+            replace: true,
+        });
     };
 
-    const openCreateModal = () => {
-        reset();
+    const openCreateModule = () => {
+        const program = programs.find((item) => String(item.id) === String(selectedProgramId));
         setEditingModule(null);
-        setShowModuleModal(true);
+        moduleForm.setData({
+            program_pembelajaran_id: selectedProgramId,
+            level_id: program?.level_id || program?.level?.id || '',
+            title: '',
+            week_number: currentModules.length ? Math.max(...currentModules.map((module) => Number(module.week_number))) + 1 : 1,
+            description: '',
+            status: 'published',
+        });
+        moduleForm.clearErrors();
+        setShowModuleDialog(true);
     };
 
-    const openEditModal = (module) => {
+    const openEditModule = (module) => {
         setEditingModule(module);
-        setData({
+        moduleForm.setData({
             program_pembelajaran_id: module.program?.id || '',
             level_id: module.level?.id || '',
             title: module.title,
@@ -82,207 +222,325 @@ export default function ModulesIndex({ modules, levels = [], programs = [], filt
             description: module.description || '',
             status: module.status || 'published',
         });
-        setShowModuleModal(true);
+        moduleForm.clearErrors();
+        setShowModuleDialog(true);
     };
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        const options = { onSuccess: () => { setShowModuleModal(false); reset(); } };
+    const submitModule = (event) => {
+        event.preventDefault();
+        const options = {
+            preserveScroll: true,
+            onSuccess: () => {
+                setShowModuleDialog(false);
+                moduleForm.reset();
+            },
+        };
 
         if (editingModule) {
-            router.put(route('admin.modules.update', editingModule.id), data, options);
+            moduleForm.put(route('admin.modules.update', editingModule.id), options);
             return;
         }
 
-        router.post(route('admin.modules.store'), data, options);
+        moduleForm.post(route('admin.modules.store'), options);
     };
 
-    const handleProgramChange = (programId) => {
-        const selectedProgram = programs.find((program) => String(program.id) === String(programId));
-        setData({
-            ...data,
-            program_pembelajaran_id: programId,
-            level_id: selectedProgram?.level_id || data.level_id,
-        });
-    };
+    const deleteModule = (module) => {
+        const contentCount = Number(module.flashcard_count || 0)
+            + Number(module.quiz_count || 0)
+            + Number(module.presentation_count || 0);
 
-    const handleDelete = (module) => {
-        if ((module.lesson_count || 0) > 0 || (module.flashcard_count || 0) > 0 || (module.quiz_count || 0) > 0) {
+        if (contentCount > 0 || Number(module.days_count || 0) > 0) {
             openConfirm({
                 variant: 'warning',
-                title: 'Modul Masih Memiliki Konten',
-                message: 'Modul tidak dapat dihapus karena masih memiliki konten terkait. Hapus atau pindahkan kontennya terlebih dahulu.',
-                details: [
-                    { label: 'Modul', value: module.title },
-                    { label: 'Konten', value: `${module.lesson_count || 0} materi, ${module.flashcard_count || 0} flashcard, ${module.quiz_count || 0} kuis` },
-                ],
+                title: 'Minggu Masih Berisi Materi',
+                message: 'Hapus atau pindahkan seluruh Hari dan resource sebelum menghapus Minggu.',
                 confirmLabel: 'Mengerti',
                 cancelLabel: 'Tutup',
                 onConfirm: closeConfirm,
             });
             return;
         }
-        setDeleteConfirm(module);
+
+        openConfirm({
+            variant: 'danger',
+            title: `Hapus Minggu ${module.week_number}?`,
+            message: 'Minggu ini akan dihapus dari roadmap kelas.',
+            confirmLabel: 'Hapus Minggu',
+            onConfirm: () => router.delete(route('admin.modules.destroy', module.id), {
+                preserveScroll: true,
+                onFinish: closeConfirm,
+            }),
+        });
     };
 
-    const confirmDelete = () => {
-        router.delete(route('admin.modules.destroy', deleteConfirm.id), {
-            onSuccess: () => setDeleteConfirm(null),
+    const deleteDay = (module, day) => {
+        const contentCount = Number(day.vocabulary_count || 0)
+            + (day.flashcard_sets?.length || 0)
+            + (day.quizzes?.length || 0)
+            + (day.presentation_decks?.length || 0);
+
+        if (contentCount > 0) {
+            openConfirm({
+                variant: 'warning',
+                title: `Hari ${day.day_number} Masih Berisi Materi`,
+                message: 'Hapus atau pindahkan seluruh resource sebelum menghapus Hari.',
+                confirmLabel: 'Mengerti',
+                cancelLabel: 'Tutup',
+                onConfirm: closeConfirm,
+            });
+            return;
+        }
+
+        openConfirm({
+            variant: 'danger',
+            title: `Hapus Hari ${day.day_number}?`,
+            message: `${day.title} akan dihapus dari Minggu ${module.week_number}.`,
+            confirmLabel: 'Hapus Hari',
+            onConfirm: () => router.delete(route('admin.module-days.destroy', day.id), {
+                preserveScroll: true,
+                onFinish: closeConfirm,
+            }),
         });
+    };
+
+    const openResourceCreate = (type, module, day) => {
+        setResourceDialog({ type, module, day });
     };
 
     return (
         <AuthenticatedLayout>
-            <Head title="Manajemen Modul Mingguan - Japanlingo" />
+            <Head title="Roadmap Kelas - Japanlingo" />
 
             <div className="min-h-screen bg-[#F8F9FB] dark:bg-gray-950">
-                <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-                    <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:p-6">
+                <main className="mx-auto max-w-6xl space-y-5 px-4 py-5 sm:px-6 lg:px-8">
+                    <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:p-6">
                         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-                            <div className="flex items-start gap-4">
-                                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#E64A19] text-white">
-                                    <MenuBookIcon sx={{ fontSize: 22 }} />
-                                </div>
-                                <div>
-                                    <p className="text-xs font-black uppercase tracking-[0.28em] text-[#E64A19]">Weekly Module Admin</p>
-                                    <h1 className="mt-1 text-2xl font-black text-gray-900 dark:text-white">Manajemen Modul Mingguan</h1>
-                                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{filteredModules.length} modul ditampilkan dari {moduleItems.length} total data halaman ini.</p>
+                            <div className="flex min-w-0 items-start gap-3">
+                                <Link href={route('admin.programs.index')} title="Kembali ke daftar kelas" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gray-200 text-gray-500 dark:border-gray-700 dark:text-gray-300">
+                                    <ArrowBackIcon sx={{ fontSize: 18 }} />
+                                </Link>
+                                <div className="min-w-0">
+                                    <p className="text-[11px] font-black uppercase tracking-[0.22em] text-orange-600">
+                                        Kelas / Roadmap / {focusLabels[focus]}
+                                    </p>
+                                    <h1 className="mt-1 text-xl font-black text-gray-900 dark:text-white sm:text-2xl">
+                                        {selectedProgram ? `Roadmap ${selectedProgram.title}` : 'Pilih Kelas'}
+                                    </h1>
+                                    <p className="mt-1 text-sm font-medium text-gray-500 dark:text-gray-400">
+                                        Susun Minggu, Hari, dan resource belajar tanpa berpindah konteks kelas.
+                                    </p>
                                 </div>
                             </div>
 
-                            <button
-                                onClick={openCreateModal}
-                                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#E64A19] px-5 text-sm font-black text-white shadow-sm shadow-orange-500/20 transition-colors hover:bg-[#D84315]"
-                            >
-                                <AddIcon sx={{ fontSize: 18 }} />
-                                Tambah Modul
-                            </button>
-                        </div>
-
-                        <div className="mt-6 grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_240px_220px]">
-                            <form onSubmit={handleSearch} className="relative">
-                                <SearchIcon sx={{ fontSize: 18 }} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                                <input
-                                    type="text"
-                                    placeholder="Cari modul..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 pl-11 pr-4 text-sm font-medium text-gray-700 outline-none transition focus:border-[#E64A19] focus:bg-white focus:ring-4 focus:ring-orange-500/10 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300 dark:focus:bg-gray-900"
-                                />
-                            </form>
-                            <select
-                                value={filterProgram}
-                                onChange={(e) => {
-                                    setFilterProgram(e.target.value);
-                                    router.get(route('admin.modules.index'), {
-                                        search: searchQuery,
-                                        program_id: e.target.value === 'all' ? undefined : e.target.value,
-                                    }, { preserveState: true });
-                                }}
-                                className="h-11 rounded-xl border border-gray-200 bg-gray-50 px-4 text-sm font-bold text-gray-700 outline-none focus:border-[#E64A19] focus:ring-4 focus:ring-orange-500/10 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300"
-                            >
-                                <option value="all">Semua Kelas</option>
-                                {programs.map((program) => <option key={program.id} value={program.id}>{program.title}</option>)}
-                            </select>
-                            <select
-                                value={filterLevel}
-                                onChange={(e) => setFilterLevel(e.target.value)}
-                                className="h-11 rounded-xl border border-gray-200 bg-gray-50 px-4 text-sm font-bold text-gray-700 outline-none focus:border-[#E64A19] focus:ring-4 focus:ring-orange-500/10 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300"
-                            >
-                                <option value="all">Semua Level</option>
-                                {levels.map((level) => <option key={level.id} value={level.id}>{level.level_name}</option>)}
-                            </select>
+                            <div className="grid w-full gap-2 sm:grid-cols-[minmax(0,260px)_auto] lg:w-auto">
+                                <select value={selectedProgramId} onChange={(event) => chooseProgram(event.target.value)} className="h-11 rounded-xl border border-gray-200 bg-gray-50 px-4 text-sm font-bold text-gray-700 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-200">
+                                    <option value="">Pilih kelas</option>
+                                    {programs.map((program) => <option key={program.id} value={program.id}>{program.title}</option>)}
+                                </select>
+                                <button type="button" onClick={openCreateModule} disabled={!selectedProgramId} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-orange-600 px-4 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-40">
+                                    <AddIcon sx={{ fontSize: 18 }} />
+                                    Tambah Minggu
+                                </button>
+                            </div>
                         </div>
                     </section>
 
-                    <section className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
-                        <div className="hidden overflow-x-auto lg:block">
-                            <table className="w-full text-left">
-                                <thead className="bg-gray-50 text-xs font-black uppercase tracking-wider text-gray-400 dark:bg-gray-800/50">
-                                    <tr>
-                                        <th className="px-6 py-4">Modul</th>
-                                        <th className="px-6 py-4">Program</th>
-                                        <th className="px-6 py-4">Level</th>
-                                        <th className="px-6 py-4">Minggu</th>
-                                        <th className="px-6 py-4">Konten</th>
-                                        <th className="px-6 py-4">Status</th>
-                                        <th className="px-6 py-4 text-right">Aksi</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                                    {filteredModules.map((module) => (
-                                        <tr key={module.id} className="transition-colors hover:bg-gray-50/70 dark:hover:bg-gray-800/40">
-                                            <td className="px-6 py-5">
-                                                <p className="font-black text-gray-900 dark:text-white">{module.title}</p>
-                                                <p className="mt-1 line-clamp-1 text-sm text-gray-500 dark:text-gray-400">{module.description || 'Tidak ada deskripsi.'}</p>
-                                            </td>
-                                            <td className="px-6 py-5"><ProgramBadge program={module.program} /></td>
-                                            <td className="px-6 py-5"><LevelBadge level={module.level} /></td>
-                                            <td className="px-6 py-5 text-sm font-bold text-gray-600 dark:text-gray-300">Minggu {module.week_number}</td>
-                                            <td className="px-6 py-5">
-                                                <div className="flex flex-wrap gap-2 text-xs font-black">
-                                                    <span className="rounded-full bg-orange-50 px-2.5 py-1 text-orange-700 dark:bg-orange-900/20 dark:text-orange-300">{module.presentation_count || 0} PPT</span>
-                                                    <span className="rounded-full bg-teal-50 px-2.5 py-1 text-teal-700 dark:bg-teal-900/20 dark:text-teal-300">{module.flashcard_count || 0} flashcard set</span>
-                                                    <span className="rounded-full bg-red-50 px-2.5 py-1 text-red-700 dark:bg-red-900/20 dark:text-red-300">{module.quiz_count || 0} kuis</span>
-                                                </div>
-                                                {!module.is_ready && <p className="mt-1 text-[11px] font-bold text-amber-600">Belum lengkap</p>}
-                                            </td>
-                                            <td className="px-6 py-5"><StatusBadge status={module.status} /></td>
-                                            <td className="px-6 py-5">
-                                                <div className="flex justify-end gap-2">
-                                                    <Link href={route('admin.modules.builder', module.id)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-black text-[#E64A19] transition-colors hover:border-[#E64A19] dark:border-gray-700">
-                                                        Kelola Isi
-                                                    </Link>
-                                                    <button onClick={() => openEditModal(module)} className="rounded-lg border border-gray-200 p-2 text-gray-500 transition-colors hover:border-red-200 hover:text-red-600 dark:border-gray-700">
-                                                        <EditOutlinedIcon sx={{ fontSize: 17 }} />
-                                                    </button>
-                                                    <button onClick={() => handleDelete(module)} className="rounded-lg border border-gray-200 p-2 text-gray-500 transition-colors hover:border-red-200 hover:text-red-600 dark:border-gray-700">
-                                                        <DeleteOutlineIcon sx={{ fontSize: 17 }} />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <div className="space-y-3 p-4 lg:hidden">
-                            {filteredModules.map((module) => (
-                                <div key={module.id} className="rounded-2xl border border-gray-100 p-4 dark:border-gray-800">
-                                    <div className="flex items-start justify-between gap-3">
-                                        <div className="min-w-0">
-                                            <h2 className="truncate text-base font-black text-gray-900 dark:text-white">{module.title}</h2>
-                                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{module.presentation_count || 0} PPT - {module.flashcard_count || 0} flashcard set - {module.quiz_count || 0} kuis</p>
-                                        </div>
-                                        <StatusBadge status={module.status} />
-                                    </div>
-                                    <div className="mt-3 flex flex-wrap gap-2">
-                                        <ProgramBadge program={module.program} />
-                                        <LevelBadge level={module.level} />
-                                    </div>
-                                    <div className="mt-4 flex flex-wrap justify-end gap-2">
-                                        <Link href={route('admin.modules.builder', module.id)} className="rounded-lg bg-[#E64A19] px-3 py-2 text-xs font-black text-white">Kelola Isi</Link>
-                                        <button onClick={() => openEditModal(module)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-black text-gray-600 dark:border-gray-700 dark:text-gray-300">Edit</button>
-                                        <button onClick={() => handleDelete(module)} className="rounded-lg border border-red-100 px-3 py-2 text-xs font-black text-red-600 dark:border-red-900/40">Delete</button>
-                                    </div>
-                                </div>
+                    {!selectedProgramId && (
+                        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                            {programs.map((program) => (
+                                <button key={program.id} type="button" onClick={() => chooseProgram(String(program.id))} className="flex min-h-28 items-start gap-3 rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-sm transition hover:border-orange-300 hover:shadow-md dark:border-gray-800 dark:bg-gray-900">
+                                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600 dark:bg-orange-900/20">
+                                        <MenuBookIcon sx={{ fontSize: 21 }} />
+                                    </span>
+                                    <span className="min-w-0">
+                                        <span className="block font-black text-gray-900 dark:text-white">{program.title}</span>
+                                        <span className="mt-1 block text-sm font-medium text-gray-500 dark:text-gray-400">{program.description || 'Buka workspace roadmap kelas.'}</span>
+                                    </span>
+                                </button>
                             ))}
-                        </div>
+                        </section>
+                    )}
 
-                        {filteredModules.length === 0 && (
-                            <div className="px-6 py-16 text-center text-sm font-bold text-gray-400">Belum ada modul yang cocok.</div>
-                        )}
-                    </section>
+                    {selectedProgramId && (
+                        <section className="space-y-3">
+                            {currentModules.map((module) => {
+                                const moduleOpen = openModuleId === module.id;
 
-                    {modules?.links && modules.links.length > 3 && (
+                                return (
+                                    <article key={module.id} className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                                        <div className="flex items-center gap-3 p-3 sm:p-4">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setOpenModuleId(moduleOpen ? null : module.id);
+                                                    if (!moduleOpen) setOpenDayId(module.days?.[0]?.id || null);
+                                                }}
+                                                aria-expanded={moduleOpen}
+                                                className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                                            >
+                                                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-orange-600 text-xs font-black text-white">
+                                                    M{module.week_number}
+                                                </span>
+                                                <span className="min-w-0 flex-1">
+                                                    <span className="flex flex-wrap items-center gap-2">
+                                                        <span className="text-base font-black text-gray-900 dark:text-white">Minggu {module.week_number}: {module.title}</span>
+                                                        <StatusBadge status={module.status} />
+                                                    </span>
+                                                    <span className="mt-1 block text-xs font-bold text-gray-400">
+                                                        {module.days_count || 0} Hari / {module.flashcard_count || 0} Flashcard / {module.quiz_count || 0} Kuis / {module.presentation_count || 0} Presentasi
+                                                    </span>
+                                                </span>
+                                                <ExpandMoreIcon className={`shrink-0 text-gray-400 transition-transform ${moduleOpen ? 'rotate-180' : ''}`} />
+                                            </button>
+                                            <div className="hidden items-center gap-2 sm:flex">
+                                                <button type="button" onClick={() => openEditModule(module)} title="Edit Minggu" className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-500 dark:border-gray-700 dark:text-gray-300">
+                                                    <EditOutlinedIcon sx={{ fontSize: 17 }} />
+                                                </button>
+                                                <button type="button" onClick={() => deleteModule(module)} title="Hapus Minggu" className="flex h-9 w-9 items-center justify-center rounded-lg border border-red-100 text-red-600 dark:border-red-900/40">
+                                                    <DeleteOutlineIcon sx={{ fontSize: 17 }} />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {moduleOpen && (
+                                            <div className="border-t border-gray-100 bg-gray-50/70 p-3 dark:border-gray-800 dark:bg-gray-950/40 sm:p-4">
+                                                <div className="mb-3 flex items-center justify-between gap-3">
+                                                    <p className="text-xs font-black uppercase tracking-[0.18em] text-gray-400">Susunan Hari</p>
+                                                    <div className="flex gap-2">
+                                                        <button type="button" onClick={() => openEditModule(module)} className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-xs font-black text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 sm:hidden">Edit Minggu</button>
+                                                        <button type="button" onClick={() => deleteModule(module)} title="Hapus Minggu" className="flex h-9 w-9 items-center justify-center rounded-lg border border-red-100 bg-white text-red-600 dark:border-red-900/40 dark:bg-gray-900 sm:hidden">
+                                                            <DeleteOutlineIcon sx={{ fontSize: 16 }} />
+                                                        </button>
+                                                        <button type="button" onClick={() => setDayDialog({ module, day: null })} className="inline-flex h-9 items-center gap-1 rounded-lg bg-gray-900 px-3 text-xs font-black text-white dark:bg-white dark:text-gray-900">
+                                                            <AddIcon sx={{ fontSize: 15 }} />
+                                                            Tambah Hari
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    {(module.days || []).map((day) => {
+                                                        const dayOpen = openDayId === day.id;
+                                                        const resourceCount = Number(day.vocabulary_count || 0)
+                                                            + (day.flashcard_sets?.length || 0)
+                                                            + (day.quizzes?.length || 0)
+                                                            + (day.presentation_decks?.length || 0);
+
+                                                        return (
+                                                            <div key={day.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+                                                                <div className="flex items-center gap-3 p-3">
+                                                                    <button type="button" onClick={() => setOpenDayId(dayOpen ? null : day.id)} aria-expanded={dayOpen} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                                                                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-900 text-xs font-black text-white dark:bg-white dark:text-gray-900">H{day.day_number}</span>
+                                                                     <span className="min-w-0 flex-1">
+                                                                         <span className="flex flex-wrap items-center gap-2">
+                                                                             <span className="truncate text-sm font-black text-gray-900 dark:text-white">{day.title}</span>
+                                                                             <StatusBadge status={day.status} />
+                                                                             {!day.is_ready && (
+                                                                                 <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                                                                                     Belum siap
+                                                                                 </span>
+                                                                             )}
+                                                                         </span>
+                                                                         <span className="mt-0.5 block text-xs font-bold text-gray-400">{resourceCount} resource terkait</span>
+                                                                     </span>
+                                                                        <ExpandMoreIcon className={`shrink-0 text-gray-400 transition-transform ${dayOpen ? 'rotate-180' : ''}`} />
+                                                                    </button>
+                                                                    <button type="button" onClick={() => setDayDialog({ module, day })} title="Edit Hari" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-500 dark:border-gray-700 dark:text-gray-300">
+                                                                        <EditOutlinedIcon sx={{ fontSize: 16 }} />
+                                                                    </button>
+                                                                    <button type="button" onClick={() => deleteDay(module, day)} title="Hapus Hari" className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-red-100 text-red-600 dark:border-red-900/40 sm:flex">
+                                                                        <DeleteOutlineIcon sx={{ fontSize: 16 }} />
+                                                                    </button>
+                                                                </div>
+
+                                                                 {dayOpen && (
+                                                                     <div className="space-y-2 border-t border-gray-100 p-3 dark:border-gray-800">
+                                                                         {day.description && <p className="pb-1 text-sm font-medium text-gray-500 dark:text-gray-400">{day.description}</p>}
+                                                                         {!day.is_ready && (
+                                                                             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/25 dark:text-amber-200">
+                                                                                 Day ini belum dapat diselesaikan siswa. Terbitkan flashcard berisi kartu atau pilih kuis checkpoint berisi soal.
+                                                                             </div>
+                                                                         )}
+                                                                        <button type="button" onClick={() => deleteDay(module, day)} className="mb-1 h-9 w-full rounded-lg border border-red-100 text-xs font-black text-red-600 dark:border-red-900/40 sm:hidden">
+                                                                            Hapus Hari
+                                                                        </button>
+                                                                        <ResourceRow
+                                                                            type="presentation"
+                                                                            label="1. Presentasi"
+                                                                            icon={<SlideshowIcon sx={{ fontSize: 19 }} />}
+                                                                            tone="orange"
+                                                                            module={module}
+                                                                            day={day}
+                                                                            resources={day.presentation_decks || []}
+                                                                            focused={focus === 'presentation'}
+                                                                            onCreate={openResourceCreate}
+                                                                        />
+                                                                        <ResourceRow
+                                                                            type="vocabulary"
+                                                                            label="2. Kosakata"
+                                                                            icon={<LibraryBooksIcon sx={{ fontSize: 19 }} />}
+                                                                            module={module}
+                                                                            day={day}
+                                                                            vocabularyCount={day.vocabulary_count || 0}
+                                                                        />
+                                                                        <ResourceRow
+                                                                            type="flashcard"
+                                                                            label="3. Flashcard"
+                                                                            icon={<StyleIcon sx={{ fontSize: 19 }} />}
+                                                                            tone="teal"
+                                                                            module={module}
+                                                                            day={day}
+                                                                            resources={day.flashcard_sets || []}
+                                                                            focused={focus === 'flashcard'}
+                                                                            onCreate={openResourceCreate}
+                                                                        />
+                                                                        <ResourceRow
+                                                                            type="quiz"
+                                                                            label="4. Kuis"
+                                                                            icon={<QuizOutlinedIcon sx={{ fontSize: 19 }} />}
+                                                                            tone="red"
+                                                                            module={module}
+                                                                            day={day}
+                                                                            resources={day.quizzes || []}
+                                                                            onCreate={openResourceCreate}
+                                                                        />
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+
+                                                    {(module.days || []).length === 0 && (
+                                                        <button type="button" onClick={() => setDayDialog({ module, day: null })} className="w-full rounded-xl border border-dashed border-gray-300 bg-white px-5 py-8 text-center dark:border-gray-700 dark:bg-gray-900">
+                                                            <span className="block text-sm font-black text-gray-700 dark:text-gray-200">Minggu ini belum memiliki Hari</span>
+                                                            <span className="mt-1 block text-xs font-bold text-orange-600">Tambah Hari pertama</span>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </article>
+                                );
+                            })}
+
+                            {currentModules.length === 0 && (
+                                <button type="button" onClick={openCreateModule} className="w-full rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-12 text-center dark:border-gray-700 dark:bg-gray-900">
+                                    <MenuBookIcon sx={{ fontSize: 38 }} className="text-gray-300" />
+                                    <span className="mt-3 block text-base font-black text-gray-800 dark:text-gray-100">Kelas ini belum memiliki Minggu</span>
+                                    <span className="mt-1 block text-sm font-bold text-orange-600">Tambah Minggu pertama</span>
+                                </button>
+                            )}
+                        </section>
+                    )}
+
+                    {selectedProgramId && modules?.links && modules.links.length > 3 && (
                         <div className="flex flex-wrap justify-center gap-2">
                             {modules.links.map((link, index) => (
                                 <Link
                                     key={`${link.label}-${index}`}
                                     href={link.url || '#'}
                                     dangerouslySetInnerHTML={{ __html: link.label }}
-                                    className={`rounded-xl px-4 py-2 text-sm font-bold transition-all ${link.active ? 'bg-[#E64A19] text-white shadow-md' : 'border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400'} ${!link.url ? 'pointer-events-none opacity-50' : ''}`}
+                                    className={`rounded-xl px-4 py-2 text-sm font-bold ${link.active ? 'bg-orange-600 text-white' : 'border border-gray-200 bg-white text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400'} ${!link.url ? 'pointer-events-none opacity-50' : ''}`}
                                 />
                             ))}
                         </div>
@@ -290,65 +548,74 @@ export default function ModulesIndex({ modules, levels = [], programs = [], filt
                 </main>
             </div>
 
-            {showModuleModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                    <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl dark:bg-gray-900">
-                        <div className="border-b border-gray-100 p-6 dark:border-gray-800">
-                            <h3 className="text-lg font-black text-gray-900 dark:text-white">{editingModule ? 'Edit Modul' : 'Tambah Modul Baru'}</h3>
+            {showModuleDialog && (
+                <div className="fixed inset-0 z-[90] overflow-y-auto bg-gray-950/60 p-3 backdrop-blur-sm sm:p-5">
+                    <div className="mx-auto my-4 w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-gray-900 sm:my-8">
+                        <div className="border-b border-gray-100 p-5 dark:border-gray-800">
+                            <p className="text-[11px] font-black uppercase tracking-[0.22em] text-orange-600">{selectedProgram?.title || 'Kelas'}</p>
+                            <h2 className="mt-1 text-xl font-black text-gray-900 dark:text-white">{editingModule ? 'Edit Minggu' : 'Tambah Minggu'}</h2>
                         </div>
-                        <form onSubmit={handleSubmit} className="space-y-4 p-6">
-                            <div>
-                                <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Program Pembelajaran</label>
-                                <select value={data.program_pembelajaran_id} onChange={(e) => handleProgramChange(e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white" required>
-                                    <option value="">Pilih Program</option>
-                                    {programs.map((program) => <option key={program.id} value={program.id}>{program.title}</option>)}
-                                </select>
+                        <form onSubmit={submitModule} className="space-y-4 p-5">
+                            <div className="grid gap-4 sm:grid-cols-[140px_minmax(0,1fr)]">
+                                <label>
+                                    <span className="mb-1.5 block text-xs font-black uppercase tracking-wider text-gray-400">Urutan</span>
+                                    <input type="number" min="1" value={moduleForm.data.week_number} onChange={(event) => moduleForm.setData('week_number', event.target.value)} className={inputClass} required />
+                                </label>
+                                <label>
+                                    <span className="mb-1.5 block text-xs font-black uppercase tracking-wider text-gray-400">Judul Minggu</span>
+                                    <input value={moduleForm.data.title} onChange={(event) => moduleForm.setData('title', event.target.value)} className={inputClass} placeholder="Contoh: Dasar Percakapan N3" required />
+                                </label>
                             </div>
-                            <div>
-                                <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Level JLPT</label>
-                                <select value={data.level_id} onChange={(e) => setData('level_id', e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white" required>
-                                    <option value="">Pilih Level</option>
-                                    {levels.map((level) => <option key={level.id} value={level.id}>{level.level_name}</option>)}
-                                </select>
+                            <label className="block">
+                                <span className="mb-1.5 block text-xs font-black uppercase tracking-wider text-gray-400">Deskripsi</span>
+                                <textarea value={moduleForm.data.description} onChange={(event) => moduleForm.setData('description', event.target.value)} className={`${inputClass} min-h-24`} />
+                            </label>
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <label>
+                                    <span className="mb-1.5 block text-xs font-black uppercase tracking-wider text-gray-400">Level</span>
+                                    <select value={moduleForm.data.level_id} onChange={(event) => moduleForm.setData('level_id', event.target.value)} className={inputClass} required>
+                                        <option value="">Pilih level</option>
+                                        {levels.map((level) => <option key={level.id} value={level.id}>{level.level_name}</option>)}
+                                    </select>
+                                </label>
+                                <label>
+                                    <span className="mb-1.5 block text-xs font-black uppercase tracking-wider text-gray-400">Status</span>
+                                    <select value={moduleForm.data.status} onChange={(event) => moduleForm.setData('status', event.target.value)} className={inputClass}>
+                                        <option value="draft">Draft</option>
+                                        <option value="published">Published</option>
+                                    </select>
+                                </label>
                             </div>
-                            <div>
-                                <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Judul Modul</label>
-                                <input type="text" value={data.title} onChange={(e) => setData('title', e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white" required />
-                            </div>
-                            <div>
-                                <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Nomor Minggu</label>
-                                <input type="number" min="1" value={data.week_number} onChange={(e) => setData('week_number', e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white" required />
-                            </div>
-                            <div>
-                                <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Status Publish</label>
-                                <select value={data.status} onChange={(e) => setData('status', e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white">
-                                    <option value="published">Published</option>
-                                    <option value="draft">Draft</option>
-                                </select>
-                            </div>
-                            <div className="flex gap-3 pt-2">
-                                <button type="button" onClick={() => setShowModuleModal(false)} className="h-11 flex-1 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 dark:border-gray-700 dark:text-gray-400">Batal</button>
-                                <button type="submit" disabled={processing} className="h-11 flex-1 rounded-xl bg-[#E64A19] text-sm font-bold text-white">{processing ? 'Menyimpan...' : 'Simpan'}</button>
+                            {Object.values(moduleForm.errors).length > 0 && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{Object.values(moduleForm.errors)[0]}</p>}
+                            <div className="grid grid-cols-2 gap-3">
+                                <button type="button" onClick={() => setShowModuleDialog(false)} className="h-11 rounded-xl border border-gray-200 text-sm font-black text-gray-600 dark:border-gray-700 dark:text-gray-300">Batal</button>
+                                <button disabled={moduleForm.processing} className="h-11 rounded-xl bg-orange-600 text-sm font-black text-white disabled:opacity-50">{moduleForm.processing ? 'Menyimpan...' : 'Simpan Minggu'}</button>
                             </div>
                         </form>
                     </div>
                 </div>
             )}
 
-            <ConfirmActionDialog
-                show={Boolean(deleteConfirm)}
-                variant="danger"
-                title="Hapus Modul?"
-                message="Modul mingguan ini akan dihapus dari roadmap kelas."
-                details={[
-                    { label: 'Modul', value: deleteConfirm?.title },
-                    { label: 'Minggu', value: deleteConfirm?.week_number ? `Minggu ${deleteConfirm.week_number}` : '-' },
-                    { label: 'Status', value: deleteConfirm?.status || '-' },
-                ]}
-                confirmLabel="Hapus"
-                onConfirm={confirmDelete}
-                onCancel={() => setDeleteConfirm(null)}
+            <ModuleDayDialog
+                open={Boolean(dayDialog)}
+                onClose={() => setDayDialog(null)}
+                module={dayDialog?.module}
+                day={dayDialog?.day}
+                nextDayNumber={dayDialog?.module?.days?.length
+                    ? Math.max(...dayDialog.module.days.map((day) => Number(day.day_number))) + 1
+                    : 1}
             />
+
+            <LearningResourceCreateDialog
+                open={Boolean(resourceDialog)}
+                onClose={() => setResourceDialog(null)}
+                resourceType={resourceDialog?.type}
+                module={resourceDialog?.module}
+                day={resourceDialog?.day}
+                levels={levels}
+                lockContext
+            />
+
             <ConfirmActionDialog {...confirmState} onCancel={closeConfirm} />
         </AuthenticatedLayout>
     );

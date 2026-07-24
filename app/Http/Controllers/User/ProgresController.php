@@ -4,15 +4,15 @@ namespace App\Http\Controllers\User;
 
 use App\Events\KuisSelesai;
 use App\Http\Controllers\Controller;
-use App\Models\PengerjaanKuis;
-use App\Models\Progres;
 use App\Models\Kuis;
 use App\Models\LogReward;
 use App\Models\Modul;
-use App\Services\AksesPremiumService;
+use App\Models\PengerjaanKuis;
+use App\Models\Progres;
 use App\Services\AksesKuisPenggunaService;
+use App\Services\AksesPremiumService;
 use App\Services\GamifikasiConfigService;
-use App\Services\NotifikasiPenggunaService;
+use App\Services\ProgresRoadmapService;
 use App\Services\RepetisiPembelajaranService;
 use App\Services\RingkasanProgresPenggunaService;
 use Illuminate\Http\Request;
@@ -32,7 +32,8 @@ class ProgresController extends Controller
         AksesKuisPenggunaService $aksesKuis,
         RepetisiPembelajaranService $repetisi,
         GamifikasiConfigService $gamifikasiConfig,
-        RingkasanProgresPenggunaService $summary
+        RingkasanProgresPenggunaService $summary,
+        ProgresRoadmapService $roadmapProgress
     ) {
         $validated = $request->validate([
             'quiz_id' => ['required', 'exists:quizzes,id'],
@@ -64,6 +65,8 @@ class ProgresController extends Controller
         $maxLives = 5;
         $passed = false;
         $wasCompleted = false;
+        $completedModule = false;
+        $completedDay = false;
         $rewardAlreadyGranted = LogReward::where('user_id', $user->id)
             ->where('source_type', 'quiz')
             ->where('source_id', $quiz->id)
@@ -141,22 +144,27 @@ class ProgresController extends Controller
                 && $answeredUniqueCount >= $quiz->questions->count()
                 && ! ($validated['finished_by_timeout'] ?? false);
 
-            $progress = Progres::firstOrNew([
-                'user_id' => $user->id,
-                'module_id' => $module->id,
-            ]);
-            $wasCompleted = (bool) $progress->completed_at;
-
-            $progress->score = max((int) ($progress->score ?? 0), (int) $attempt->score);
-
             if ($passed) {
-                $progress->completed_at = $progress->completed_at ?: now();
+                if ($quiz->module_day_id) {
+                    $result = $roadmapProgress->selesaikanDariKuis($user, $quiz, (int) $attempt->score);
+                    $completedDay = $result['day_completed'];
+                    $completedModule = $result['module_completed'];
+                    $wasCompleted = $result['was_module_completed'];
+                } else {
+                    $progress = Progres::firstOrNew([
+                        'user_id' => $user->id,
+                        'module_id' => $module->id,
+                    ]);
+                    $wasCompleted = (bool) $progress->completed_at;
+                    $progress->score = max((int) ($progress->score ?? 0), (int) $attempt->score);
+                    $progress->completed_at = $progress->completed_at ?: now();
+                    $progress->save();
+                    $completedModule = true;
+                }
             }
 
-            $progress->save();
-
-            if ($passed && ! $wasCompleted) {
-                $this->notifyWeekUnlocked($user, $module, $attempt->score);
+            if ($completedModule && ! $wasCompleted && ! $quiz->module_day_id) {
+                $roadmapProgress->notifyWeekUnlocked($user, $module, $attempt->score);
             }
         }
 
@@ -173,7 +181,8 @@ class ProgresController extends Controller
                 'score' => $attempt->score,
                 'xp_earned' => $rewardAlreadyGranted ? 0 : $attempt->xp_earned,
                 'passed' => $passed,
-                'completed_module' => $passed,
+                'completed_day' => $completedDay,
+                'completed_module' => $completedModule,
                 'was_completed' => $wasCompleted,
                 'answered_count' => $answeredUniqueCount,
                 'total_questions' => $quiz->questions->count(),
@@ -182,7 +191,11 @@ class ProgresController extends Controller
                 'finished_by_timeout' => (bool) ($validated['finished_by_timeout'] ?? false),
                 'next_url' => $finishUrl,
                 'message' => $passed
-                    ? 'Kuis lulus. Progress modul berhasil diperbarui.'
+                    ? ($completedModule
+                        ? 'Kuis lulus. Week selesai dan roadmap berikutnya terbuka.'
+                        : ($completedDay
+                            ? 'Kuis lulus. Day berikutnya sudah terbuka.'
+                            : 'Kuis lulus. Kuis ini bukan checkpoint Day.'))
                     : 'Kuis tersimpan. Ulangi sampai skor dan mastery cukup.',
             ]);
         }
@@ -194,8 +207,7 @@ class ProgresController extends Controller
         Request $request,
         AksesPremiumService $aksesPremium,
         RingkasanProgresPenggunaService $summary
-    )
-    {
+    ) {
         $validated = $request->validate([
             'module_id' => ['required', 'exists:modules,id'],
             'score' => ['nullable', 'integer'],
@@ -205,6 +217,11 @@ class ProgresController extends Controller
         $module = Modul::where('status', 'published')->findOrFail($validated['module_id']);
 
         abort_unless($aksesPremium->bolehAksesModul($user, $module), 403);
+        abort_if(
+            $module->days()->where('status', 'published')->exists(),
+            422,
+            'Modul ini diselesaikan melalui urutan Day.'
+        );
         abort_if(
             $module->quizzes()->where('status', 'published')->whereHas('questions')->exists(),
             422,
@@ -232,43 +249,6 @@ class ProgresController extends Controller
                 $questionMap->get((int) $answer['question_id'])->correct_answer
             ))
             ->count();
-    }
-
-    private function notifyWeekUnlocked($user, Modul $module, int $score): void
-    {
-        $program = $module->programPembelajaran;
-        $nextModule = Modul::query()
-            ->where('status', 'published')
-            ->when($program, fn ($query) => $query->where('program_pembelajaran_id', $program->id))
-            ->where('week_number', '>', (int) ($module->week_number ?? 0))
-            ->orderBy('week_number')
-            ->first();
-
-        $targetModule = $nextModule ?: $module;
-        $url = $program
-            ? route('user.modul.program', $program->slug)
-            : route('user.kelas.index');
-        $title = $nextModule ? 'Minggu berikutnya terbuka' : 'Modul selesai';
-        $message = $nextModule
-            ? "Kamu lulus Week {$module->week_number} dengan skor {$score}. Week {$nextModule->week_number} sudah bisa dilanjutkan."
-            : "Kamu lulus {$module->title} dengan skor {$score}.";
-
-        app(NotifikasiPenggunaService::class)->kirimKePengguna(
-            $user,
-            $nextModule ? 'week_unlocked' : 'module_completed',
-            $title,
-            $message,
-            $url,
-            [
-                'module_id' => $targetModule->id,
-                'completed_module_id' => $module->id,
-                'score' => $score,
-                'dedupe_key' => 'module_completed:' . $module->id,
-            ],
-            'progress',
-            'success',
-            false
-        );
     }
 
     private function xpForScore(int $score, int $total): int

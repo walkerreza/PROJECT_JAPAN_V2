@@ -267,28 +267,8 @@ export default function AuthenticatedLayout({ children }) {
     const adminMenu = [
         { href: '/admin/dashboard', icon: <DashboardIcon sx={{ fontSize: 24 }} />, label: 'Beranda' },
         { href: '/admin/users', icon: <PeopleIcon sx={{ fontSize: 24 }} />, label: 'Kloter & Siswa' },
-        {
-            type: 'group',
-            key: 'learning-structure',
-            label: 'Kelas & Modul',
-            icon: <SchoolIcon sx={{ fontSize: 24 }} />,
-            items: [
-                { href: '/admin/programs', icon: <SchoolIcon sx={{ fontSize: 18 }} />, label: 'Kelas' },
-                { href: '/admin/modules', icon: <LayersIcon sx={{ fontSize: 18 }} />, label: 'Modul Mingguan' },
-            ],
-        },
-        {
-            type: 'group',
-            key: 'learning-content',
-            label: 'Konten Belajar',
-            icon: <MenuBookIcon sx={{ fontSize: 24 }} />,
-            items: [
-                { href: '/admin/presentations', icon: <SlideshowIcon sx={{ fontSize: 18 }} />, label: 'Presentasi / PPT' },
-                { href: '/admin/vocabulary', icon: <LibraryBooksIcon sx={{ fontSize: 18 }} />, label: 'Bank Konten N3' },
-                { href: '/admin/flashcards', icon: <StyleIcon sx={{ fontSize: 18 }} />, label: 'Flashcard' },
-                { href: '/admin/quizzes', icon: <QuizIcon sx={{ fontSize: 18 }} />, label: 'Bank Kuis' },
-            ],
-        },
+        { href: '/admin/programs', icon: <SchoolIcon sx={{ fontSize: 24 }} />, label: 'Kelas' },
+        { href: '/admin/vocabulary', icon: <LibraryBooksIcon sx={{ fontSize: 24 }} />, label: 'Bank Konten N3' },
         { href: '/admin/gamification', icon: <EmojiEventsIcon sx={{ fontSize: 24 }} />, label: 'Gamifikasi & Pencapaian' },
     ];
     

@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Admin;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class KuisRequest extends FormRequest
 {
@@ -11,7 +12,7 @@ class KuisRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return true; 
+        return true;
     }
 
     /**
@@ -20,11 +21,17 @@ class KuisRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'module_id'  => 'required|exists:modules,id',
-            'type'       => 'required|in:multiple_choice,fill_blank,listening',
+            'module_id' => 'required|exists:modules,id',
+            'module_day_id' => [
+                'required',
+                'integer',
+                Rule::exists('module_days', 'id')
+                    ->where('module_id', $this->integer('module_id')),
+            ],
+            'type' => 'required|in:multiple_choice,fill_blank,listening',
             'time_limit' => 'nullable|integer|min:0',
             'passing_score' => 'nullable|integer|min:1|max:100',
-            'status'     => 'nullable|in:draft,published',
+            'status' => 'nullable|in:draft,published',
         ];
     }
 
@@ -35,11 +42,13 @@ class KuisRequest extends FormRequest
     {
         return [
             'module_id.required' => 'Modul mingguan wajib dipilih.',
-            'module_id.exists'   => 'Modul mingguan yang dipilih tidak valid di sistem.',
-            'type.required'      => 'Tipe kuis wajib ditentukan.',
-            'type.in'            => 'Tipe kuis hanya boleh: Pilihan Ganda, Mengetik/Isian, atau Mendengarkan.',
+            'module_id.exists' => 'Modul mingguan yang dipilih tidak valid di sistem.',
+            'module_day_id.required' => 'Day wajib dipilih.',
+            'module_day_id.exists' => 'Day tidak sesuai dengan modul mingguan yang dipilih.',
+            'type.required' => 'Tipe kuis wajib ditentukan.',
+            'type.in' => 'Tipe kuis hanya boleh: Pilihan Ganda, Mengetik/Isian, atau Mendengarkan.',
             'time_limit.integer' => 'Batas waktu harus berupa angka bulat (dalam satuan detik).',
-            'time_limit.min'     => 'Batas waktu minimal adalah 0 (tanpa batas).',
+            'time_limit.min' => 'Batas waktu minimal adalah 0 (tanpa batas).',
             'passing_score.integer' => 'Nilai lulus harus berupa angka.',
             'passing_score.min' => 'Nilai lulus minimal 1.',
             'passing_score.max' => 'Nilai lulus maksimal 100.',

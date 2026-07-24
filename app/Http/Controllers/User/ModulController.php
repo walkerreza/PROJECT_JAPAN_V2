@@ -5,11 +5,13 @@ namespace App\Http\Controllers\User;
 use App\Http\Controllers\Controller;
 use App\Models\DeckPresentasi;
 use App\Models\Flashcard;
+use App\Models\HariModul;
 use App\Models\Kosakata;
 use App\Models\Kuis;
 use App\Models\Modul;
 use App\Models\PengerjaanKuis;
 use App\Models\ProgramPembelajaran;
+use App\Models\ProgresHariModul;
 use App\Models\ReviewFlashcard;
 use App\Models\SetFlashcard;
 use App\Models\Soal;
@@ -17,20 +19,63 @@ use App\Services\AksesKuisPenggunaService;
 use App\Services\AksesPremiumService;
 use App\Services\KloterBelajarService;
 use App\Services\PembelajaranPenggunaService;
+use App\Services\ProgresRoadmapService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class ModulController extends Controller
 {
-    public function program(ProgramPembelajaran $program, AksesPremiumService $aksesPremium, KloterBelajarService $kloterService)
-    {
+    public function program(
+        ProgramPembelajaran $program,
+        AksesPremiumService $aksesPremium,
+        KloterBelajarService $kloterService,
+        AksesKuisPenggunaService $aksesKuis
+    ) {
         $user = Auth::user();
 
         abort_unless($program->status === 'published', 404);
 
         $moduls = $program->modules()
-            ->with(['level'])
+            ->with([
+                'level',
+                'days' => fn ($query) => $query
+                    ->where('status', 'published')
+                    ->with([
+                        'checkpointQuiz.questions',
+                        'flashcardSets' => fn ($query) => $query
+                            ->where('status', 'published')
+                            ->withCount('flashcards')
+                            ->with([
+                                'flashcards' => fn ($cardQuery) => $cardQuery
+                                    ->select(['id', 'flashcard_set_id'])
+                                    ->with(['reviews' => fn ($reviewQuery) => $reviewQuery
+                                        ->where('user_id', $user->id)
+                                        ->select(['id', 'flashcard_id', 'user_id'])]),
+                            ]),
+                        'quizzes' => fn ($query) => $query->where('status', 'published')->withCount('questions'),
+                        'presentationDecks' => fn ($query) => $query
+                            ->where('status', 'published')
+                            ->withCount('slides')
+                            ->with(['slides' => fn ($slideQuery) => $slideQuery
+                                ->select([
+                                    'id',
+                                    'presentation_deck_id',
+                                    'title',
+                                    'layout',
+                                    'content',
+                                    'media_url',
+                                    'background',
+                                    'snapshot_url',
+                                    'order',
+                                ])
+                                ->orderBy('order')
+                                ->limit(1)]),
+                        'vocabulary' => fn ($query) => $query->where('status', 'published'),
+                    ])
+                    ->orderBy('day_number'),
+            ])
             ->where('status', 'published')
             ->orderBy('week_number')
             ->orderBy('id')
@@ -40,7 +85,7 @@ class ModulController extends Controller
 
         $completedModulIds = collect();
 
-        $weeks = $moduls->values()->map(function (Modul $modul, int $index) use (&$completedModulIds, $user, $aksesPremium, $moduls, $program, $kloterAktif, $mingguAktifKloter) {
+        $weeks = $moduls->values()->map(function (Modul $modul, int $index) use (&$completedModulIds, $user, $aksesPremium, $moduls, $program, $kloterAktif, $mingguAktifKloter, $aksesKuis) {
             $flashcardSet = $this->firstFlashcardSetFor($modul);
             $quiz = $this->firstQuizFor($modul);
             $flashcardStats = $this->flashcardStats($user->id, $flashcardSet);
@@ -59,7 +104,10 @@ class ModulController extends Controller
             $flashcardDone = ! $hasFlashcard || $flashcardStats['reviewed'] >= $flashcardStats['total'];
             $quizDone = ! $hasQuiz || $quizStats['done'];
             $quizUnlocked = (bool) $hasQuiz;
-            $isDone = $hasQuiz ? $quizDone : ($hasFlashcard && $flashcardDone);
+            $isDone = $user->progress()
+                ->where('module_id', $modul->id)
+                ->whereNotNull('completed_at')
+                ->exists();
             $isSubscriptionLocked = ! $aksesPremium->bolehAksesModul($user, $modul);
             $isKloterLocked = $kloterAktif && $mingguAktifKloter !== null && (int) $modul->week_number > $mingguAktifKloter;
             $hasContent = $hasFlashcard || $hasQuiz || $hasPresentation || $hasVocabulary;
@@ -87,9 +135,130 @@ class ModulController extends Controller
                 $status = $isSubscriptionLocked ? 'locked' : 'active';
             }
 
+            $weekCanOpen = in_array($status, ['active', 'done'], true) && ! $isKloterLocked && ! $isSubscriptionLocked;
+            $completedDayIds = ProgresHariModul::query()
+                ->where('user_id', $user->id)
+                ->whereIn('module_day_id', $modul->days->pluck('id'))
+                ->whereNotNull('completed_at')
+                ->pluck('module_day_id');
+            $days = $modul->days->values()->map(function (HariModul $day, int $dayIndex) use ($program, $modul, $weekCanOpen, $completedDayIds, $aksesKuis, $user) {
+                $flashcardSet = $day->flashcardSets->first(fn ($set) => $set->flashcards_count > 0);
+                $checkpointQuiz = $day->checkpointQuiz?->status === 'published' && $day->checkpointQuiz?->questions?->isNotEmpty()
+                    ? $day->checkpointQuiz
+                    : null;
+                $quizAccess = $checkpointQuiz
+                    ? $aksesKuis->status($user, $checkpointQuiz)
+                    : ['allowed' => false, 'message' => 'Kuis checkpoint belum tersedia.'];
+                $dayDone = $completedDayIds->contains($day->id);
+                $previousDayDone = $dayIndex === 0 || $completedDayIds->contains($modul->days[$dayIndex - 1]?->id);
+                $dayStatus = $dayDone ? 'done' : ($weekCanOpen && $previousDayDone ? 'active' : 'locked');
+                $presentationCount = $day->presentationDecks->sum('slides_count');
+                $flashcardCount = $day->flashcardSets->sum('flashcards_count');
+                $flashcardReviewed = $day->flashcardSets
+                    ->flatMap->flashcards
+                    ->filter(fn ($card) => $card->reviews->isNotEmpty())
+                    ->count();
+                $questionCount = $day->quizzes->sum('questions_count');
+                $hasContent = $presentationCount > 0 || $flashcardCount > 0 || $questionCount > 0 || $day->vocabulary->isNotEmpty();
+                $completionMethod = $checkpointQuiz ? 'checkpoint' : ($flashcardCount > 0 ? 'flashcard' : null);
+                $isReady = $hasContent && $completionMethod;
+                $presentationPreviews = $day->presentationDecks
+                    ->take(3)
+                    ->map(function (DeckPresentasi $deck) {
+                        $cover = $deck->slides->first();
+
+                        return [
+                            'id' => $deck->id,
+                            'title' => $deck->title,
+                            'description' => Str::limit(strip_tags((string) $deck->description), 120),
+                            'slides_count' => $deck->slides_count,
+                            'cover' => $cover ? [
+                                'title' => $cover->title,
+                                'layout' => $cover->layout,
+                                'content_excerpt' => Str::limit(strip_tags((string) $cover->content), 100),
+                                'media_url' => $cover->media_url,
+                                'snapshot_url' => $cover->snapshot_url,
+                                'background' => $cover->background,
+                            ] : null,
+                        ];
+                    })
+                    ->values();
+                $vocabularyPreview = $day->vocabulary
+                    ->take(3)
+                    ->map(fn (Kosakata $item) => [
+                        'id' => $item->id,
+                        'type' => $item->content_type,
+                        'word' => $item->word,
+                        'reading' => $item->reading,
+                        'meaning' => $item->meaning_id,
+                    ])
+                    ->values();
+
+                return [
+                    'id' => $day->id,
+                    'day_number' => $day->day_number,
+                    'title' => $day->title,
+                    'description' => $day->description,
+                    'status' => $isReady ? $dayStatus : 'unavailable',
+                    'lock_reason' => ! $hasContent
+                        ? 'Konten Hari ini belum tersedia.'
+                        : (! $completionMethod
+                            ? 'Hari belum memiliki flashcard atau kuis checkpoint.'
+                            : ($weekCanOpen ? 'Selesaikan Hari sebelumnya.' : 'Minggu ini belum terbuka.')),
+                    'has_content' => $hasContent,
+                    'completion_method' => $completionMethod,
+                    'checkpoint_quiz_id' => $checkpointQuiz?->id,
+                    'presentations_count' => $presentationCount,
+                    'presentation_previews' => $presentationPreviews,
+                    'vocabulary_count' => $day->vocabulary->count(),
+                    'vocabulary_preview' => $vocabularyPreview,
+                    'flashcard_total' => $flashcardCount,
+                    'flashcard_reviewed' => $flashcardReviewed,
+                    'flashcard_summary' => [
+                        'sets' => $day->flashcardSets->map(fn (SetFlashcard $set) => [
+                            'id' => $set->id,
+                            'title' => $set->title,
+                            'cards_count' => $set->flashcards_count,
+                            'reviewed_count' => $set->flashcards
+                                ->filter(fn ($card) => $card->reviews->isNotEmpty())
+                                ->count(),
+                            'url' => route('user.flashcards.show', $set->id),
+                        ])->values(),
+                        'total' => $flashcardCount,
+                        'reviewed' => $flashcardReviewed,
+                    ],
+                    'questions_count' => $questionCount,
+                    'checkpoint_summary' => $checkpointQuiz ? [
+                        'id' => $checkpointQuiz->id,
+                        'questions_count' => $checkpointQuiz->questions->count(),
+                        'passing_score' => (int) ($checkpointQuiz->passing_score ?? 70),
+                        'time_limit' => (int) ($checkpointQuiz->time_limit ?? 0),
+                        'best_score' => PengerjaanKuis::query()
+                            ->where('user_id', $user->id)
+                            ->where('quiz_id', $checkpointQuiz->id)
+                            ->max('score'),
+                        'locked' => ! $quizAccess['allowed'],
+                        'lock_reason' => $quizAccess['allowed'] ? null : $quizAccess['message'],
+                    ] : null,
+                    'presentation_url' => $presentationCount > 0
+                        ? route('user.modul.program.presentasi', ['program' => $program->slug, 'module' => $modul->id, 'day' => $day->id])
+                        : null,
+                    'vocabulary_url' => $day->vocabulary->isNotEmpty()
+                        ? route('user.modul.program.kosakata', ['program' => $program->slug, 'module' => $modul->id, 'day' => $day->id])
+                        : null,
+                    'flashcard_url' => $flashcardSet ? route('user.flashcards.show', $flashcardSet->id) : null,
+                    'quiz_url' => $checkpointQuiz && $quizAccess['allowed'] ? route('user.quizzes.show', $checkpointQuiz->id) : null,
+                    'quiz_locked_reason' => $checkpointQuiz && ! $quizAccess['allowed'] ? $quizAccess['message'] : null,
+                    'primary_url' => $flashcardSet
+                        ? route('user.flashcards.show', $flashcardSet->id)
+                        : ($checkpointQuiz && $quizAccess['allowed'] ? route('user.quizzes.show', $checkpointQuiz->id) : null),
+                ];
+            });
+
             return [
                 'id' => $modul->id,
                 'title' => 'Week '.($modul->week_number ?? ($index + 1)).' - '.$modul->title,
+                'display_title' => $modul->title,
                 'week_number' => $modul->week_number ?? ($index + 1),
                 'subtitle' => $modul->description ?? 'Flashcard dan kuis mingguan.',
                 'status' => $status,
@@ -122,6 +291,7 @@ class ModulController extends Controller
                 'best_score' => $quizStats['best_score'],
                 'kloter_locked' => (bool) $isKloterLocked,
                 'isFinal' => $index === $moduls->count() - 1,
+                'days' => $days,
             ];
         });
 
@@ -168,8 +338,12 @@ class ModulController extends Controller
         ]);
     }
 
-    public function kosakata(ProgramPembelajaran $program, Request $request, AksesPremiumService $aksesPremium)
-    {
+    public function kosakata(
+        ProgramPembelajaran $program,
+        Request $request,
+        AksesPremiumService $aksesPremium,
+        ProgresRoadmapService $progresRoadmap
+    ) {
         $user = Auth::user();
 
         abort_unless($program->status === 'published', 404);
@@ -178,6 +352,11 @@ class ModulController extends Controller
         $selectedModuleId = $this->selectedAccessibleModuleId($request, $moduleIds);
         $queryModuleIds = $selectedModuleId ? collect([$selectedModuleId]) : $moduleIds;
         $query = $this->vocabularyQueryForModules($queryModuleIds);
+        $selectedDayId = $this->selectedAccessibleDayId($request, $queryModuleIds, $user, $progresRoadmap);
+
+        if ($selectedDayId) {
+            $query->whereHas('days', fn ($dayQuery) => $dayQuery->whereKey($selectedDayId));
+        }
 
         if ($request->filled('search')) {
             $search = $request->string('search')->toString();
@@ -222,6 +401,7 @@ class ModulController extends Controller
                 ->orderBy('week_number')
                 ->get(['id', 'title', 'week_number']),
             'selected_module_id' => $selectedModuleId,
+            'selected_day_id' => $selectedDayId,
             'vocabulary' => $query
                 ->orderBy('jlpt_level')
                 ->orderBy('word')
@@ -232,8 +412,12 @@ class ModulController extends Controller
         ]);
     }
 
-    public function presentasi(ProgramPembelajaran $program, Request $request, AksesPremiumService $aksesPremium)
-    {
+    public function presentasi(
+        ProgramPembelajaran $program,
+        Request $request,
+        AksesPremiumService $aksesPremium,
+        ProgresRoadmapService $progresRoadmap
+    ) {
         $user = Auth::user();
 
         abort_unless($program->status === 'published', 404);
@@ -241,10 +425,12 @@ class ModulController extends Controller
         $moduleIds = $this->accessibleModuleIdsForProgram($program, $user, $aksesPremium);
         $selectedModuleId = $this->selectedAccessibleModuleId($request, $moduleIds);
         $queryModuleIds = $selectedModuleId ? collect([$selectedModuleId]) : $moduleIds;
+        $selectedDayId = $this->selectedAccessibleDayId($request, $queryModuleIds, $user, $progresRoadmap);
 
         $decks = DeckPresentasi::with(['module:id,title,week_number', 'slides'])
             ->withCount('slides')
             ->whereIn('module_id', $queryModuleIds)
+            ->when($selectedDayId, fn ($query) => $query->where('module_day_id', $selectedDayId))
             ->where('status', 'published')
             ->orderBy('module_id')
             ->orderBy('id')
@@ -298,6 +484,7 @@ class ModulController extends Controller
                 ->orderBy('week_number')
                 ->get(['id', 'title', 'week_number']),
             'selected_module_id' => $selectedModuleId,
+            'selected_day_id' => $selectedDayId,
             'decks' => $decks,
         ]);
     }
@@ -466,6 +653,28 @@ class ModulController extends Controller
             ->pluck('id');
     }
 
+    private function selectedAccessibleDayId(
+        Request $request,
+        $moduleIds,
+        $user,
+        ProgresRoadmapService $progresRoadmap
+    ): ?int {
+        if (! $request->filled('day')) {
+            return null;
+        }
+
+        $day = HariModul::query()
+            ->whereKey($request->integer('day'))
+            ->where('status', 'published')
+            ->whereIn('module_id', $moduleIds)
+            ->firstOrFail();
+
+        $access = $progresRoadmap->statusAksesHari($user, $day);
+        abort_unless($access['allowed'], 403, $access['message']);
+
+        return $day->id;
+    }
+
     private function selectedAccessibleModuleId(Request $request, $moduleIds): ?int
     {
         if (! $request->filled('module')) {
@@ -484,6 +693,7 @@ class ModulController extends Controller
             ->where('status', 'published')
             ->where(function ($query) use ($moduleIds) {
                 $query->whereIn('module_id', $moduleIds)
+                    ->orWhereHas('days', fn ($dayQuery) => $dayQuery->whereIn('module_id', $moduleIds))
                     ->orWhereHas('flashcards.set', fn ($query) => $query
                         ->whereIn('module_id', $moduleIds)
                         ->where('status', 'published'));

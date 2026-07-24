@@ -1,7 +1,16 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Card from '@/Components/UI/Card';
+import AddIcon from '@mui/icons-material/Add';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import CloseIcon from '@mui/icons-material/Close';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined';
+import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
+import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 
 const emptyCard = {
     id: null,
@@ -28,6 +37,14 @@ const fromVocabulary = (item) => ({
 });
 
 export default function BuilderFlashcard({ set, vocabulary = {}, filters = {}, quizzes = [] }) {
+    const builderReturnUrl = set.module?.program_pembelajaran_id
+        ? route('admin.modules.index', {
+            program_id: set.module.program_pembelajaran_id,
+            week_id: set.module.id,
+            day_id: set.day?.id,
+            focus: 'flashcard',
+        })
+        : route('admin.flashcards.index');
     const rows = vocabulary.data || [];
     const importInputRef = useRef(null);
     const [cards, setCards] = useState(set.flashcards || []);
@@ -35,8 +52,17 @@ export default function BuilderFlashcard({ set, vocabulary = {}, filters = {}, q
     const [status, setStatus] = useState(filters.status || 'all');
     const [contentType, setContentType] = useState(filters.content_type || 'all');
     const [setRecordStatus, setSetRecordStatus] = useState(set.status || 'draft');
-    const [showTemplateMenu, setShowTemplateMenu] = useState(false);
+    const [activeIndex, setActiveIndex] = useState(0);
+    const [showImportMenu, setShowImportMenu] = useState(false);
+    const [showLibrary, setShowLibrary] = useState(false);
     const generateForm = useForm({ quiz_id: '', mode: 'word_to_meaning', count: 10 });
+    const activeCard = cards[activeIndex] || null;
+
+    useEffect(() => {
+        if (activeIndex > cards.length - 1) {
+            setActiveIndex(Math.max(0, cards.length - 1));
+        }
+    }, [activeIndex, cards.length]);
 
     const updateCard = (index, field, value) => {
         setCards((current) => current.map((card, cardIndex) => (
@@ -44,24 +70,38 @@ export default function BuilderFlashcard({ set, vocabulary = {}, filters = {}, q
         )));
     };
 
-    const addBlankCard = () => setCards((current) => [...current, { ...emptyCard }]);
-    const addVocabulary = (item) => setCards((current) => [...current, fromVocabulary(item)]);
-    const removeCard = (index) => setCards((current) => current.filter((_, cardIndex) => cardIndex !== index));
-    const duplicateCard = (index) => setCards((current) => {
-        const card = current[index];
-        if (!card) return current;
+    const addBlankCard = () => {
+        setActiveIndex(cards.length);
+        setCards((current) => [...current, { ...emptyCard }]);
+    };
+    const addVocabulary = (item) => {
+        setActiveIndex(cards.length);
+        setShowLibrary(false);
+        setCards((current) => [...current, fromVocabulary(item)]);
+    };
+    const removeCard = (index) => {
+        setCards((current) => current.filter((_, cardIndex) => cardIndex !== index));
+        setActiveIndex((current) => Math.max(0, Math.min(current, cards.length - 2)));
+    };
+    const duplicateCard = (index) => {
+        setActiveIndex(index + 1);
+        setCards((current) => {
+            const card = current[index];
+            if (!card) return current;
 
-        const duplicate = { ...card, id: null, vocabulary_id: card.vocabulary_id || null };
-        const next = [...current];
-        next.splice(index + 1, 0, duplicate);
+            const duplicate = { ...card, id: null, vocabulary_id: card.vocabulary_id || null };
+            const next = [...current];
+            next.splice(index + 1, 0, duplicate);
 
-        return next;
-    });
+            return next;
+        });
+    };
 
     const moveCard = (index, direction) => {
         const nextIndex = index + direction;
         if (nextIndex < 0 || nextIndex >= cards.length) return;
 
+        setActiveIndex(nextIndex);
         setCards((current) => {
             const next = [...current];
             [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
@@ -120,60 +160,99 @@ export default function BuilderFlashcard({ set, vocabulary = {}, filters = {}, q
             <div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                     <div>
-                        <Link href={route('admin.flashcards.index')} className="text-xs font-black uppercase tracking-[0.25em] text-teal-600">
-                            Kembali ke Flashcard
+                        <Link href={builderReturnUrl} className="text-xs font-black uppercase tracking-[0.25em] text-teal-600">
+                            Kembali ke Hari
                         </Link>
                         <h1 className="mt-2 text-2xl font-black text-gray-900 dark:text-white">{set.title}</h1>
                         <p className="mt-1 max-w-2xl text-sm text-gray-500 dark:text-gray-400">
-                            Susun kartu seperti form: satu blok untuk satu kosakata, lalu publish agar muncul di modul mingguan.
+                            Week {set.module?.week_number || '-'} → Day {set.day?.day_number || '-'} · Susun satu kartu untuk satu kosakata.
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                         <div className="relative">
                             <button
                                 type="button"
-                                onClick={() => setShowTemplateMenu(value => !value)}
-                                className="h-11 rounded-xl bg-red-600 px-4 text-sm font-bold text-white shadow-md shadow-red-500/20 transition-colors hover:bg-red-700"
+                                onClick={() => setShowImportMenu(value => !value)}
+                                className="flex h-11 items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-sm font-bold text-gray-700 shadow-sm transition-colors hover:border-teal-300 hover:text-teal-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
                             >
-                                Template
+                                <UploadFileIcon sx={{ fontSize: 18 }} />
+                                Import
                             </button>
-                            {showTemplateMenu && (
+                            {showImportMenu && (
                                 <div className="absolute right-0 top-12 z-50 w-56 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowImportMenu(false);
+                                            importInputRef.current?.click();
+                                        }}
+                                        className="block w-full px-4 py-3 text-left text-sm font-bold text-gray-700 hover:bg-teal-50 hover:text-teal-700 dark:text-gray-200 dark:hover:bg-teal-900/20 dark:hover:text-teal-300"
+                                    >
+                                        Import CSV / Excel
+                                    </button>
                                     <a
                                         href={route('admin.flashcards.template', { flashcardSet: set.id, format: 'xlsx' })}
-                                        onClick={() => setShowTemplateMenu(false)}
-                                        className="block px-4 py-3 text-sm font-bold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 dark:text-gray-200 dark:hover:bg-emerald-900/20 dark:hover:text-emerald-300"
+                                        onClick={() => setShowImportMenu(false)}
+                                        className="block border-t border-gray-100 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-200 dark:hover:bg-gray-800"
                                     >
-                                        Download Excel (.xlsx)
+                                        Unduh Template Excel
                                     </a>
                                     <a
                                         href={route('admin.flashcards.template', { flashcardSet: set.id, format: 'csv' })}
-                                        onClick={() => setShowTemplateMenu(false)}
-                                        className="block border-t border-gray-100 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-red-50 hover:text-red-700 dark:border-gray-800 dark:text-gray-200 dark:hover:bg-red-900/20 dark:hover:text-red-300"
+                                        onClick={() => setShowImportMenu(false)}
+                                        className="block border-t border-gray-100 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-200 dark:hover:bg-gray-800"
                                     >
-                                        Download CSV (.csv)
+                                        Unduh Template CSV
                                     </a>
                                 </div>
                             )}
                         </div>
                         <input ref={importInputRef} type="file" accept=".csv,.txt,.xlsx" className="hidden" onChange={importCards} />
-                        <button onClick={() => importInputRef.current?.click()} className="h-11 rounded-xl border border-gray-200 bg-white px-4 text-sm font-bold text-gray-600 transition-colors hover:border-red-200 hover:text-red-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
-                            Import CSV/Excel
-                        </button>
                         <select value={setRecordStatus} onChange={(event) => setSetRecordStatus(event.target.value)} className="h-11 rounded-xl border border-gray-200 bg-white px-4 text-sm font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
                             <option value="draft">Draft</option>
                             <option value="published">Published</option>
                         </select>
-                        <button onClick={addBlankCard} className="h-11 rounded-xl border border-gray-200 bg-white px-4 text-sm font-black text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
-                            Kartu Manual
+                        <button onClick={addBlankCard} className="flex h-11 items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-sm font-black text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
+                            <AddIcon sx={{ fontSize: 18 }} />
+                            Kartu Baru
                         </button>
-                        <button onClick={saveCards} className="h-11 rounded-xl bg-[#14B8A6] px-5 text-sm font-black text-white">
-                            Simpan Builder
+                        <button onClick={saveCards} className="flex h-11 items-center gap-2 rounded-xl bg-[#14B8A6] px-5 text-sm font-black text-white">
+                            <SaveOutlinedIcon sx={{ fontSize: 18 }} />
+                            Simpan Flashcard
                         </button>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+                <button type="button" onClick={() => setShowLibrary(true)} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-teal-200 bg-teal-50 text-sm font-black text-teal-700 dark:border-teal-900/40 dark:bg-teal-900/20 dark:text-teal-300 xl:hidden">
+                    <LibraryBooksIcon sx={{ fontSize: 18 }} />
+                    Buka Bank Kosakata
+                </button>
+
+                <div className="grid grid-cols-1 gap-4 xl:grid-cols-[240px_minmax(0,1fr)_360px] xl:gap-6">
+                    <aside className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900 xl:sticky xl:top-6 xl:self-start">
+                        <div className="border-b border-gray-100 px-4 py-3 dark:border-gray-800">
+                            <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-400">Daftar Kartu ({cards.length})</p>
+                        </div>
+                        <div className="flex max-w-full gap-2 overflow-x-auto p-3 xl:max-h-[70vh] xl:flex-col xl:overflow-y-auto">
+                            {cards.map((card, index) => (
+                                <button
+                                    type="button"
+                                    key={`${card.id || 'new'}-${card.vocabulary_id || 'manual'}-${index}`}
+                                    onClick={() => setActiveIndex(index)}
+                                    className={`w-48 shrink-0 rounded-xl border p-3 text-left transition xl:w-full ${
+                                        activeIndex === index
+                                            ? 'border-teal-500 bg-teal-50 ring-1 ring-teal-500 dark:bg-teal-900/20'
+                                            : 'border-gray-100 hover:border-gray-300 dark:border-gray-800 dark:hover:border-gray-600'
+                                    }`}
+                                >
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-teal-600">Kartu {index + 1}</p>
+                                    <p className="mt-1 truncate text-sm font-black text-gray-900 dark:text-white">{card.front_text || 'Kartu baru'}</p>
+                                    <p className="mt-0.5 truncate text-xs font-medium text-gray-400">{card.back_text || 'Belum ada arti'}</p>
+                                </button>
+                            ))}
+                        </div>
+                    </aside>
+
                     <div className="space-y-4">
                         {cards.length === 0 && (
                             <Card>
@@ -183,7 +262,11 @@ export default function BuilderFlashcard({ set, vocabulary = {}, filters = {}, q
                             </Card>
                         )}
 
-                        {cards.map((card, index) => (
+                        {activeCard && (() => {
+                            const card = activeCard;
+                            const index = activeIndex;
+
+                            return (
                             <Card key={`${card.id || 'new'}-${card.vocabulary_id || 'manual'}-${index}`} className="overflow-hidden border-l-4 border-l-[#14B8A6]">
                                 <div className="mb-4 flex flex-col gap-3 border-b border-gray-100 pb-4 dark:border-gray-800 sm:flex-row sm:items-start sm:justify-between">
                                     <div>
@@ -191,10 +274,10 @@ export default function BuilderFlashcard({ set, vocabulary = {}, filters = {}, q
                                         <h2 className="mt-1 text-lg font-black text-gray-900 dark:text-white">{card.front_text || 'Kartu baru'}</h2>
                                     </div>
                                     <div className="flex flex-wrap gap-2">
-                                        <button type="button" onClick={() => moveCard(index, -1)} className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-black text-gray-600 dark:border-gray-700 dark:text-gray-300">Naik</button>
-                                        <button type="button" onClick={() => moveCard(index, 1)} className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-black text-gray-600 dark:border-gray-700 dark:text-gray-300">Turun</button>
-                                        <button type="button" onClick={() => duplicateCard(index)} className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-black text-gray-600 dark:border-gray-700 dark:text-gray-300">Duplikat</button>
-                                        <button type="button" onClick={() => removeCard(index)} className="rounded-xl border border-red-100 px-3 py-2 text-xs font-black text-red-600 dark:border-red-900/40">Hapus</button>
+                                        <button type="button" title="Pindahkan ke atas" disabled={index === 0} onClick={() => moveCard(index, -1)} className="flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 text-gray-600 disabled:opacity-30 dark:border-gray-700 dark:text-gray-300"><ArrowUpwardIcon sx={{ fontSize: 17 }} /></button>
+                                        <button type="button" title="Pindahkan ke bawah" disabled={index === cards.length - 1} onClick={() => moveCard(index, 1)} className="flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 text-gray-600 disabled:opacity-30 dark:border-gray-700 dark:text-gray-300"><ArrowDownwardIcon sx={{ fontSize: 17 }} /></button>
+                                        <button type="button" title="Duplikat kartu" onClick={() => duplicateCard(index)} className="flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-300"><ContentCopyIcon sx={{ fontSize: 17 }} /></button>
+                                        <button type="button" title="Hapus kartu" onClick={() => removeCard(index)} className="flex h-9 w-9 items-center justify-center rounded-xl border border-red-100 text-red-600 dark:border-red-900/40"><DeleteOutlineIcon sx={{ fontSize: 17 }} /></button>
                                     </div>
                                 </div>
 
@@ -226,10 +309,21 @@ export default function BuilderFlashcard({ set, vocabulary = {}, filters = {}, q
                                     <input value={card.audio_url || ''} onChange={(event) => updateCard(index, 'audio_url', event.target.value)} placeholder="Audio URL opsional" className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white md:col-span-2" />
                                 </div>
                             </Card>
-                        ))}
+                            );
+                        })()}
                     </div>
 
-                    <aside className="space-y-4 xl:sticky xl:top-6 xl:self-start">
+                    <aside className={`${showLibrary ? 'fixed inset-0 z-[80] flex justify-end bg-gray-950/60' : 'hidden'} xl:sticky xl:top-6 xl:block xl:self-start xl:bg-transparent`}>
+                        <div className={`${showLibrary ? 'h-full w-full max-w-md space-y-4 overflow-y-auto bg-[#F8F9FB] p-4 dark:bg-gray-950' : 'space-y-4'}`}>
+                            <div className="flex items-center justify-between xl:hidden">
+                                <div>
+                                    <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-600">Sumber Kartu</p>
+                                    <h2 className="text-lg font-black text-gray-900 dark:text-white">Bank Kosakata</h2>
+                                </div>
+                                <button type="button" onClick={() => setShowLibrary(false)} title="Tutup bank kosakata" className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-gray-200">
+                                    <CloseIcon sx={{ fontSize: 19 }} />
+                                </button>
+                            </div>
                         <Card>
                             <h2 className="text-sm font-black uppercase tracking-[0.2em] text-gray-900 dark:text-white">Bank Konten N3</h2>
                             <form onSubmit={submitFilters} className="mt-4 space-y-3">
@@ -287,6 +381,7 @@ export default function BuilderFlashcard({ set, vocabulary = {}, filters = {}, q
                                 </button>
                             </form>
                         </Card>
+                        </div>
                     </aside>
                 </div>
             </div>

@@ -4,12 +4,12 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Flashcard;
-use App\Models\SetFlashcard;
+use App\Models\Kosakata;
+use App\Models\Kuis;
 use App\Models\LevelPembelajaran;
 use App\Models\Modul;
+use App\Models\SetFlashcard;
 use App\Models\Soal;
-use App\Models\Kuis;
-use App\Models\Kosakata;
 use App\Services\ImportSpreadsheetService;
 use App\Services\NotifikasiPenggunaService;
 use App\Services\TemplateExcelService;
@@ -22,7 +22,11 @@ class AdminFlashcardController extends Controller
 {
     public function index(Request $request)
     {
-        $query = SetFlashcard::with(['level:id,level_name', 'module:id,title,week_number'])
+        $query = SetFlashcard::with([
+            'level:id,level_name',
+            'module:id,program_pembelajaran_id,title,week_number',
+            'day:id,module_id,day_number,title',
+        ])
             ->withCount('flashcards')
             ->latest();
 
@@ -35,11 +39,29 @@ class AdminFlashcardController extends Controller
             $query->where('status', $request->status);
         }
 
+        if ($request->filled('module_id')) {
+            $query->where('module_id', $request->integer('module_id'));
+        }
+
+        if ($request->filled('module_day_id')) {
+            $query->where('module_day_id', $request->integer('module_day_id'));
+        }
+
+        if ($request->filled('program_id')) {
+            $query->whereHas('module', fn ($moduleQuery) => $moduleQuery
+                ->where('program_pembelajaran_id', $request->integer('program_id')));
+        }
+
         return Inertia::render('Admin/Flashcard/ManajemenFlashcard', [
             'sets' => $query->paginate(10)->withQueryString(),
-            'filters' => $request->only('search', 'status'),
+            'filters' => $request->only('search', 'status', 'program_id', 'module_id', 'module_day_id'),
             'levels' => LevelPembelajaran::orderBy('stage')->get(['id', 'level_name']),
-            'modules' => Modul::orderBy('week_number')->orderBy('id')->get(['id', 'title', 'week_number']),
+            'modules' => Modul::with('days:id,module_id,day_number,title,status')
+                ->when($request->filled('program_id'), fn ($moduleQuery) => $moduleQuery
+                    ->where('program_pembelajaran_id', $request->integer('program_id')))
+                ->orderBy('week_number')
+                ->orderBy('id')
+                ->get(['id', 'program_pembelajaran_id', 'title', 'week_number']),
         ]);
     }
 
@@ -76,7 +98,12 @@ class AdminFlashcardController extends Controller
 
     public function builder(SetFlashcard $flashcardSet, Request $request)
     {
-        $flashcardSet->load(['level:id,level_name', 'module:id,title,week_number', 'flashcards.vocabulary']);
+        $flashcardSet->load([
+            'level:id,level_name',
+            'module:id,program_pembelajaran_id,title,week_number',
+            'day:id,module_id,day_number,title',
+            'flashcards.vocabulary',
+        ]);
 
         $vocabularyQuery = Kosakata::query()
             ->where(function ($query) use ($flashcardSet) {
@@ -235,7 +262,7 @@ class AdminFlashcardController extends Controller
 
         $headers = $this->flashcardImportHeaders();
         $rows = $this->flashcardTemplateRows();
-        $filename = 'japanlingo-flashcard-template.' . $format;
+        $filename = 'japanlingo-flashcard-template.'.$format;
 
         if ($format === 'csv') {
             return $templates->csvResponse($headers, $rows, $filename);
@@ -283,7 +310,7 @@ class AdminFlashcardController extends Controller
             }
         });
 
-        return redirect()->back()->with('success', $cards->count() . ' soal berhasil dibuat dari flashcard.');
+        return redirect()->back()->with('success', $cards->count().' soal berhasil dibuat dari flashcard.');
     }
 
     private function validateSet(Request $request): array
@@ -293,6 +320,11 @@ class AdminFlashcardController extends Controller
             'description' => ['nullable', 'string'],
             'level_id' => ['nullable', 'integer', 'exists:levels,id'],
             'module_id' => ['required', 'integer', 'exists:modules,id'],
+            'module_day_id' => [
+                'required',
+                'integer',
+                Rule::exists('module_days', 'id')->where('module_id', $request->integer('module_id')),
+            ],
             'status' => ['required', 'in:draft,published'],
         ]);
 
@@ -328,10 +360,10 @@ class AdminFlashcardController extends Controller
             $options = $this->options($correct, $pool->pluck('front_text')->all());
 
             return [
-                'question_text' => 'Pilih kosakata Jepang untuk arti: ' . $card->back_text,
+                'question_text' => 'Pilih kosakata Jepang untuk arti: '.$card->back_text,
                 'correct_answer' => $correct,
                 'options' => $options,
-                'explanation' => trim(($card->front_text ?? '') . ' / ' . ($card->reading ?? '') . ' = ' . ($card->back_text ?? '')),
+                'explanation' => trim(($card->front_text ?? '').' / '.($card->reading ?? '').' = '.($card->back_text ?? '')),
             ];
         }
 
@@ -340,10 +372,10 @@ class AdminFlashcardController extends Controller
             $options = $this->options($correct, $pool->pluck('front_text')->all());
 
             return [
-                'question_text' => 'Pilih kosakata untuk reading: ' . ($card->reading ?: $card->hint ?: $card->back_text),
+                'question_text' => 'Pilih kosakata untuk reading: '.($card->reading ?: $card->hint ?: $card->back_text),
                 'correct_answer' => $correct,
                 'options' => $options,
-                'explanation' => trim(($card->front_text ?? '') . ' / ' . ($card->reading ?? '') . ' = ' . ($card->back_text ?? '')),
+                'explanation' => trim(($card->front_text ?? '').' / '.($card->reading ?? '').' = '.($card->back_text ?? '')),
             ];
         }
 
@@ -351,10 +383,10 @@ class AdminFlashcardController extends Controller
         $options = $this->options($correct, $pool->pluck('back_text')->filter()->all());
 
         return [
-            'question_text' => 'Apa arti dari ' . $card->front_text . ($card->reading ? " ({$card->reading})" : '') . '?',
+            'question_text' => 'Apa arti dari '.$card->front_text.($card->reading ? " ({$card->reading})" : '').'?',
             'correct_answer' => $correct,
             'options' => $options,
-            'explanation' => trim(($card->front_text ?? '') . ' / ' . ($card->reading ?? '') . ' = ' . ($card->back_text ?? '')),
+            'explanation' => trim(($card->front_text ?? '').' / '.($card->reading ?? '').' = '.($card->back_text ?? '')),
         ];
     }
 

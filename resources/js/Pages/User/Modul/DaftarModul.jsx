@@ -1,14 +1,12 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Head, Link } from '@inertiajs/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { LearningStatBadge, MascotGuide, SeasonalScene } from '@/Components/User/UserVisuals';
 import theme from '@/Components/theme/themes';
 
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import LockIcon from '@mui/icons-material/Lock';
-import StarIcon from '@mui/icons-material/Star';
-import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StyleIcon from '@mui/icons-material/Style';
 import QuizIcon from '@mui/icons-material/Quiz';
@@ -17,6 +15,7 @@ import TranslateIcon from '@mui/icons-material/Translate';
 import AutoStoriesIcon from '@mui/icons-material/AutoStories';
 import CloseIcon from '@mui/icons-material/Close';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 
 // Posisi zigzag kiri-kanan untuk path ala Duolingo
 const PATH_POSITIONS = ['50%', '30%', '65%', '25%', '60%', '35%', '50%', '70%', '40%', '55%'];
@@ -29,62 +28,30 @@ const nodeStyles = {
     unavailable: { bg: '#f3f4f6', shadow: '#d1d5db', text: '#9ca3af' },
 };
 
-function WeekTooltip({ week, placement = 'right' }) {
-    const hasContent = week.has_content ?? Boolean(week.flashcard_set_id || week.quiz_id);
-    const lockedText = week.lock_reason || 'Selesaikan minggu sebelumnya';
-    const unavailableText = week.lock_reason || 'Konten belum tersedia';
-    const desktopPosition = placement === 'left'
-        ? 'sm:right-full sm:mr-5 sm:left-auto'
-        : 'sm:left-full sm:ml-5';
-    const desktopArrow = placement === 'left'
-        ? 'sm:left-full sm:top-1/2 sm:-translate-y-1/2 sm:border-8 sm:border-transparent sm:border-l-gray-900 sm:translate-x-0'
-        : 'sm:right-full sm:top-1/2 sm:-translate-y-1/2 sm:border-8 sm:border-transparent sm:border-r-gray-900 sm:translate-x-0';
-
-    return (
-        <motion.div
-            initial={{ opacity: 0, y: 8, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.96 }}
-            transition={{ duration: 0.15 }}
-            className={`absolute z-50 hidden top-1/2 w-64 -translate-y-1/2 rounded-2xl border border-white/10 bg-gray-900 px-5 py-4 text-left text-white shadow-2xl shadow-gray-900/30 sm:block sm:translate-x-0 ${desktopPosition}`}
-        >
-            <p className="font-black text-sm mb-1">{week.title}</p>
-            <p className="text-gray-400 text-xs mb-3">{week.subtitle}</p>
-            {/* Fase info */}
-            <div className="flex gap-2 justify-center mb-3">
-                <span className="flex items-center gap-1 text-[10px] bg-orange-500/20 text-orange-300 px-2 py-0.5 rounded-full font-bold">
-                    <StyleIcon sx={{ fontSize: 10 }} /> Flashcard
-                </span>
-                <span className="flex items-center gap-1 text-[10px] bg-red-500/20 text-red-300 px-2 py-0.5 rounded-full font-bold">
-                    <QuizIcon sx={{ fontSize: 10 }} /> Kuis
-                </span>
-            </div>
-            {week.status === 'active' && hasContent && (
-                <span className="text-gray-400 text-xs font-bold">Klik node untuk melihat materi dan mulai belajar.</span>
-            )}
-            {week.status === 'active' && !hasContent && (
-                <span className="text-gray-500 text-xs font-bold">Konten belum tersedia.</span>
-            )}
-            {week.status === 'done' && (
-                <span className="text-green-400 text-xs font-bold">Selesai</span>
-            )}
-            {week.status === 'locked' && (
-                <span className="text-gray-500 text-xs font-bold">{lockedText}</span>
-            )}
-            {week.status === 'unavailable' && (
-                <span className="text-gray-500 text-xs font-bold">{unavailableText}</span>
-            )}
-            {/* Arrow */}
-
-            <div className={`absolute bottom-full left-1/2 -translate-x-1/2 border-8 border-transparent border-b-gray-900 sm:bottom-auto ${desktopArrow}`} />
-        </motion.div>
-    );
-}
-
-function ModulDetailPanel({ week, onClose }) {
+function ModulDetailPanel({ week, initialDayId = null, onClose }) {
     const [isDesktopPanel, setIsDesktopPanel] = useState(() => (
         typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches
     ));
+    const selectedDay = week.days?.find((day) => day.id === initialDayId) || null;
+    const activeResource = selectedDay || week;
+    const presentationPreviews = activeResource.presentation_previews || [];
+    const vocabularyPreview = activeResource.vocabulary_preview || [];
+    const flashcardSummary = activeResource.flashcard_summary || {
+        sets: [],
+        total: activeResource.flashcard_total || 0,
+        reviewed: activeResource.flashcard_reviewed || 0,
+    };
+    const checkpointSummary = activeResource.checkpoint_summary || null;
+    const defaultSection = presentationPreviews.length > 0
+        ? 'presentation'
+        : vocabularyPreview.length > 0
+            ? 'vocabulary'
+            : flashcardSummary.total > 0
+                ? 'flashcard'
+                : checkpointSummary
+                    ? 'quiz'
+                    : null;
+    const [openSection, setOpenSection] = useState(defaultSection);
 
     useEffect(() => {
         const mediaQuery = window.matchMedia('(min-width: 640px)');
@@ -96,78 +63,254 @@ function ModulDetailPanel({ week, onClose }) {
         return () => mediaQuery.removeEventListener('change', syncPanelMode);
     }, []);
 
-    const hasContent = week.has_content ?? Boolean(week.flashcard_set_id || week.quiz_id);
-    const canOpenResource = ['active', 'done'].includes(week.status);
-    const primaryStudyUrl = week.primary_url || week.flashcard_url || week.quiz_url;
-    const canStart = canOpenResource && Boolean(primaryStudyUrl);
-    const startButtonClass = week.status === 'done'
-        ? 'bg-green-600 hover:bg-green-700 text-white'
-        : 'bg-red-600 hover:bg-red-700 text-white';
+    useEffect(() => {
+        setOpenSection(defaultSection);
+    }, [activeResource.id, defaultSection]);
+
+    useEffect(() => {
+        const previousOverflow = document.body.style.overflow;
+        const closeOnEscape = (event) => {
+            if (event.key === 'Escape') onClose();
+        };
+
+        document.body.style.overflow = 'hidden';
+        window.addEventListener('keydown', closeOnEscape);
+
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            window.removeEventListener('keydown', closeOnEscape);
+        };
+    }, [onClose]);
+
+    const hasContent = activeResource.has_content ?? week.has_content ?? Boolean(week.flashcard_set_id || week.quiz_id);
+    const canOpenResource = ['active', 'done'].includes(activeResource.status);
     const statusLabel = {
         done: 'Selesai',
         active: hasContent ? 'Sedang berjalan' : 'Konten belum tersedia',
-        locked: week.lock_reason || 'Terkunci',
-        unavailable: week.lock_reason || 'Konten belum tersedia',
-    }[week.status] || 'Terkunci';
+        locked: activeResource.lock_reason || 'Terkunci',
+        unavailable: activeResource.lock_reason || 'Konten belum tersedia',
+    }[activeResource.status] || 'Terkunci';
+    const statusTone = activeResource.status === 'done'
+        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+        : activeResource.status === 'active'
+            ? 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300'
+            : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400';
+    const flashcardProgress = flashcardSummary.total > 0
+        ? Math.min(100, Math.round((flashcardSummary.reviewed / flashcardSummary.total) * 100))
+        : 0;
 
-    const handleStart = () => {
-        if (!canStart) return;
-        window.location.href = primaryStudyUrl;
-    };
-
-    const resourceItems = [
+    const sections = [
         {
+            id: 'presentation',
             label: 'PPT / Board',
-            count: week.presentations_count ?? 0,
-            href: week.presentation_url,
+            count: activeResource.presentations_count ?? 0,
+            href: activeResource.presentation_url,
             icon: <SlideshowIcon sx={{ fontSize: 22 }} />,
-            tone: 'border-sky-100 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/25 dark:text-sky-300',
+            iconTone: 'bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300',
         },
         {
+            id: 'vocabulary',
             label: 'Konten N3',
-            count: week.vocabulary_count ?? 0,
-            href: week.vocabulary_url,
+            count: activeResource.vocabulary_count ?? 0,
+            href: activeResource.vocabulary_url,
             icon: <TranslateIcon sx={{ fontSize: 22 }} />,
-            tone: 'border-emerald-100 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/25 dark:text-emerald-300',
+            iconTone: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
         },
         {
+            id: 'flashcard',
             label: 'Flashcard',
-            count: week.flashcard_total ?? 0,
-            href: week.flashcard_url,
+            count: flashcardSummary.total,
+            href: activeResource.flashcard_url,
             icon: <StyleIcon sx={{ fontSize: 22 }} />,
-            tone: 'border-orange-100 bg-orange-50 text-orange-700 dark:border-orange-900 dark:bg-orange-950/25 dark:text-orange-300',
+            iconTone: 'bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300',
         },
         {
-            label: 'Kuis',
-            count: week.questions_count ?? 0,
-            href: week.quiz_url,
-            lockedReason: week.quiz_locked_reason,
+            id: 'quiz',
+            label: 'Kuis Checkpoint',
+            count: checkpointSummary?.questions_count ?? activeResource.questions_count ?? 0,
+            href: activeResource.quiz_url,
+            locked: Boolean(checkpointSummary?.locked || activeResource.quiz_locked_reason),
+            lockedReason: checkpointSummary?.lock_reason || activeResource.quiz_locked_reason,
             icon: <QuizIcon sx={{ fontSize: 22 }} />,
-            tone: 'border-red-100 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/25 dark:text-red-300',
+            iconTone: 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300',
         },
     ];
 
-    return (
+    const sectionBody = (section) => {
+        if (section.id === 'presentation') {
+            return (
+                <div className="space-y-3">
+                    {presentationPreviews.map((deck) => {
+                        const coverImage = deck.cover?.snapshot_url || deck.cover?.media_url;
+                        const coverColor = deck.cover?.background?.startsWith('#') ? deck.cover.background : '#f3f4f6';
+
+                        return (
+                            <div key={deck.id} className="flex gap-3 rounded-xl bg-gray-50 p-3 dark:bg-gray-900">
+                                <div
+                                    className="flex h-20 w-28 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-100 dark:border-gray-700 dark:bg-gray-800"
+                                    style={{ backgroundColor: coverColor }}
+                                >
+                                    {coverImage ? (
+                                        <img src={coverImage} alt="" className="h-full w-full object-cover" />
+                                    ) : (
+                                        <span className="line-clamp-3 px-2 text-center text-[10px] font-black text-gray-600 dark:text-gray-300">
+                                            {deck.cover?.title || deck.title}
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <p className="line-clamp-2 text-sm font-black text-gray-900 dark:text-white">{deck.title}</p>
+                                    <p className="mt-1 text-xs font-semibold text-gray-500 dark:text-gray-400">{deck.slides_count} slide</p>
+                                    {deck.description && <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500 dark:text-gray-400">{deck.description}</p>}
+                                </div>
+                            </div>
+                        );
+                    })}
+                    {canOpenResource && section.href && (
+                        <Link href={section.href} className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 text-sm font-black text-white hover:bg-sky-700">
+                            <PlayArrowIcon sx={{ fontSize: 19 }} />
+                            Buka presentasi
+                        </Link>
+                    )}
+                </div>
+            );
+        }
+
+        if (section.id === 'vocabulary') {
+            return (
+                <div className="space-y-3">
+                    <div className="divide-y divide-gray-100 rounded-xl bg-gray-50 px-3 dark:divide-gray-800 dark:bg-gray-900">
+                        {vocabularyPreview.map((item) => (
+                            <div key={item.id} className="grid grid-cols-2 gap-3 py-3">
+                                <div className="min-w-0">
+                                    <p className="truncate text-sm font-black text-gray-900 dark:text-white">{item.word}</p>
+                                    {item.reading && <p className="truncate text-xs font-semibold text-gray-500 dark:text-gray-400">{item.reading}</p>}
+                                </div>
+                                <p className="text-right text-sm font-semibold text-gray-600 dark:text-gray-300">{item.meaning}</p>
+                            </div>
+                        ))}
+                    </div>
+                    {canOpenResource && section.href && (
+                        <Link href={section.href} className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-black text-white hover:bg-emerald-700">
+                            <AutoStoriesIcon sx={{ fontSize: 19 }} />
+                            Buka Konten N3
+                        </Link>
+                    )}
+                </div>
+            );
+        }
+
+        if (section.id === 'flashcard') {
+            return (
+                <div className="space-y-3">
+                    <div className="rounded-xl bg-gray-50 p-3 dark:bg-gray-900">
+                        <div className="flex items-center justify-between gap-3 text-xs font-bold text-gray-500 dark:text-gray-400">
+                            <span>Sudah direview</span>
+                            <span>{flashcardSummary.reviewed}/{flashcardSummary.total} kartu</span>
+                        </div>
+                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-800">
+                            <div className="h-full rounded-full bg-orange-500 transition-all" style={{ width: `${flashcardProgress}%` }} />
+                        </div>
+                        {flashcardSummary.sets?.length > 0 && (
+                            <div className="mt-3 space-y-2">
+                                {flashcardSummary.sets.map((set) => {
+                                    const content = (
+                                        <>
+                                            <span className="min-w-0 flex-1 truncate text-xs font-black text-gray-700 dark:text-gray-200">{set.title}</span>
+                                            <span className="shrink-0 text-[11px] font-bold text-gray-500 dark:text-gray-400">{set.reviewed_count}/{set.cards_count}</span>
+                                        </>
+                                    );
+
+                                    return canOpenResource && set.url ? (
+                                        <Link key={set.id} href={set.url} className="flex min-h-9 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 hover:border-orange-300 dark:border-gray-700 dark:bg-gray-950">
+                                            {content}
+                                        </Link>
+                                    ) : (
+                                        <div key={set.id} className="flex min-h-9 items-center gap-2 rounded-lg border border-gray-200 px-3 opacity-60 dark:border-gray-700">
+                                            {content}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                    {canOpenResource && section.href && !flashcardSummary.sets?.length && (
+                        <Link href={section.href} className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-orange-600 px-4 text-sm font-black text-white hover:bg-orange-700">
+                            <StyleIcon sx={{ fontSize: 19 }} />
+                            {flashcardProgress === 100 ? 'Ulangi flashcard' : 'Review flashcard'}
+                        </Link>
+                    )}
+                </div>
+            );
+        }
+
+        return (
+            <div className="space-y-3">
+                <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-xl bg-gray-50 p-3 text-center dark:bg-gray-900">
+                        <p className="text-base font-black text-gray-900 dark:text-white">{checkpointSummary?.questions_count || 0}</p>
+                        <p className="text-[10px] font-bold text-gray-500">Soal</p>
+                    </div>
+                    <div className="rounded-xl bg-gray-50 p-3 text-center dark:bg-gray-900">
+                        <p className="text-base font-black text-gray-900 dark:text-white">{checkpointSummary?.passing_score || 70}</p>
+                        <p className="text-[10px] font-bold text-gray-500">Nilai lulus</p>
+                    </div>
+                    <div className="rounded-xl bg-gray-50 p-3 text-center dark:bg-gray-900">
+                        <p className="text-base font-black text-gray-900 dark:text-white">{checkpointSummary?.best_score ?? '-'}</p>
+                        <p className="text-[10px] font-bold text-gray-500">Terbaik</p>
+                    </div>
+                </div>
+                {section.locked ? (
+                    <div className="flex gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-xs font-semibold leading-5 text-gray-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300">
+                        <LockIcon sx={{ fontSize: 18 }} className="mt-0.5 shrink-0" />
+                        <span>{section.lockedReason || 'Selesaikan materi sebelumnya untuk membuka kuis.'}</span>
+                    </div>
+                ) : canOpenResource && section.href ? (
+                    <Link href={section.href} className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-black text-white hover:bg-red-700">
+                        <QuizIcon sx={{ fontSize: 19 }} />
+                        Mulai kuis
+                    </Link>
+                ) : null}
+            </div>
+        );
+    };
+
+    if (typeof document === 'undefined') {
+        return null;
+    }
+
+    return createPortal(
         <motion.div
-            className="fixed inset-0 z-40 flex items-end bg-black/40 sm:justify-end"
+            className="fixed inset-0 z-[90] flex items-end bg-black/40 sm:justify-end"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
         >
             <motion.aside
-                className="max-h-[86dvh] w-full overflow-y-auto rounded-t-[2rem] bg-white p-5 shadow-2xl dark:bg-gray-950 sm:h-full sm:max-h-none sm:max-w-md sm:rounded-none sm:p-6"
+                className="flex max-h-[88dvh] w-full flex-col overflow-hidden rounded-t-[1.5rem] bg-white shadow-2xl dark:bg-gray-950 sm:h-full sm:max-h-none sm:max-w-[480px] sm:rounded-none"
                 initial={isDesktopPanel ? { x: '100%', y: 0 } : { x: 0, y: '100%' }}
                 animate={{ x: 0, y: 0 }}
                 exit={isDesktopPanel ? { x: '100%', y: 0 } : { x: 0, y: '100%' }}
                 transition={{ type: 'spring', stiffness: 260, damping: 28 }}
                 onClick={(event) => event.stopPropagation()}
             >
-                <div className="flex items-start justify-between gap-4 mb-6">
-                    <div>
-                        <p className="text-xs font-black uppercase tracking-wider text-red-600 mb-2">Detail Modul</p>
-                        <h2 className="text-2xl font-black text-gray-900 dark:text-white">{week.title}</h2>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">{week.subtitle}</p>
+                <div className="shrink-0 border-b border-gray-100 bg-white px-4 pb-4 pt-3 dark:border-gray-800 dark:bg-gray-950 sm:px-6 sm:pt-5">
+                    <div className="mx-auto mb-3 h-1 w-12 rounded-full bg-gray-200 dark:bg-gray-800 sm:hidden" />
+                    <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                            <div className="mb-2 flex flex-wrap items-center gap-2">
+                                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-red-600">
+                                    Minggu {week.week_number}{selectedDay ? ` / Hari ${selectedDay.day_number}` : ''}
+                                </p>
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${statusTone}`}>{statusLabel}</span>
+                            </div>
+                            <h2 className="text-lg font-black text-gray-900 sm:text-xl dark:text-white">
+                            {selectedDay?.title || week.display_title || week.title}
+                        </h2>
+                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500 dark:text-gray-400 sm:text-sm">
+                            {selectedDay?.description || week.subtitle}
+                        </p>
                     </div>
                     <button
                         type="button"
@@ -177,56 +320,69 @@ function ModulDetailPanel({ week, onClose }) {
                     >
                         <CloseIcon sx={{ fontSize: 20 }} />
                     </button>
+                    </div>
                 </div>
 
-                <div className="space-y-3 mb-6">
-                    <div className="rounded-2xl border border-gray-100 dark:border-gray-800 p-4">
-                        <p className="text-xs font-black uppercase tracking-wider text-gray-400 mb-1">Status</p>
-                        <p className="text-sm font-bold text-gray-800 dark:text-gray-100">{statusLabel}</p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                        {resourceItems.map((item) => {
-                            const enabled = canOpenResource && item.href && item.count > 0;
-                            const content = (
-                                <>
-                            <div className="mb-2">{item.icon}</div>
-                            <p className="text-sm font-black">{item.label}</p>
-                            <p className="mt-1 text-xs font-bold opacity-70">{item.count} item</p>
-                            {item.lockedReason && <p className="mt-2 text-[11px] font-black leading-4 opacity-80">{item.lockedReason}</p>}
-                        </>
-                    );
+                <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+                    <div className="space-y-2">
+                        {sections.map((section) => {
+                            const available = section.count > 0;
+                            const expanded = openSection === section.id;
 
-                            return enabled ? (
-                                <Link key={item.label} href={item.href} className={`rounded-2xl border p-4 transition hover:-translate-y-0.5 ${item.tone}`}>
-                                    {content}
-                                </Link>
-                            ) : (
-                                <div key={item.label} className={`rounded-2xl border p-4 opacity-55 ${item.tone}`}>
-                                    {content}
-                                </div>
+                            return (
+                                <section key={section.id} className={`overflow-hidden rounded-xl border ${expanded ? 'border-gray-300 dark:border-gray-700' : 'border-gray-200 dark:border-gray-800'} ${available ? '' : 'opacity-55'}`}>
+                                    <button
+                                        type="button"
+                                        disabled={!available}
+                                        onClick={() => setOpenSection((current) => current === section.id ? null : section.id)}
+                                        aria-expanded={expanded}
+                                        className="flex min-h-14 w-full items-center gap-3 px-3 py-2.5 text-left"
+                                    >
+                                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${section.iconTone}`}>
+                                            {section.locked ? <LockIcon sx={{ fontSize: 19 }} /> : section.icon}
+                                        </span>
+                                        <span className="min-w-0 flex-1">
+                                            <span className="block text-sm font-black text-gray-900 dark:text-white">{section.label}</span>
+                                            <span className="block text-xs font-semibold text-gray-500 dark:text-gray-400">
+                                                {available ? `${section.count} item` : 'Belum tersedia'}
+                                                {section.id === 'flashcard' && available ? ` / ${flashcardSummary.reviewed} direview` : ''}
+                                            </span>
+                                        </span>
+                                        {available && <ExpandMoreIcon className={`shrink-0 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />}
+                                    </button>
+                                    <AnimatePresence initial={false}>
+                                        {expanded && available && (
+                                            <motion.div
+                                                initial={{ height: 0, opacity: 0 }}
+                                                animate={{ height: 'auto', opacity: 1 }}
+                                                exit={{ height: 0, opacity: 0 }}
+                                                className="overflow-hidden"
+                                            >
+                                                <div className="border-t border-gray-100 p-3 dark:border-gray-800">
+                                                    {sectionBody(section)}
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </section>
                             );
                         })}
                     </div>
-                </div>
 
-                <button
-                    type="button"
-                    onClick={handleStart}
-                    disabled={!canStart}
-                    className={`w-full rounded-2xl py-3 text-sm font-black transition-colors ${
-                        canStart
-                            ? startButtonClass
-                            : 'bg-gray-100 dark:bg-gray-900 text-gray-400 cursor-not-allowed'
-                    }`}
-                >
-                        {canStart ? (week.primary_label || (week.status === 'done' ? 'Ulangi Sesi' : 'Mulai Belajar')) : (hasContent ? 'Pilih resource di atas' : statusLabel)}
-                </button>
+                    {!hasContent && (
+                        <p className="rounded-xl bg-gray-50 px-4 py-4 text-center text-sm font-semibold text-gray-500 dark:bg-gray-900 dark:text-gray-400">
+                            Konten untuk Hari ini belum tersedia.
+                        </p>
+                    )}
+                </div>
             </motion.aside>
-        </motion.div>
+        </motion.div>,
+        document.body
     );
 }
 
 function ResourceBar({ resources = {} }) {
+    const [isOpen, setIsOpen] = useState(false);
     const items = [
         {
             label: 'PPT / Board',
@@ -257,58 +413,330 @@ function ResourceBar({ resources = {} }) {
             tone: 'from-red-500 to-rose-600',
         },
     ];
+    const totalItems = items.reduce((total, item) => total + item.count, 0);
 
     return (
         <section className="relative z-10 px-4 pb-6 sm:px-6 lg:px-20">
-            <div className="mx-auto grid max-w-5xl grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
-                {items.map((item) => {
-                    const disabled = !item.href || item.count === 0;
-                    const className = `group flex flex-col items-start gap-2 rounded-xl border border-white/70 bg-white/70 px-3 py-3 text-left shadow-xl shadow-red-900/5 backdrop-blur-md transition sm:flex-row sm:items-center sm:gap-3 sm:rounded-2xl sm:px-4 sm:py-4 dark:border-gray-800 dark:bg-gray-900/70 ${
-                        disabled ? 'cursor-not-allowed opacity-55' : 'hover:-translate-y-1 hover:shadow-2xl'
-                    }`;
-                    const content = (
-                        <>
-                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${item.tone} text-white shadow-lg sm:h-12 sm:w-12 sm:rounded-2xl`}>
-                                {item.icon}
-                            </div>
-                            <div className="min-w-0">
-                                <p className="truncate text-xs font-black text-gray-900 sm:text-sm dark:text-white">{item.label}</p>
-                                <p className="text-[10px] font-bold text-gray-500 sm:text-xs dark:text-gray-400">{item.count} item</p>
-                            </div>
-                        </>
-                    );
+            <div className="mx-auto max-w-3xl">
+                <button
+                    type="button"
+                    onClick={() => setIsOpen((open) => !open)}
+                    aria-expanded={isOpen}
+                    aria-controls="roadmap-resource-library"
+                    className="flex min-h-12 w-full items-center justify-between gap-4 rounded-2xl border border-white/70 bg-white/70 px-4 py-3 text-left shadow-lg shadow-red-900/5 backdrop-blur-md transition hover:border-red-200 dark:border-gray-800 dark:bg-gray-900/70"
+                >
+                    <span className="flex min-w-0 items-center gap-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-600 text-white">
+                            <AutoStoriesIcon sx={{ fontSize: 21 }} />
+                        </span>
+                        <span className="min-w-0">
+                             <span className="block text-sm font-black text-gray-900 dark:text-white">Perpustakaan Materi</span>
+                             <span className="block truncate text-xs font-semibold text-gray-500 dark:text-gray-400">
+                                 {totalItems} materi dan latihan dari seluruh minggu
+                             </span>
+                        </span>
+                    </span>
+                    <ExpandMoreIcon
+                        className={`shrink-0 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                        sx={{ fontSize: 24 }}
+                    />
+                </button>
 
-                    return disabled ? (
-                        <div key={item.label} className={className}>
-                            {content}
-                        </div>
-                    ) : (
-                        <Link key={item.label} href={item.href} className={className}>
-                            {content}
-                        </Link>
-                    );
-                })}
+                <AnimatePresence initial={false}>
+                    {isOpen && (
+                        <motion.div
+                            id="roadmap-resource-library"
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="overflow-hidden"
+                        >
+                            <div className="grid grid-cols-2 gap-2 pt-3 sm:gap-3 lg:grid-cols-4">
+                                {items.map((item) => {
+                                    const disabled = !item.href || item.count === 0;
+                                    const className = `group flex min-h-[88px] flex-col items-start gap-2 rounded-xl border border-white/70 bg-white/70 px-3 py-3 text-left shadow-md backdrop-blur-md transition sm:min-h-0 sm:flex-row sm:items-center sm:gap-3 dark:border-gray-800 dark:bg-gray-900/70 ${
+                                        disabled ? 'cursor-not-allowed opacity-55' : 'hover:-translate-y-0.5 hover:border-red-200'
+                                    }`;
+                                    const content = (
+                                        <>
+                                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${item.tone} text-white shadow-md`}>
+                                                {item.icon}
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-xs font-black text-gray-900 sm:text-sm dark:text-white">{item.label}</p>
+                                                <p className="text-[10px] font-bold text-gray-500 sm:text-xs dark:text-gray-400">{item.count} item</p>
+                                            </div>
+                                        </>
+                                    );
+
+                                    return disabled ? (
+                                        <div key={item.label} className={className}>
+                                            {content}
+                                        </div>
+                                    ) : (
+                                        <Link key={item.label} href={item.href} className={className}>
+                                            {content}
+                                        </Link>
+                                    );
+                                })}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
+        </section>
+    );
+}
+
+function WeekRoadmapSection({ week, expanded, onToggle, onSelect }) {
+    const days = week.days || [];
+    const hasDays = days.length > 0;
+    const roadmapItems = hasDays
+        ? days
+        : [{
+            id: `week-${week.id}`,
+            day_number: null,
+            title: 'Materi Minggu',
+            status: week.status,
+            has_content: week.has_content,
+            lock_reason: week.lock_reason,
+        }];
+    const completedDays = days.filter((day) => day.status === 'done').length;
+    const progressPercent = hasDays ? Math.round((completedDays / days.length) * 100) : (week.status === 'done' ? 100 : 0);
+    const nextDay = days.find((day) => day.status === 'active');
+    const isLocked = ['locked', 'unavailable'].includes(week.status);
+    const statusText = week.status === 'done'
+        ? 'Selesai'
+        : week.status === 'active'
+            ? 'Sedang berjalan'
+            : 'Terkunci';
+    const statusTone = week.status === 'done'
+        ? 'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300'
+        : week.status === 'active'
+            ? 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300'
+            : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400';
+    const pathHeight = roadmapItems.length * 124 + 116;
+
+    return (
+        <section className="mx-auto mb-5 max-w-xl sm:mb-7">
+            <button
+                type="button"
+                onClick={() => !isLocked && onToggle()}
+                disabled={isLocked}
+                aria-expanded={expanded}
+                className={`flex min-h-[76px] w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left shadow-lg shadow-red-900/5 transition sm:px-5 ${
+                    week.status === 'active'
+                        ? 'border-red-200 bg-white hover:border-red-300 dark:border-red-900/60 dark:bg-gray-900'
+                        : 'border-white/70 bg-white/75 hover:border-gray-200 dark:border-gray-800 dark:bg-gray-900/75'
+                } ${isLocked ? 'cursor-not-allowed opacity-75' : ''}`}
+            >
+                <span className="flex min-w-0 items-center gap-3">
+                    <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-black ${
+                        week.status === 'done'
+                            ? 'bg-green-600 text-white'
+                            : week.status === 'active'
+                                ? 'bg-red-600 text-white'
+                                : 'bg-gray-200 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                    }`}>
+                        {week.status === 'done'
+                            ? <CheckCircleIcon sx={{ fontSize: 23 }} />
+                            : isLocked
+                                ? <LockIcon sx={{ fontSize: 20 }} />
+                                : week.week_number}
+                    </span>
+                    <span className="min-w-0">
+                        <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-red-600 dark:text-red-400">
+                            Minggu {week.week_number}
+                        </span>
+                         <span className="mt-0.5 block truncate text-sm font-black text-gray-900 sm:text-base dark:text-white">
+                             {week.display_title || week.title}
+                         </span>
+                         {hasDays && !isLocked && (
+                             <span className="mt-1.5 block">
+                                 <span className="flex items-center justify-between gap-2 text-[10px] font-bold text-gray-500 dark:text-gray-400">
+                                     <span>{nextDay ? `Lanjut Hari ${nextDay.day_number}` : `${completedDays}/${days.length} Hari selesai`}</span>
+                                     <span>{progressPercent}%</span>
+                                 </span>
+                                 <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
+                                     <span
+                                         className={`block h-full rounded-full ${week.status === 'done' ? 'bg-green-500' : 'bg-red-500'}`}
+                                         style={{ width: `${progressPercent}%` }}
+                                     />
+                                 </span>
+                             </span>
+                         )}
+                         {isLocked && (
+                            <span className="mt-0.5 block truncate text-[11px] font-semibold text-gray-500 dark:text-gray-400">
+                                {week.lock_reason || 'Selesaikan minggu sebelumnya.'}
+                            </span>
+                        )}
+                    </span>
+                </span>
+
+                <span className="flex shrink-0 items-center gap-2">
+                    <span className="hidden text-right sm:block">
+                        <span className={`block rounded-full px-2.5 py-1 text-[10px] font-black ${statusTone}`}>{statusText}</span>
+                        {hasDays && <span className="mt-1 block text-[10px] font-bold text-gray-400">{completedDays}/{days.length} Hari</span>}
+                    </span>
+                    {!isLocked && (
+                        <ExpandMoreIcon
+                            className={`text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
+                            sx={{ fontSize: 24 }}
+                        />
+                    )}
+                </span>
+            </button>
+
+            <AnimatePresence initial={false}>
+                {expanded && !isLocked && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden"
+                    >
+                        <div
+                            className="relative mx-auto mt-3 max-w-lg rounded-2xl border border-white/70 bg-white/35 py-6 shadow-xl shadow-red-900/5 backdrop-blur-sm sm:rounded-3xl sm:py-8 dark:border-gray-800 dark:bg-gray-900/35"
+                            style={{ minHeight: `${pathHeight}px` }}
+                        >
+                            <svg
+                                className="pointer-events-none absolute inset-0 h-full w-full"
+                                viewBox={`0 0 400 ${pathHeight}`}
+                                preserveAspectRatio="none"
+                                aria-hidden="true"
+                            >
+                                <defs>
+                                    <linearGradient id={`dayPathGrad-${week.id}`} x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor={theme.pathGrad?.[0] || '#dc2626'} />
+                                        <stop offset="50%" stopColor={theme.pathGrad?.[1] || '#f97316'} />
+                                        <stop offset="100%" stopColor={theme.pathGrad?.[2] || '#e5e7eb'} />
+                                    </linearGradient>
+                                </defs>
+                                {roadmapItems.slice(0, -1).map((item, index) => {
+                                    const x1 = (parseFloat(PATH_POSITIONS[index % PATH_POSITIONS.length]) / 100) * 400;
+                                    const x2 = (parseFloat(PATH_POSITIONS[(index + 1) % PATH_POSITIONS.length]) / 100) * 400;
+                                    const y1 = index * 124 + 64;
+                                    const y2 = (index + 1) * 124 + 64;
+
+                                    return (
+                                        <line
+                                            key={item.id}
+                                            x1={x1}
+                                            y1={y1}
+                                            x2={x2}
+                                            y2={y2}
+                                            stroke={item.status === 'done' ? '#22c55e' : `url(#dayPathGrad-${week.id})`}
+                                            strokeWidth="5"
+                                            strokeDasharray="12 7"
+                                            strokeLinecap="round"
+                                            opacity={item.status === 'done' ? 0.9 : 0.45}
+                                        />
+                                    );
+                                })}
+                            </svg>
+
+                            {roadmapItems.map((item, index) => {
+                                const left = PATH_POSITIONS[index % PATH_POSITIONS.length];
+                                const style = nodeStyles[item.status] || nodeStyles.locked;
+                                const itemLocked = ['locked', 'unavailable'].includes(item.status);
+                                const itemDone = item.status === 'done';
+                                const itemActive = item.status === 'active';
+
+                                return (
+                                    <div
+                                        key={item.id}
+                                        className="absolute"
+                                        style={{ left, top: `${index * 124 + 28}px`, transform: 'translateX(-50%)' }}
+                                    >
+                                        {itemActive && (
+                                            <div
+                                                className="absolute inset-0 animate-ping rounded-full opacity-20"
+                                                style={{ backgroundColor: style.bg, margin: '-6px' }}
+                                            />
+                                        )}
+                                        <button
+                                            type="button"
+                                            disabled={itemLocked}
+                                            onClick={() => onSelect(hasDays ? item.id : null)}
+                                            aria-label={`${hasDays ? `Hari ${item.day_number}` : 'Materi Minggu'}: ${item.title}${itemLocked ? ', terkunci' : ''}`}
+                                            className={`group relative flex w-[112px] flex-col items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-4 ${
+                                                itemLocked ? 'cursor-not-allowed' : ''
+                                            }`}
+                                        >
+                                            <motion.span
+                                                whileHover={!itemLocked ? { scale: 1.08 } : {}}
+                                                whileTap={!itemLocked ? { scale: 0.96 } : {}}
+                                                className="flex h-16 w-16 items-center justify-center rounded-full transition-all sm:h-[72px] sm:w-[72px]"
+                                                style={{
+                                                    backgroundColor: style.bg,
+                                                    boxShadow: `0 5px 0 ${style.shadow}`,
+                                                    border: itemActive ? '3px solid #fff' : 'none',
+                                                    outline: itemActive ? `3px solid ${style.bg}` : 'none',
+                                                }}
+                                            >
+                                                {itemDone ? (
+                                                    <CheckCircleIcon sx={{ fontSize: 34, color: '#fff' }} />
+                                                ) : itemLocked ? (
+                                                    <LockIcon sx={{ fontSize: 27, color: '#9ca3af' }} />
+                                                ) : (
+                                                    <span className="text-center text-white">
+                                                        <span className="block text-[9px] font-black uppercase">Hari</span>
+                                                        <span className="block text-lg font-black leading-none">{item.day_number || week.week_number}</span>
+                                                    </span>
+                                                )}
+                                            </motion.span>
+
+                                            <span className={`line-clamp-2 max-w-[112px] text-center text-[11px] font-bold leading-tight ${
+                                                itemLocked ? 'text-gray-400' : 'text-gray-700 dark:text-gray-200'
+                                            }`}>
+                                                {item.title}
+                                            </span>
+
+                                            {itemActive && (
+                                                <span className="rounded-full bg-red-600 px-3 py-1 text-[10px] font-black text-white shadow-sm">
+                                                    LANJUTKAN
+                                                </span>
+                                            )}
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </section>
     );
 }
 
 
 export default function DaftarModul({ weeks = [], userProgress = {}, program = null, back_url = null }) {
-    const [openTooltip, setOpenTooltip] = useState(null);
-    const [selectedWeek, setSelectedWeek] = useState(null);
-
-    const handleMouseEnter = (i) => setOpenTooltip(i);
-    const handleMouseLeave = () => setOpenTooltip(null);
-    const handleClick = (_, __, week) => {
-        setSelectedWeek(week);
-        setOpenTooltip(null);
-    };
-
     // Jika tidak ada data dari backend, tampilkan placeholder
     const displayWeeks = weeks.length > 0 ? weeks : [
-        { id: 1, title: 'Week 1 - Perkenalan', subtitle: 'Admin belum menambahkan modul.', status: 'unavailable', has_content: false, flashcard_set_id: null, quiz_id: null },
+        { id: 1, title: 'Week 1 - Perkenalan', display_title: 'Perkenalan', week_number: 1, subtitle: 'Admin belum menambahkan modul.', status: 'unavailable', has_content: false, flashcard_set_id: null, quiz_id: null, days: [] },
     ];
+    const defaultExpandedWeekId = displayWeeks.find((week) => week.status === 'active')?.id
+        || [...displayWeeks].reverse().find((week) => week.status === 'done')?.id
+        || displayWeeks[0]?.id
+        || null;
+    const completedWeekCount = displayWeeks.filter((week) => week.status === 'done').length;
+    const roadmapProgress = displayWeeks.length > 0
+        ? Math.round((completedWeekCount / displayWeeks.length) * 100)
+        : 0;
+    const activeWeek = displayWeeks.find((week) => week.status === 'active');
+    const activeDay = activeWeek?.days?.find((day) => day.status === 'active');
+    const nextAction = activeWeek
+        ? `Lanjutkan Week ${activeWeek.week_number}${activeDay ? `, Hari ${activeDay.day_number}` : ''}`
+        : completedWeekCount === displayWeeks.length
+            ? 'Semua Week sudah selesai'
+            : 'Belum ada Week yang dapat dibuka';
+    const [expandedWeekId, setExpandedWeekId] = useState(defaultExpandedWeekId);
+    const [selectedItem, setSelectedItem] = useState(null);
+
+    useEffect(() => {
+        setExpandedWeekId(defaultExpandedWeekId);
+        setSelectedItem(null);
+    }, [program?.id]);
 
     return (
         <AuthenticatedLayout header={false}>
@@ -318,298 +746,81 @@ export default function DaftarModul({ weeks = [], userProgress = {}, program = n
                 <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(220,38,38,0.10)_0%,transparent_28%),linear-gradient(240deg,rgba(245,158,11,0.12)_0%,transparent_30%),repeating-linear-gradient(90deg,rgba(120,53,15,0.055)_0_1px,transparent_1px_82px),repeating-linear-gradient(0deg,rgba(120,53,15,0.045)_0_1px,transparent_1px_82px)] dark:bg-[linear-gradient(120deg,rgba(220,38,38,0.14)_0%,transparent_28%),linear-gradient(240deg,rgba(245,158,11,0.08)_0%,transparent_30%),repeating-linear-gradient(90deg,rgba(255,255,255,0.035)_0_1px,transparent_1px_82px),repeating-linear-gradient(0deg,rgba(255,255,255,0.028)_0_1px,transparent_1px_82px)]" />
                 <div className="pointer-events-none absolute left-4 top-40 hidden text-[13rem] font-black leading-none text-red-900/[0.045] dark:text-white/[0.035] lg:block">道</div>
                 <div className="pointer-events-none absolute right-8 top-[560px] hidden text-[12rem] font-black leading-none text-amber-900/[0.05] dark:text-white/[0.03] lg:block">週</div>
-                <div className="relative z-10 hidden px-4 pt-6 sm:block sm:px-6 sm:pt-8 lg:px-20">
-                    <SeasonalScene
-                        title={`Roadmap ${program?.title || 'Mingguan JLPT N3'}`}
-                        subtitle="Setiap node adalah satu quest: flashcard untuk mengenal pola, kuis untuk mengunci mastery, lalu lanjut ke minggu berikutnya."
-                        label="Weekly Roadmap"
-                        icon="torii"
-                        compact
-                    >
-                        <div className="grid w-full max-w-sm grid-cols-3 gap-3">
-                            <LearningStatBadge icon={<CheckCircleIcon sx={{ fontSize: 20 }} />} label="Selesai" value={displayWeeks.filter(w => w.status === 'done').length} color="green" />
-                            <LearningStatBadge icon={<PlayArrowIcon sx={{ fontSize: 20 }} />} label="Aktif" value={displayWeeks.filter(w => w.status === 'active').length} color="red" />
-                            <LearningStatBadge icon={<LockIcon sx={{ fontSize: 20 }} />} label="Terkunci" value={displayWeeks.filter(w => w.status === 'locked' || w.status === 'unavailable').length} color="amber" />
+                <header className="relative z-10 px-4 pb-3 pt-5 sm:px-6 sm:pb-5 sm:pt-7 lg:px-20">
+                    <div className="mx-auto max-w-3xl">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            {back_url ? (
+                                <Link
+                                    href={back_url}
+                                    className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/70 bg-white/75 px-3 text-xs font-black text-gray-600 shadow-sm transition hover:border-red-200 hover:text-red-600 dark:border-gray-800 dark:bg-gray-900/75 dark:text-gray-300"
+                                >
+                                    <ArrowBackIcon sx={{ fontSize: 16 }} />
+                                    Pilih Program
+                                </Link>
+                            ) : <span />}
+                            <span className="inline-flex min-h-9 items-center gap-2 rounded-full bg-red-600/10 px-3 text-[11px] font-black uppercase tracking-[0.12em] text-red-600">
+                                <AutoStoriesIcon sx={{ fontSize: 15 }} />
+                                {program?.level ? `Kurikulum ${program.level}` : 'Kurikulum JLPT N3'}
+                            </span>
                         </div>
-                    </SeasonalScene>
-                </div>
 
-                {/* Hero Section */}
-                <div className="relative z-10 px-4 pb-6 pt-6 sm:px-6 sm:pb-8 sm:pt-12 lg:px-20">
-                    <div className="max-w-2xl mx-auto text-center">
-                        {back_url && (
-                            <Link
-                                href={back_url}
-                                className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/75 px-4 py-2 text-xs font-black uppercase tracking-wider text-gray-600 shadow-sm transition hover:border-red-200 hover:text-red-600 dark:border-gray-800 dark:bg-gray-900/75 dark:text-gray-300"
-                            >
-                                <ArrowBackIcon sx={{ fontSize: 16 }} />
-                                Pilih Program
-                            </Link>
-                        )}
-                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-600/10 text-red-600 text-xs font-bold uppercase tracking-wider mb-5">
-                            <AutoStoriesIcon sx={{ fontSize: 14 }} />
-                            {program?.level ? `Kurikulum ${program.level}` : 'Kurikulum JLPT N3'}
-                        </div>
-                        <h1 className="mb-2 text-2xl font-black tracking-tight text-gray-900 sm:mb-3 sm:text-3xl lg:text-4xl dark:text-white">
-                            {program?.title ? `Peta ${program.title}` : 'Peta Perjalanan Mingguan'}
-                        </h1>
-                        <p className="hidden text-sm leading-relaxed text-gray-500 sm:block lg:text-base dark:text-gray-400">
-                            Setiap minggu berisi <strong>PPT/Konten N3</strong> sebagai penunjang, lalu <strong>Flashcard</strong> dan <strong>Kuis</strong> sebagai jalur utama. Selesaikan satu minggu untuk membuka minggu berikutnya.
-                        </p>
-
-                        {/* Stats mini */}
-                        <div className="mx-auto mt-4 flex max-w-xl items-center justify-center gap-3 rounded-[1.25rem] border border-white/70 bg-white/55 px-4 py-3 shadow-xl shadow-red-900/5 backdrop-blur-md sm:mt-6 sm:gap-4 sm:rounded-[1.5rem] sm:px-5 sm:py-4 dark:border-gray-800 dark:bg-gray-900/55">
-                            <div className="text-center">
-                                <p className="text-xl font-black text-green-600 sm:text-2xl">{displayWeeks.filter(w => w.status === 'done').length}</p>
-                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Selesai</p>
-                            </div>
-                            <div className="h-7 w-px bg-gray-200 sm:h-8 dark:bg-gray-700" />
-                            <div className="text-center">
-                                <p className="text-xl font-black text-red-600 sm:text-2xl">{displayWeeks.length}</p>
-                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Total Minggu</p>
-                            </div>
-                            <div className="h-7 w-px bg-gray-200 sm:h-8 dark:bg-gray-700" />
-                            <div className="text-center">
-                                <p className="text-xl font-black text-gray-700 sm:text-2xl dark:text-gray-300">
-                                    {displayWeeks.filter(w => w.status === 'locked').length}
+                        <div className="mt-5 sm:flex sm:items-end sm:justify-between sm:gap-8">
+                            <div className="min-w-0">
+                                <h1 className="text-2xl font-black text-gray-900 sm:text-3xl dark:text-white">
+                                    {program?.title ? `Roadmap ${program.title}` : 'Roadmap Mingguan'}
+                                </h1>
+                                <p className={`mt-1.5 text-sm font-bold ${activeWeek ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                                    {nextAction}
                                 </p>
-                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Terkunci</p>
+                            </div>
+
+                            <div className="mt-4 w-full sm:mt-0 sm:max-w-xs">
+                                <div className="flex items-center justify-between text-xs font-bold text-gray-500 dark:text-gray-400">
+                                    <span>{completedWeekCount} dari {displayWeeks.length} Week selesai</span>
+                                    <span>{roadmapProgress}%</span>
+                                </div>
+                                <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/80 shadow-inner dark:bg-gray-800">
+                                    <div className="h-full rounded-full bg-red-600 transition-all" style={{ width: `${roadmapProgress}%` }} />
+                                </div>
                             </div>
                         </div>
 
-                        {program?.kloter ? (
-                            <div className="mx-auto mt-3 max-w-xl rounded-[1.25rem] border border-emerald-100 bg-emerald-50/80 px-4 py-3 text-left shadow-sm sm:mt-4 sm:rounded-[1.5rem] sm:px-5 sm:py-4 dark:border-emerald-900/35 dark:bg-emerald-900/20">
-                                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-300">Kloter aktif</p>
-                                <p className="mt-1 text-sm font-black text-gray-900 dark:text-white">{program.kloter.nama}</p>
-                                <p className="mt-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
-                                    Week aktif: {program.kloter.minggu_aktif || 0} - mulai {program.kloter.tanggal_mulai || '-'}
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="mx-auto mt-3 max-w-xl rounded-[1.25rem] border border-amber-100 bg-amber-50/80 px-4 py-3 text-left shadow-sm sm:mt-4 sm:rounded-[1.5rem] sm:px-5 sm:py-4 dark:border-amber-900/35 dark:bg-amber-900/20">
-                                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-600 dark:text-amber-300">Belum masuk kloter</p>
-                                <p className="mt-1 text-xs font-semibold leading-5 text-gray-500 dark:text-gray-400">
-                                    Roadmap masih memakai akses umum. Setelah masuk kloter, pembukaan week akan mengikuti tanggal mulai batch.
-                                </p>
-                            </div>
-                        )}
+                        <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                            <span className={`h-2 w-2 rounded-full ${program?.kloter ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+                            {program?.kloter ? (
+                                <>
+                                    <span className="font-black text-gray-700 dark:text-gray-200">{program.kloter.nama}</span>
+                                    <span>· Week aktif {program.kloter.minggu_aktif || 0}</span>
+                                    <span>· Mulai {program.kloter.tanggal_mulai || '-'}</span>
+                                </>
+                            ) : (
+                                <span>Jadwal umum aktif</span>
+                            )}
+                        </div>
                     </div>
+                </header>
+
+                {/* Path Section */}
+                <div className="relative z-10 px-4 pb-8 pt-3 sm:px-6 sm:pb-14 sm:pt-5">
+                    {displayWeeks.map((week) => (
+                        <WeekRoadmapSection
+                            key={week.id}
+                            week={week}
+                            expanded={expandedWeekId === week.id}
+                            onToggle={() => setExpandedWeekId((current) => current === week.id ? null : week.id)}
+                            onSelect={(dayId) => setSelectedItem({ week, dayId })}
+                        />
+                    ))}
                 </div>
 
                 <ResourceBar resources={program?.resources} />
 
-                {/* Path Section */}
-                <div className="relative z-10 px-4 py-8 pb-10 sm:px-6 sm:py-10 sm:pb-24">
-                    <div className="mx-auto mb-10 hidden max-w-3xl sm:block">
-                        <MascotGuide
-                            title="Tips Jalur Belajar"
-                            message="Node abu-abu berarti belum saatnya dibuka. Node aktif bisa dimulai, dan node hijau sudah selesai. Klik node untuk melihat detail flashcard dan kuis."
-                        />
-                    </div>
-                    {Object.entries(
-                        displayWeeks.reduce((acc, week) => {
-                            const wn = week.week_number || 1;
-                            if (!acc[wn]) acc[wn] = [];
-                            acc[wn].push(week);
-                            return acc;
-                        }, {})
-                    ).map(([weekNumber, groupWeeks], groupIdx) => (
-                        <div key={weekNumber} className="relative mb-16 sm:mb-24">
-                            {/* Week Header */}
-                            <div className="relative z-10 mx-auto mb-6 max-w-xl text-center sm:mb-10">
-                                <div className="inline-block cursor-default rounded-xl bg-red-600 px-4 py-2 font-black text-white shadow-[0_5px_0_#991b1b] transition-transform hover:-translate-y-1 sm:rounded-2xl sm:px-6 sm:py-3 sm:shadow-[0_6px_0_#991b1b]">
-                                    <h2 className="text-lg sm:text-xl">Unit {weekNumber}</h2>
-                                    <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-red-100 sm:mt-1 sm:text-xs">
-                                        Kumpulan Modul
-                                    </p>
-                                </div>
-                            </div>
-                            
-                            <div className="relative mx-auto max-w-lg rounded-[1.5rem] border border-white/70 bg-white/35 py-8 shadow-2xl shadow-red-900/5 backdrop-blur-sm sm:rounded-[2rem] sm:py-10 dark:border-gray-800 dark:bg-gray-900/35" style={{ minHeight: `${groupWeeks.length * 130 + 160}px` }}>
-
-                                {/* SVG Connector Lines */}
-                                <svg
-                                    className="absolute inset-0 w-full h-full pointer-events-none"
-                                    viewBox={`0 0 400 ${groupWeeks.length * 130 + 160}`}
-                                    preserveAspectRatio="none"
-                                >
-                                    <defs>
-                                        <linearGradient id={`weekPathGrad-${weekNumber}`} x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="0%" stopColor={theme.pathGrad?.[0] || '#dc2626'} />
-                                            <stop offset="50%" stopColor={theme.pathGrad?.[1] || '#f97316'} />
-                                            <stop offset="100%" stopColor={theme.pathGrad?.[2] || '#e5e7eb'} />
-                                        </linearGradient>
-                                    </defs>
-                                    {groupWeeks.slice(0, -1).map((_, i) => {
-                                        const positions = PATH_POSITIONS;
-                                        const pct1 = parseFloat(positions[i % positions.length]) / 100;
-                                        const pct2 = parseFloat(positions[(i + 1) % positions.length]) / 100;
-                                        const x1 = pct1 * 400;
-                                        const x2 = pct2 * 400;
-                                        const y1 = i * 130 + 105;
-                                        const y2 = (i + 1) * 130 + 105;
-                                        const isDone = groupWeeks[i].status === 'done';
-                                        return (
-                                            <line
-                                                key={i}
-                                                x1={x1} y1={y1}
-                                                x2={x2} y2={y2}
-                                                stroke={isDone ? '#22c55e' : `url(#weekPathGrad-${weekNumber})`}
-                                                strokeWidth="5"
-                                                strokeDasharray="12 7"
-                                                strokeLinecap="round"
-                                                opacity={isDone ? 0.9 : 0.45}
-                                            />
-                                        );
-                                    })}
-                                </svg>
-
-                                {/* Week Nodes */}
-                                {groupWeeks.map((week, i) => {
-                                    const left = PATH_POSITIONS[i % PATH_POSITIONS.length];
-                                    const style = nodeStyles[week.status] || nodeStyles.locked;
-                                    const isDone = week.status === 'done';
-                                    const isActive = week.status === 'active';
-                                    const isLocked = week.status === 'locked' || week.status === 'unavailable';
-                                    const isFinal = week.isFinal;
-                                    const tooltipId = `tooltip-${week.id}`;
-
-                                    return (
-                                        <div
-                                            key={week.id}
-                                            className="absolute"
-                                            style={{ left, top: `${i * 130 + 40}px`, transform: 'translateX(-50%)' }}
-                                        >
-                                            {/* Tooltip */}
-                                            <AnimatePresence>
-                                                {openTooltip === tooltipId && (
-                                                    <WeekTooltip
-                                                        week={week}
-                                                        placement={parseFloat(left) > 50 ? 'left' : 'right'}
-                                                    />
-                                                )}
-                                            </AnimatePresence>
-
-                                            {/* Pulse ring for active */}
-                                            {isActive && (
-                                                <div
-                                                    className="absolute inset-0 rounded-full animate-ping opacity-25"
-                                                    style={{ backgroundColor: style.bg, margin: '-8px' }}
-                                                />
-                                            )}
-
-                                            {/* Node Button */}
-                                            <button
-                                                onMouseEnter={() => handleMouseEnter(tooltipId)}
-                                                onMouseLeave={() => handleMouseLeave(tooltipId)}
-                                                onClick={() => handleClick(tooltipId, isLocked, week)}
-                                                className="relative flex flex-col items-center gap-2 focus:outline-none group"
-                                            >
-                                        {/* Circle */}
-                                        <motion.div
-                                            whileHover={!isLocked ? { scale: 1.1 } : {}}
-                                            whileTap={!isLocked ? { scale: 0.95 } : {}}
-                                            className="w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200"
-                                            style={{
-                                                backgroundColor: style.bg,
-                                                boxShadow: `0 6px 0 ${style.shadow}`,
-                                                border: isActive ? '4px solid #fff' : 'none',
-                                                outline: isActive ? `3px solid ${style.bg}` : 'none',
-                                            }}
-                                        >
-                                            {isDone ? (
-                                                <CheckCircleIcon sx={{ fontSize: 40, color: '#fff' }} />
-                                            ) : isLocked ? (
-                                                <LockIcon sx={{ fontSize: 30, color: '#9ca3af' }} />
-                                            ) : isFinal ? (
-                                                <EmojiEventsIcon sx={{ fontSize: 36, color: '#fff' }} />
-                                            ) : (
-                                                <div className="text-center">
-                                                    <StyleIcon sx={{ fontSize: 22, color: '#fff' }} />
-                                                    <p className="text-[9px] text-white font-black mt-0.5">WEEK</p>
-                                                </div>
-                                            )}
-                                        </motion.div>
-
-                                        {/* Stars for done */}
-                                        {isDone && (
-                                            <div className="flex gap-0.5">
-                                                {[0, 1, 2].map(s => (
-                                                    <StarIcon key={s} sx={{ fontSize: 13, color: '#FFD700' }} />
-                                                ))}
-                                            </div>
-                                        )}
-
-                                        {/* MULAI button bounce for active */}
-                                        {isActive && (
-                                            <motion.span
-                                                animate={{ y: [0, -4, 0] }}
-                                                transition={{ repeat: Infinity, duration: 1.2 }}
-                                                className="text-white text-xs font-black px-4 py-1.5 rounded-full shadow-md"
-                                                style={{ backgroundColor: style.bg }}
-                                            >
-                                                MULAI
-                                            </motion.span>
-                                        )}
-
-                                        {/* Week label */}
-                                        <span
-                                            className="text-[11px] font-bold max-w-[110px] text-center leading-tight"
-                                            style={{ color: isLocked ? '#9ca3af' : '#374151' }}
-                                        >
-                                            {week.title}
-                                        </span>
-
-                                        {/* Phase indicators */}
-                                        {!isLocked && (
-                                            <div className="flex gap-1 items-center">
-                                                <span className={`w-2 h-2 rounded-full ${week.flashcard_done ? 'bg-orange-400' : 'bg-gray-200'}`} title="Flashcard" />
-                                                <span className={`w-2 h-2 rounded-full ${week.quiz_done ? 'bg-red-400' : 'bg-gray-200'}`} title="Kuis" />
-                                            </div>
-                                        )}
-
-                                        {isFinal && (
-                                            <span className="text-amber-500 text-[10px] font-black uppercase tracking-wide">Ujian Akhir</span>
-                                        )}
-                                    </button>
-                                </div>
-                            );
-                        })}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                {/* Legend */}
-                <div className="relative z-20 mx-auto mt-1 w-[calc(100%-2rem)] max-w-lg sm:fixed sm:bottom-6 sm:left-1/2 sm:mt-0 sm:w-auto sm:max-w-none sm:-translate-x-1/2">
-                    <div className="rounded-2xl bg-white shadow-xl dark:bg-gray-900">
-                    <div className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-2xl border border-gray-100 px-4 py-3 text-[11px] font-bold text-gray-500 dark:border-gray-800 sm:flex sm:min-w-max sm:items-center sm:gap-5 sm:px-5 sm:text-xs">
-                        <div className="flex items-center gap-1.5">
-                            <span className="w-3 h-3 rounded-full bg-green-500 inline-block" />
-                            Selesai
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                            <span className="w-3 h-3 rounded-full bg-red-500 inline-block" />
-                            Sedang Berjalan
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                            <span className="w-3 h-3 rounded-full bg-gray-200 inline-block" />
-                            Terkunci
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-orange-400 inline-block" />
-                            <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
-                            Flashcard / Kuis
-                        </div>
-                    </div>
-                    </div>
-                </div>
-
                 <AnimatePresence>
-                    {selectedWeek && (
+                    {selectedItem && (
                         <ModulDetailPanel
-                            week={selectedWeek}
-                            onClose={() => setSelectedWeek(null)}
+                            week={selectedItem.week}
+                            initialDayId={selectedItem.dayId}
+                            onClose={() => setSelectedItem(null)}
                         />
                     )}
                 </AnimatePresence>

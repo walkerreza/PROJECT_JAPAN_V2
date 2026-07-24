@@ -12,8 +12,7 @@ class PembelajaranPenggunaService
 {
     public function __construct(
         private AksesKuisPenggunaService $aksesKuis
-    ) {
-    }
+    ) {}
 
     public function quizLobby(Pengguna $user): Collection
     {
@@ -125,18 +124,25 @@ class PembelajaranPenggunaService
             return '10 Menit';
         }
 
-        return max(1, (int) ceil($timeLimit / 60)) . ' Menit';
+        return max(1, (int) ceil($timeLimit / 60)).' Menit';
     }
 
     private function quizFlashcards(Kuis $quiz): Collection
     {
         $moduleId = $quiz->module_id;
+        $moduleDayId = $quiz->module_day_id;
         $levelId = $quiz->module?->level_id;
 
         $sets = SetFlashcard::with('flashcards')
             ->where('status', 'published')
             ->whereHas('flashcards')
-            ->where(function ($query) use ($moduleId, $levelId) {
+            ->where(function ($query) use ($moduleId, $moduleDayId, $levelId) {
+                if ($moduleDayId) {
+                    $query->where('module_day_id', $moduleDayId);
+
+                    return;
+                }
+
                 if ($moduleId) {
                     $query->where('module_id', $moduleId);
                 }

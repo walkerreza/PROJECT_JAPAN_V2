@@ -56,4 +56,9 @@ class Modul extends Model
     {
         return $this->hasMany(ReviewSoal::class, 'module_id');
     }
+
+    public function days(): HasMany
+    {
+        return $this->hasMany(HariModul::class, 'module_id')->orderBy('day_number');
+    }
 }

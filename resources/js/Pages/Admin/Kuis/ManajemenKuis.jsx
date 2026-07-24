@@ -8,6 +8,7 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import QuizOutlinedIcon from '@mui/icons-material/QuizOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
+import LearningResourceCreateDialog from '@/Components/Admin/LearningResourceCreateDialog';
 
 const TYPE_CONFIG = {
     multiple_choice: { label: 'Pilihan Ganda', color: 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300' },
@@ -37,6 +38,8 @@ function TypeBadge({ type }) {
 }
 
 export default function QuizzesIndex({ quizzes, modules = [], filters = {} }) {
+    const contextualModule = modules.find((module) => String(module.id) === String(filters.module_id));
+    const contextualDay = (contextualModule?.days || []).find((day) => String(day.id) === String(filters.module_day_id));
     const [filterModule, setFilterModule] = useState(filters?.module_id || 'all');
     const [searchQuery, setSearchQuery] = useState(filters?.search || '');
     const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -44,15 +47,9 @@ export default function QuizzesIndex({ quizzes, modules = [], filters = {} }) {
     const [editingQuiz, setEditingQuiz] = useState(null);
     const { confirmState, openConfirm, closeConfirm } = useConfirmAction();
 
-    const createForm = useForm({
-        module_id: '',
-        type: 'multiple_choice',
-        time_limit: '',
-        passing_score: 70,
-        status: 'published',
-    });
     const editForm = useForm({
         module_id: '',
+        module_day_id: '',
         type: 'multiple_choice',
         time_limit: '',
         passing_score: 70,
@@ -69,6 +66,8 @@ export default function QuizzesIndex({ quizzes, modules = [], filters = {} }) {
         router.get(route('admin.quizzes.index'), {
             search: searchQuery,
             module_id: filterModule === 'all' ? undefined : filterModule,
+            program_id: filters?.program_id,
+            module_day_id: filters?.module_day_id,
         }, { preserveState: true });
     };
 
@@ -78,20 +77,11 @@ export default function QuizzesIndex({ quizzes, modules = [], filters = {} }) {
         });
     };
 
-    const handleCreateQuiz = (e) => {
-        e.preventDefault();
-        createForm.post(route('admin.quizzes.store'), {
-            onSuccess: () => {
-                setShowCreateModal(false);
-                createForm.reset();
-            },
-        });
-    };
-
     const openEditModal = (quiz) => {
         setEditingQuiz(quiz);
         editForm.setData({
             module_id: quiz.module?.id || '',
+            module_day_id: quiz.day?.id || '',
             type: quiz.type || 'multiple_choice',
             time_limit: quiz.time_limit || '',
             passing_score: quiz.passing_score ?? 70,
@@ -210,7 +200,7 @@ export default function QuizzesIndex({ quizzes, modules = [], filters = {} }) {
                                         <tr key={quiz.id} className="transition-colors hover:bg-gray-50/70 dark:hover:bg-gray-800/40">
                                             <td className="px-6 py-5">
                                                 <p className="font-black text-gray-900 dark:text-white">{quiz.module?.title || quiz.lesson?.title || 'Modul tidak ditemukan'}</p>
-                                                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Week {quiz.module?.week_number || '-'} - Quiz #{quiz.id}</p>
+                                                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Week {quiz.module?.week_number || '-'} - Day {quiz.day?.day_number || '-'} - Quiz #{quiz.id}</p>
                                             </td>
                                             <td className="px-6 py-5"><TypeBadge type={quiz.type} /></td>
                                             <td className="px-6 py-5 text-sm font-bold text-gray-600 dark:text-gray-300">{quiz.question_count} soal</td>
@@ -247,7 +237,7 @@ export default function QuizzesIndex({ quizzes, modules = [], filters = {} }) {
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0">
                                             <h2 className="truncate text-base font-black text-gray-900 dark:text-white">{quiz.module?.title || quiz.lesson?.title || 'Modul tidak ditemukan'}</h2>
-                                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{quiz.question_count} soal - {quiz.time_limit ? `${Math.floor(quiz.time_limit / 60)} menit` : 'Tanpa batas'} - Lulus {quiz.passing_score ?? 70}%</p>
+                                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Day {quiz.day?.day_number || '-'} - {quiz.question_count} soal - {quiz.time_limit ? `${Math.floor(quiz.time_limit / 60)} menit` : 'Tanpa batas'} - Lulus {quiz.passing_score ?? 70}%</p>
                                         </div>
                                         <StatusBadge status={quiz.status} />
                                     </div>
@@ -284,53 +274,15 @@ export default function QuizzesIndex({ quizzes, modules = [], filters = {} }) {
                 </main>
             </div>
 
-            {showCreateModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                    <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl dark:bg-gray-900">
-                        <div className="border-b border-gray-100 p-6 dark:border-gray-800">
-                            <h3 className="text-lg font-black text-gray-900 dark:text-white">Buat Kuis Baru</h3>
-                            <p className="mt-1 text-sm text-gray-400 dark:text-gray-500">Pilih modul mingguan dan tipe kuis. Soal ditambahkan lewat Builder.</p>
-                        </div>
-                        <form onSubmit={handleCreateQuiz} className="space-y-4 p-6">
-                            <div>
-                                <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Modul Mingguan</label>
-                                <select value={createForm.data.module_id} onChange={(e) => createForm.setData('module_id', e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white" required>
-                                    <option value="">Pilih Modul</option>
-                                    {modules.map((module) => <option key={module.id} value={module.id}>Week {module.week_number || '-'} - {module.title}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Tipe Kuis</label>
-                                <select value={createForm.data.type} onChange={(e) => createForm.setData('type', e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white" required>
-                                    <option value="multiple_choice">Pilihan Ganda</option>
-                                    <option value="fill_blank">Mengetik/Isian</option>
-                                    <option value="listening">Mendengarkan</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Batas Waktu (detik)</label>
-                                <input type="number" min="0" value={createForm.data.time_limit} onChange={(e) => createForm.setData('time_limit', e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white" placeholder="Kosongkan jika tanpa batas" />
-                            </div>
-                            <div>
-                                <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Nilai Lulus (%)</label>
-                                <input type="number" min="1" max="100" value={createForm.data.passing_score} onChange={(e) => createForm.setData('passing_score', e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white" placeholder="Default 70" />
-                                <p className="mt-1 text-xs font-medium text-gray-400 dark:text-gray-500">Week berikutnya baru terbuka jika skor kuis mencapai nilai ini.</p>
-                            </div>
-                            <div>
-                                <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Status Publish</label>
-                                <select value={createForm.data.status} onChange={(e) => createForm.setData('status', e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white">
-                                    <option value="published">Published</option>
-                                    <option value="draft">Draft</option>
-                                </select>
-                            </div>
-                            <div className="flex gap-3 pt-2">
-                                <button type="button" onClick={() => setShowCreateModal(false)} className="h-11 flex-1 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 dark:border-gray-700 dark:text-gray-400">Batal</button>
-                                <button type="submit" disabled={createForm.processing} className="h-11 flex-1 rounded-xl bg-[#E64A19] text-sm font-bold text-white">{createForm.processing ? 'Membuat...' : 'Buat Kuis'}</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+            <LearningResourceCreateDialog
+                open={showCreateModal}
+                onClose={() => setShowCreateModal(false)}
+                resourceType="quiz"
+                module={contextualModule}
+                day={contextualDay}
+                modules={modules}
+                lockContext={Boolean(contextualModule && contextualDay)}
+            />
 
             {editingQuiz && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -350,12 +302,20 @@ export default function QuizzesIndex({ quizzes, modules = [], filters = {} }) {
                                 </p>
                             </div>
                             <div>
-                                <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Modul Mingguan</label>
-                                <select value={editForm.data.module_id} onChange={(e) => editForm.setData('module_id', e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white" required>
-                                    <option value="">Pilih Modul</option>
+                                <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Week</label>
+                                <select value={editForm.data.module_id} onChange={(e) => editForm.setData((data) => ({ ...data, module_id: e.target.value, module_day_id: '' }))} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white" required>
+                                    <option value="">Pilih Week</option>
                                     {modules.map((module) => <option key={module.id} value={module.id}>Week {module.week_number || '-'} - {module.title}</option>)}
                                 </select>
                                 {editForm.errors.module_id && <p className="mt-1 text-xs font-bold text-red-600">{editForm.errors.module_id}</p>}
+                            </div>
+                            <div>
+                                <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Day</label>
+                                <select value={editForm.data.module_day_id} onChange={(e) => editForm.setData('module_day_id', e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white" required>
+                                    <option value="">Pilih Day</option>
+                                    {(modules.find((module) => String(module.id) === String(editForm.data.module_id))?.days || []).map((day) => <option key={day.id} value={day.id}>Day {day.day_number} - {day.title}</option>)}
+                                </select>
+                                {editForm.errors.module_day_id && <p className="mt-1 text-xs font-bold text-red-600">{editForm.errors.module_day_id}</p>}
                             </div>
                             <div>
                                 <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Tipe Kuis</label>

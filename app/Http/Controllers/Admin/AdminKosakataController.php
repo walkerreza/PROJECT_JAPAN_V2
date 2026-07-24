@@ -16,7 +16,10 @@ class AdminKosakataController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Kosakata::with('module:id,title,week_number')->latest();
+        $query = Kosakata::with([
+            'module:id,program_pembelajaran_id,title,week_number',
+            'days:id,module_id,day_number,title',
+        ])->latest();
 
         if ($request->filled('search')) {
             $search = $request->string('search')->toString();
@@ -42,14 +45,28 @@ class AdminKosakataController extends Controller
             $query->where('module_id', $request->integer('module_id'));
         }
 
+        if ($request->filled('module_day_id') && $request->module_day_id !== 'all') {
+            $query->whereHas('days', fn ($dayQuery) => $dayQuery->whereKey($request->integer('module_day_id')));
+        }
+
+        if ($request->filled('program_id')) {
+            $query->whereHas('module', fn ($moduleQuery) => $moduleQuery
+                ->where('program_pembelajaran_id', $request->integer('program_id')));
+        }
+
         if ($request->filled('jlpt_level') && $request->jlpt_level !== 'all') {
             $query->where('jlpt_level', $request->jlpt_level);
         }
 
         return Inertia::render('Admin/Kosakata/Kosakata', [
             'vocabulary' => $query->paginate(12)->withQueryString(),
-            'filters' => $request->only('search', 'status', 'jlpt_level', 'content_type', 'module_id'),
-            'modules' => Modul::with('programPembelajaran:id,title')
+            'filters' => $request->only('search', 'status', 'jlpt_level', 'content_type', 'program_id', 'module_id', 'module_day_id'),
+            'modules' => Modul::with([
+                'programPembelajaran:id,title',
+                'days:id,module_id,day_number,title,status',
+            ])
+                ->when($request->filled('program_id'), fn ($moduleQuery) => $moduleQuery
+                    ->where('program_pembelajaran_id', $request->integer('program_id')))
                 ->orderBy('program_pembelajaran_id')
                 ->orderBy('week_number')
                 ->get(['id', 'program_pembelajaran_id', 'title', 'week_number']),
@@ -59,7 +76,11 @@ class AdminKosakataController extends Controller
 
     public function store(Request $request, NotifikasiPenggunaService $notifikasi)
     {
-        $content = Kosakata::create($this->validateVocabulary($request));
+        $validated = $this->validateVocabulary($request);
+        $dayIds = $validated['module_day_ids'] ?? [];
+        unset($validated['module_day_ids']);
+        $content = Kosakata::create($validated);
+        $content->days()->sync($dayIds);
 
         if ($content->status === 'published') {
             $this->kirimNotifikasiKosakataTerbit($content, $notifikasi);
@@ -71,7 +92,11 @@ class AdminKosakataController extends Controller
     public function update(Request $request, Kosakata $vocabulary, NotifikasiPenggunaService $notifikasi)
     {
         $oldStatus = $vocabulary->status;
-        $vocabulary->update($this->validateVocabulary($request, $vocabulary));
+        $validated = $this->validateVocabulary($request, $vocabulary);
+        $dayIds = $validated['module_day_ids'] ?? [];
+        unset($validated['module_day_ids']);
+        $vocabulary->update($validated);
+        $vocabulary->days()->sync($dayIds);
 
         if ($oldStatus !== 'published' && $vocabulary->status === 'published') {
             $this->kirimNotifikasiKosakataTerbit($vocabulary, $notifikasi);
@@ -93,6 +118,11 @@ class AdminKosakataController extends Controller
             'import_file' => ['required', 'file', 'max:4096'],
             'content_type' => ['nullable', Rule::in(Kosakata::contentTypes())],
             'module_id' => ['nullable', 'integer', 'exists:modules,id'],
+            'module_day_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('module_days', 'id')->where('module_id', $request->integer('module_id')),
+            ],
             'source_type' => ['nullable', 'string', 'max:30'],
             'source_title' => ['nullable', 'string', 'max:255'],
         ]);
@@ -122,7 +152,7 @@ class AdminKosakataController extends Controller
 
             $reading = $data['reading'] ?? $data['kana'] ?? $data['onyomi'] ?? $data['struktur'] ?? null;
 
-            Kosakata::updateOrCreate(
+            $content = Kosakata::updateOrCreate(
                 [
                     'word' => $word,
                     'reading' => $reading,
@@ -146,6 +176,10 @@ class AdminKosakataController extends Controller
                 ]
             );
 
+            if (filled($validated['module_day_id'] ?? null)) {
+                $content->days()->syncWithoutDetaching([(int) $validated['module_day_id']]);
+            }
+
             $created++;
         }
 
@@ -162,7 +196,7 @@ class AdminKosakataController extends Controller
 
         $headers = $this->importHeaders();
         $rows = $this->templateRows();
-        $filename = 'japanlingo-bank-konten-n3-template.' . $format;
+        $filename = 'japanlingo-bank-konten-n3-template.'.$format;
 
         if ($format === 'csv') {
             return $templates->csvResponse($headers, $rows, $filename);
@@ -190,6 +224,11 @@ class AdminKosakataController extends Controller
             ],
             'content_type' => ['required', Rule::in(Kosakata::contentTypes())],
             'module_id' => ['nullable', 'integer', 'exists:modules,id'],
+            'module_day_ids' => ['nullable', 'array'],
+            'module_day_ids.*' => [
+                'integer',
+                Rule::exists('module_days', 'id')->where('module_id', $request->integer('module_id')),
+            ],
             'reading' => ['nullable', 'string', 'max:255'],
             'meaning_id' => ['nullable', 'string'],
             'meaning_en' => ['nullable', 'string'],

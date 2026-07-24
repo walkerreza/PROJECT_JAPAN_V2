@@ -15,6 +15,7 @@ class Kuis extends Model
 
     protected $fillable = [
         'module_id',
+        'module_day_id',
         'type',
         'time_limit',
         'passing_score',
@@ -24,6 +25,11 @@ class Kuis extends Model
     public function module(): BelongsTo
     {
         return $this->belongsTo(Modul::class, 'module_id');
+    }
+
+    public function day(): BelongsTo
+    {
+        return $this->belongsTo(HariModul::class, 'module_day_id');
     }
 
     public function questions(): HasMany

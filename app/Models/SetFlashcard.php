@@ -14,6 +14,7 @@ class SetFlashcard extends Model
     protected $fillable = [
         'level_id',
         'module_id',
+        'module_day_id',
         'title',
         'description',
         'source_type',
@@ -28,6 +29,11 @@ class SetFlashcard extends Model
     public function module()
     {
         return $this->belongsTo(Modul::class, 'module_id');
+    }
+
+    public function day()
+    {
+        return $this->belongsTo(HariModul::class, 'module_day_id');
     }
 
     public function flashcards()

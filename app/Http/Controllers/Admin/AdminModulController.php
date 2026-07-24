@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ModulRequest;
-use App\Models\Kosakata;
 use App\Models\LevelPembelajaran;
 use App\Models\Modul;
 use App\Models\ProgramPembelajaran;
@@ -74,18 +73,51 @@ class AdminModulController extends Controller
 
     public function index(Request $request)
     {
-        $query = Modul::with(['level', 'programPembelajaran'])
-            ->withCount(['flashcardSets', 'quizzes', 'presentationDecks'])
+        $focus = in_array($request->string('focus')->toString(), ['roadmap', 'flashcard', 'presentation'], true)
+            ? $request->string('focus')->toString()
+            : 'roadmap';
+
+        $query = Modul::with([
+            'level',
+            'programPembelajaran',
+            'days' => fn ($dayQuery) => $dayQuery
+                ->select([
+                    'id',
+                    'module_id',
+                    'day_number',
+                    'title',
+                    'description',
+                    'status',
+                    'checkpoint_quiz_id',
+                ])
+                ->withCount('vocabulary')
+                ->with([
+                    'flashcardSets' => fn ($resourceQuery) => $resourceQuery
+                        ->select(['id', 'module_id', 'module_day_id', 'title', 'status'])
+                        ->withCount('flashcards'),
+                    'quizzes' => fn ($resourceQuery) => $resourceQuery
+                        ->select(['id', 'module_id', 'module_day_id', 'type', 'passing_score', 'status'])
+                        ->withCount('questions'),
+                    'presentationDecks' => fn ($resourceQuery) => $resourceQuery
+                        ->select(['id', 'module_id', 'module_day_id', 'title', 'status'])
+                        ->withCount('slides'),
+                ])
+                ->orderBy('day_number'),
+        ])
+            ->withCount(['days', 'flashcardSets', 'quizzes', 'presentationDecks'])
             ->orderBy('program_pembelajaran_id')
             ->orderBy('level_id')
             ->orderBy('week_number');
 
         if ($request->filled('search')) {
-            $query->where('title', 'like', '%' . $request->search . '%');
+            $query->where('title', 'like', '%'.$request->search.'%');
         }
 
         if ($request->filled('program_id') && $request->program_id !== 'all') {
             $query->where('program_pembelajaran_id', $request->integer('program_id'));
+        } else {
+            // The roadmap is a class workspace; never mix weeks from multiple classes.
+            $query->whereRaw('1 = 0');
         }
 
         $modules = $query->paginate(10)->through(fn ($module) => [
@@ -97,17 +129,65 @@ class AdminModulController extends Controller
             'level' => $module->level,
             'program' => $module->programPembelajaran,
             'lesson_count' => 0,
+            'day_count' => $module->days_count,
+            'days_count' => $module->days_count,
             'flashcard_count' => $module->flashcard_sets_count,
             'quiz_count' => $module->quizzes_count,
             'presentation_count' => $module->presentation_decks_count,
             'is_ready' => $module->flashcard_sets_count > 0 && $module->quizzes_count > 0,
+            'days' => $module->days->map(function ($day) {
+                $publishedFlashcardCount = $day->flashcardSets
+                    ->where('status', 'published')
+                    ->sum('flashcards_count');
+                $checkpointQuiz = $day->quizzes->firstWhere('id', $day->checkpoint_quiz_id);
+                $hasValidCheckpoint = $checkpointQuiz?->status === 'published'
+                    && $checkpointQuiz->questions_count > 0;
+                $completionMethod = $hasValidCheckpoint
+                    ? 'checkpoint'
+                    : ($publishedFlashcardCount > 0 ? 'flashcard' : null);
+
+                return [
+                    'id' => $day->id,
+                    'day_number' => $day->day_number,
+                    'title' => $day->title,
+                    'description' => $day->description,
+                    'status' => $day->status,
+                    'checkpoint_quiz_id' => $day->checkpoint_quiz_id,
+                    'completion_method' => $completionMethod,
+                    'is_ready' => $completionMethod !== null,
+                    'vocabulary_count' => $day->vocabulary_count,
+                    'flashcard_sets' => $day->flashcardSets->map(fn ($set) => [
+                        'id' => $set->id,
+                        'title' => $set->title,
+                        'status' => $set->status,
+                        'item_count' => $set->flashcards_count,
+                    ]),
+                    'quizzes' => $day->quizzes->map(fn ($quiz) => [
+                        'id' => $quiz->id,
+                        'title' => 'Kuis #'.$quiz->id,
+                        'type' => $quiz->type,
+                        'status' => $quiz->status,
+                        'passing_score' => $quiz->passing_score,
+                        'item_count' => $quiz->questions_count,
+                    ]),
+                    'presentation_decks' => $day->presentationDecks->map(fn ($deck) => [
+                        'id' => $deck->id,
+                        'title' => $deck->title,
+                        'status' => $deck->status,
+                        'item_count' => $deck->slides_count,
+                    ]),
+                ];
+            }),
         ]);
 
         return Inertia::render('Admin/ModulMateri/ManajemenModulMateri', [
             'modules' => $modules,
             'levels' => LevelPembelajaran::orderBy('stage')->get(),
             'programs' => ProgramPembelajaran::with('level')->orderBy('sort_order')->orderBy('id')->get(),
-            'filters' => $request->only('search', 'program_id'),
+            'filters' => [
+                ...$request->only('search', 'program_id', 'week_id', 'day_id'),
+                'focus' => $focus,
+            ],
         ]);
     }
 
@@ -148,32 +228,6 @@ class AdminModulController extends Controller
         $module->delete();
 
         return redirect()->back()->with('success', 'Modul berhasil dihapus');
-    }
-
-    public function builder(Modul $module)
-    {
-        $module->load([
-            'level',
-            'programPembelajaran',
-            'flashcardSets' => fn ($query) => $query->withCount('flashcards')->latest(),
-            'quizzes' => fn ($query) => $query->withCount('questions')->latest(),
-            'presentationDecks' => fn ($query) => $query->withCount('slides')->latest(),
-        ]);
-
-        return Inertia::render('Admin/ModulMateri/BuilderMateri', [
-            'module' => $module,
-            'flashcardSets' => $module->flashcardSets,
-            'quizzes' => $module->quizzes,
-            'presentations' => $module->presentationDecks,
-            'vocabularyStats' => [
-                'total' => Kosakata::where('module_id', $module->id)->orWhereNull('module_id')->count(),
-                'published' => Kosakata::where('status', 'published')->where(fn ($query) => $query->where('module_id', $module->id)->orWhereNull('module_id'))->count(),
-                'n3' => Kosakata::where('jlpt_level', 'N3')->where(fn ($query) => $query->where('module_id', $module->id)->orWhereNull('module_id'))->count(),
-                'kosakata' => Kosakata::where('content_type', Kosakata::TYPE_KOSAKATA)->where(fn ($query) => $query->where('module_id', $module->id)->orWhereNull('module_id'))->count(),
-                'kanji' => Kosakata::where('content_type', Kosakata::TYPE_KANJI)->where(fn ($query) => $query->where('module_id', $module->id)->orWhereNull('module_id'))->count(),
-                'bunpo' => Kosakata::where('content_type', Kosakata::TYPE_BUNPO)->where(fn ($query) => $query->where('module_id', $module->id)->orWhereNull('module_id'))->count(),
-            ],
-        ]);
     }
 
     private function validateProgram(Request $request, ?ProgramPembelajaran $program = null): array
@@ -219,11 +273,6 @@ class AdminModulController extends Controller
             $url,
             ['module_id' => $module->id]
         );
-    }
-
-    public function updateContent(Request $request, Modul $module)
-    {
-        return redirect()->back()->with('success', 'Konten modul sekarang dikelola lewat Flashcard, Kuis, Kosakata, dan Presentasi.');
     }
 
 }

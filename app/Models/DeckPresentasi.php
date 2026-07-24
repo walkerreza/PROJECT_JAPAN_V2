@@ -16,6 +16,7 @@ class DeckPresentasi extends Model
     protected $fillable = [
         'level_id',
         'module_id',
+        'module_day_id',
         'title',
         'description',
         'status',
@@ -43,6 +44,11 @@ class DeckPresentasi extends Model
     public function module(): BelongsTo
     {
         return $this->belongsTo(Modul::class, 'module_id');
+    }
+
+    public function day(): BelongsTo
+    {
+        return $this->belongsTo(HariModul::class, 'module_day_id');
     }
 
     public function slides(): HasMany

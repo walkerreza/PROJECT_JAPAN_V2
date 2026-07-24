@@ -3,17 +3,22 @@ import { Head, Link, router, useForm } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Card from '@/Components/UI/Card';
 import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
+import LearningResourceCreateDialog from '@/Components/Admin/LearningResourceCreateDialog';
 
 const emptyForm = {
     title: '',
     description: '',
     level_id: '',
     module_id: '',
+    module_day_id: '',
     status: 'draft',
 };
 
 export default function ManajemenFlashcard({ sets = {}, filters = {}, levels = [], modules = [] }) {
     const rows = sets.data || [];
+    const contextualModule = modules.find((module) => String(module.id) === String(filters.module_id));
+    const contextualDay = (contextualModule?.days || []).find((day) => String(day.id) === String(filters.module_day_id));
+    const [showCreateDialog, setShowCreateDialog] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [editing, setEditing] = useState(null);
     const [search, setSearch] = useState(filters.search || '');
@@ -22,9 +27,7 @@ export default function ManajemenFlashcard({ sets = {}, filters = {}, levels = [
     const { confirmState, openConfirm, closeConfirm } = useConfirmAction();
 
     const openCreate = () => {
-        setEditing(null);
-        form.setData(emptyForm);
-        setShowForm(true);
+        setShowCreateDialog(true);
     };
 
     const openEdit = (item) => {
@@ -34,6 +37,7 @@ export default function ManajemenFlashcard({ sets = {}, filters = {}, levels = [
             description: item.description || '',
             level_id: item.level_id || '',
             module_id: item.module_id || '',
+            module_day_id: item.module_day_id || '',
             status: item.status || 'draft',
         });
         setShowForm(true);
@@ -49,6 +53,7 @@ export default function ManajemenFlashcard({ sets = {}, filters = {}, levels = [
         ...data,
         level_id: data.level_id || null,
         module_id: data.module_id || null,
+        module_day_id: data.module_day_id || null,
     });
 
     const submitForm = (event) => {
@@ -62,7 +67,13 @@ export default function ManajemenFlashcard({ sets = {}, filters = {}, levels = [
 
     const submitFilters = (event) => {
         event.preventDefault();
-        router.get(route('admin.flashcards.index'), { search, status }, { preserveState: true, replace: true });
+        router.get(route('admin.flashcards.index'), {
+            search,
+            status,
+            program_id: filters.program_id,
+            module_id: filters.module_id,
+            module_day_id: filters.module_day_id,
+        }, { preserveState: true, replace: true });
     };
 
     const deleteSet = (item) => {
@@ -119,7 +130,11 @@ export default function ManajemenFlashcard({ sets = {}, filters = {}, levels = [
                                     </div>
                                     <h2 className="mt-3 text-lg font-black text-gray-900 dark:text-white">{item.title}</h2>
                                     <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 line-clamp-2">{item.description || 'Belum ada deskripsi.'}</p>
-                                    <p className="mt-3 text-xs font-bold text-gray-400">{item.level?.level_name || 'General'} {item.module ? `- ${item.module.title}` : ''}</p>
+                                    <p className="mt-3 text-xs font-bold text-gray-400">
+                                        {item.level?.level_name || 'General'}
+                                        {item.module ? ` - Week ${item.module.week_number}: ${item.module.title}` : ''}
+                                        {item.day ? ` - Day ${item.day.day_number}` : ''}
+                                    </p>
                                 </div>
                             </div>
                             <div className="mt-5 grid grid-cols-2 gap-2">
@@ -146,14 +161,22 @@ export default function ManajemenFlashcard({ sets = {}, filters = {}, levels = [
                             <form onSubmit={submitForm} className="space-y-4">
                                 <input value={form.data.title} onChange={(event) => form.setData('title', event.target.value)} placeholder="Kosakata Minggu 1" className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
                                 <textarea value={form.data.description} onChange={(event) => form.setData('description', event.target.value)} placeholder="Deskripsi set" className="min-h-24 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
-                                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                     <select value={form.data.level_id} onChange={(event) => form.setData('level_id', event.target.value)} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white">
                                         <option value="">Tanpa Level</option>
                                         {levels.map((level) => <option key={level.id} value={level.id}>{level.level_name}</option>)}
                                     </select>
-                                    <select value={form.data.module_id} onChange={(event) => form.setData('module_id', event.target.value)} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white" required>
-                                        <option value="">Pilih Modul</option>
+                                    <select value={form.data.module_id} onChange={(event) => {
+                                        form.setData((data) => ({ ...data, module_id: event.target.value, module_day_id: '' }));
+                                    }} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white" required>
+                                        <option value="">Pilih Week</option>
                                         {modules.map((module) => <option key={module.id} value={module.id}>Week {module.week_number || '-'} - {module.title}</option>)}
+                                    </select>
+                                    <select value={form.data.module_day_id} onChange={(event) => form.setData('module_day_id', event.target.value)} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white" required>
+                                        <option value="">Pilih Day</option>
+                                        {(modules.find((module) => String(module.id) === String(form.data.module_id))?.days || []).map((day) => (
+                                            <option key={day.id} value={day.id}>Day {day.day_number} - {day.title}</option>
+                                        ))}
                                     </select>
                                     <select value={form.data.status} onChange={(event) => form.setData('status', event.target.value)} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white">
                                         <option value="draft">Draft</option>
@@ -170,6 +193,16 @@ export default function ManajemenFlashcard({ sets = {}, filters = {}, levels = [
                     </div>
                 )}
             </div>
+            <LearningResourceCreateDialog
+                open={showCreateDialog}
+                onClose={() => setShowCreateDialog(false)}
+                resourceType="flashcard"
+                module={contextualModule}
+                day={contextualDay}
+                modules={modules}
+                levels={levels}
+                lockContext={Boolean(contextualModule && contextualDay)}
+            />
             <ConfirmActionDialog {...confirmState} onCancel={closeConfirm} />
         </AuthenticatedLayout>
     );

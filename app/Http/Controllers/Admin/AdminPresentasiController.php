@@ -24,7 +24,11 @@ class AdminPresentasiController extends Controller
 {
     public function index(Request $request)
     {
-        $query = DeckPresentasi::with(['level:id,level_name', 'module:id,title,week_number'])
+        $query = DeckPresentasi::with([
+            'level:id,level_name',
+            'module:id,program_pembelajaran_id,title,week_number',
+            'day:id,module_id,day_number,title',
+        ])
             ->withCount('slides')
             ->latest();
 
@@ -44,11 +48,25 @@ class AdminPresentasiController extends Controller
             $query->where('module_id', $request->integer('module_id'));
         }
 
+        if ($request->filled('module_day_id') && $request->module_day_id !== 'all') {
+            $query->where('module_day_id', $request->integer('module_day_id'));
+        }
+
+        if ($request->filled('program_id')) {
+            $query->whereHas('module', fn ($moduleQuery) => $moduleQuery
+                ->where('program_pembelajaran_id', $request->integer('program_id')));
+        }
+
         return Inertia::render('Admin/Presentasi/ManajemenPresentasi', [
             'decks' => $query->paginate(10)->withQueryString(),
-            'filters' => $request->only('search', 'status', 'module_id'),
+            'filters' => $request->only('search', 'status', 'program_id', 'module_id', 'module_day_id'),
             'levels' => LevelPembelajaran::orderBy('stage')->get(['id', 'level_name']),
-            'modules' => Modul::orderBy('week_number')->orderBy('id')->get(['id', 'title', 'week_number']),
+            'modules' => Modul::with('days:id,module_id,day_number,title,status')
+                ->when($request->filled('program_id'), fn ($moduleQuery) => $moduleQuery
+                    ->where('program_pembelajaran_id', $request->integer('program_id')))
+                ->orderBy('week_number')
+                ->orderBy('id')
+                ->get(['id', 'program_pembelajaran_id', 'title', 'week_number']),
         ]);
     }
 
@@ -98,7 +116,12 @@ class AdminPresentasiController extends Controller
 
     public function builder(DeckPresentasi $presentationDeck)
     {
-        $presentationDeck->load(['level:id,level_name', 'module:id,title', 'slides']);
+        $presentationDeck->load([
+            'level:id,level_name',
+            'module:id,program_pembelajaran_id,title,week_number',
+            'day:id,module_id,day_number,title',
+            'slides',
+        ]);
 
         return Inertia::render('Admin/Presentasi/BuilderPresentasi', [
             'deck' => $presentationDeck,
@@ -310,6 +333,12 @@ class AdminPresentasiController extends Controller
             'description' => ['nullable', 'string'],
             'level_id' => ['nullable', 'integer', 'exists:levels,id'],
             'module_id' => ['nullable', 'integer', 'exists:modules,id'],
+            'module_day_id' => [
+                'required_with:module_id',
+                'nullable',
+                'integer',
+                Rule::exists('module_days', 'id')->where('module_id', $request->integer('module_id')),
+            ],
             'status' => ['required', 'in:draft,published'],
         ]);
     }

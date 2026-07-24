@@ -20,20 +20,29 @@ class AdminKuisController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Kuis::with(['module:id,title,week_number'])
+        $query = Kuis::with(['module:id,program_pembelajaran_id,title,week_number', 'day:id,module_id,day_number,title'])
             ->withCount('questions')
             ->latest();
 
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($query) use ($search) {
-                $query->whereHas('module', fn ($moduleQuery) => $moduleQuery->where('title', 'like', '%' . $search . '%'))
-                    ->orWhere('type', 'like', '%' . $search . '%');
+                $query->whereHas('module', fn ($moduleQuery) => $moduleQuery->where('title', 'like', '%'.$search.'%'))
+                    ->orWhere('type', 'like', '%'.$search.'%');
             });
         }
 
         if ($request->filled('module_id')) {
             $query->where('module_id', $request->module_id);
+        }
+
+        if ($request->filled('module_day_id')) {
+            $query->where('module_day_id', $request->integer('module_day_id'));
+        }
+
+        if ($request->filled('program_id')) {
+            $query->whereHas('module', fn ($moduleQuery) => $moduleQuery
+                ->where('program_pembelajaran_id', $request->integer('program_id')));
         }
 
         $quizzes = $query->paginate(10)->through(fn ($quiz) => [
@@ -44,13 +53,19 @@ class AdminKuisController extends Controller
             'status' => $quiz->status ?? 'published',
             'question_count' => $quiz->questions_count,
             'module' => $quiz->module,
+            'day' => $quiz->day,
             'lesson' => null,
         ]);
 
         return Inertia::render('Admin/Kuis/ManajemenKuis', [
             'quizzes' => $quizzes,
-            'modules' => Modul::orderBy('week_number')->orderBy('id')->get(['id', 'title', 'week_number']),
-            'filters' => $request->only('search', 'module_id'),
+            'modules' => Modul::with('days:id,module_id,day_number,title,status')
+                ->when($request->filled('program_id'), fn ($moduleQuery) => $moduleQuery
+                    ->where('program_pembelajaran_id', $request->integer('program_id')))
+                ->orderBy('week_number')
+                ->orderBy('id')
+                ->get(['id', 'program_pembelajaran_id', 'title', 'week_number']),
+            'filters' => $request->only('search', 'program_id', 'module_id', 'module_day_id'),
         ]);
     }
 
@@ -62,7 +77,7 @@ class AdminKuisController extends Controller
             $this->kirimNotifikasiKuisTerbit($quiz, $notifikasi);
         }
 
-        return redirect()->back()->with('success', 'Kuis berhasil dibuat');
+        return redirect()->route('admin.quizzes.builder', $quiz)->with('success', 'Kuis berhasil dibuat');
     }
 
     public function update(KuisRequest $request, Kuis $quiz, NotifikasiPenggunaService $notifikasi)
@@ -116,7 +131,8 @@ class AdminKuisController extends Controller
     public function builder(Kuis $quiz)
     {
         $quiz->load([
-            'module:id,title,week_number',
+            'module:id,program_pembelajaran_id,title,week_number',
+            'day:id,module_id,day_number,title',
             'questions' => fn ($query) => $query
                 ->withCount([
                     'attemptAnswers as attempts_count',
@@ -133,6 +149,7 @@ class AdminKuisController extends Controller
                 'passing_score' => $quiz->passing_score ?? 70,
                 'status' => $quiz->status ?? 'published',
                 'module' => $quiz->module,
+                'day' => $quiz->day,
                 'lesson' => null,
             ],
             'questions' => $quiz->questions->map(fn ($question) => [
@@ -255,7 +272,7 @@ class AdminKuisController extends Controller
 
         $headers = $questions->importHeaders();
         $rows = $questions->templateRows();
-        $filename = 'japanlingo-quiz-import-template-v1.' . $format;
+        $filename = 'japanlingo-quiz-import-template-v1.'.$format;
 
         if ($format === 'csv') {
             return $templates->csvResponse($headers, $rows, $filename);
