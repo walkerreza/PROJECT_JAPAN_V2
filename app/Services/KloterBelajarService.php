@@ -131,6 +131,126 @@ class KloterBelajarService
             ->first(fn (KloterBelajar $kloter) => $this->masihAdaKapasitas($kloter));
     }
 
+    public function kloterTersediaUntukCheckout(int $programPembelajaranId): Collection
+    {
+        return KloterBelajar::query()
+            ->with(['admin:id,username', 'programPembelajaran:id,title'])
+            ->where('program_pembelajaran_id', $programPembelajaranId)
+            ->where('status', 'active')
+            ->whereNotNull('admin_id')
+            ->where(function (Builder $query) {
+                $query->whereNull('tanggal_selesai')
+                    ->orWhereDate('tanggal_selesai', '>=', now()->toDateString());
+            })
+            ->orderByDesc('is_default')
+            ->orderBy('tanggal_mulai')
+            ->get()
+            ->filter(function (KloterBelajar $kloter) {
+                $remainingSeats = $this->sisaKapasitas($kloter);
+                $kloter->setAttribute('remaining_seats', $remainingSeats);
+
+                return $remainingSeats === null || $remainingSeats > 0;
+            })
+            ->values();
+    }
+
+    public function validasiKloterCheckout(KloterBelajar $kloter, int $programPembelajaranId): void
+    {
+        if ((int) $kloter->program_pembelajaran_id !== $programPembelajaranId) {
+            throw ValidationException::withMessages([
+                'kloter_belajar_id' => 'Kloter tidak sesuai dengan kelas yang dipilih.',
+            ]);
+        }
+
+        if ($kloter->status !== 'active' || ($kloter->tanggal_selesai && $kloter->tanggal_selesai->isPast())) {
+            throw ValidationException::withMessages([
+                'kloter_belajar_id' => 'Kloter tidak aktif atau masa pendaftarannya sudah berakhir.',
+            ]);
+        }
+
+        $mentorValid = $kloter->admin()
+            ->where('role', 'admin')
+            ->where('status', 'active')
+            ->exists();
+
+        if (! $mentorValid) {
+            throw ValidationException::withMessages([
+                'kloter_belajar_id' => 'Kloter belum memiliki mentor aktif.',
+            ]);
+        }
+
+        if (! $this->masihAdaKapasitas($kloter)) {
+            throw ValidationException::withMessages([
+                'kloter_belajar_id' => 'Kapasitas kloter sudah penuh.',
+            ]);
+        }
+    }
+
+    public function reservePaymentSeat(Pengguna $user, KloterBelajar $kloter, Transaksi $transaction): AnggotaKloter
+    {
+        $existingActive = AnggotaKloter::query()
+            ->where('user_id', $user->id)
+            ->where('status', 'active')
+            ->whereHas('kloterBelajar', fn (Builder $query) => $query
+                ->where('program_pembelajaran_id', $kloter->program_pembelajaran_id))
+            ->exists();
+
+        if ($existingActive) {
+            throw ValidationException::withMessages([
+                'payment_plan_id' => 'Kamu sudah memiliki akses aktif untuk kelas ini.',
+            ]);
+        }
+
+        if (! $this->masihAdaKapasitas($kloter, $user->id)) {
+            throw ValidationException::withMessages([
+                'kloter_belajar_id' => 'Kapasitas kloter sudah penuh.',
+            ]);
+        }
+
+        $anggota = AnggotaKloter::firstOrNew([
+            'kloter_belajar_id' => $kloter->id,
+            'user_id' => $user->id,
+        ]);
+
+        if (
+            $anggota->exists
+            && $anggota->status === 'rejected'
+            && $anggota->transaction?->status === 'success'
+        ) {
+            throw ValidationException::withMessages([
+                'payment_plan_id' => 'Refund pendaftaran sebelumnya masih diproses. Tunggu sampai refund selesai sebelum checkout lagi.',
+            ]);
+        }
+
+        if ($anggota->exists && in_array($anggota->status, ['active', 'paid_pending_approval'], true)) {
+            throw ValidationException::withMessages([
+                'payment_plan_id' => 'Pendaftaran kelas ini sudah aktif atau sedang menunggu persetujuan.',
+            ]);
+        }
+
+        $anggota->fill([
+            'transaction_id' => $transaction->id,
+            'subscription_id' => null,
+            'access_key_id' => null,
+            'joined_at' => $anggota->joined_at ?: now(),
+            'status' => 'pending_payment',
+            'catatan' => 'Kursi dicadangkan saat checkout Midtrans dibuat.',
+        ])->save();
+
+        return $anggota;
+    }
+
+    public function releasePaymentReservation(Transaksi $transaction, string $status = 'cancelled'): void
+    {
+        AnggotaKloter::query()
+            ->where('transaction_id', $transaction->id)
+            ->whereIn('status', ['pending_payment', 'paid_pending_approval'])
+            ->update([
+                'status' => $status,
+                'catatan' => 'Reservasi ditutup karena status pembayaran '.$transaction->status.'.',
+            ]);
+    }
+
     public function assignUser(
         Pengguna $user,
         KloterBelajar $kloter,
@@ -212,7 +332,7 @@ class KloterBelajarService
 
     public function masihAdaKapasitas(KloterBelajar $kloter, ?int $userId = null): bool
     {
-        if ($userId && AnggotaKloter::where('kloter_belajar_id', $kloter->id)->where('user_id', $userId)->where('status', 'active')->exists()) {
+        if ($userId && AnggotaKloter::where('kloter_belajar_id', $kloter->id)->where('user_id', $userId)->whereIn('status', ['active', 'paid_pending_approval'])->exists()) {
             return true;
         }
 
@@ -220,9 +340,31 @@ class KloterBelajarService
             return true;
         }
 
-        $anggotaAktif = $kloter->anggota_aktif_count
-            ?? AnggotaKloter::where('kloter_belajar_id', $kloter->id)->where('status', 'active')->count();
+        return $this->jumlahKursiTerpakai($kloter) < $kloter->max_siswa;
+    }
 
-        return $anggotaAktif < $kloter->max_siswa;
+    public function sisaKapasitas(KloterBelajar $kloter): ?int
+    {
+        if (! $kloter->max_siswa) {
+            return null;
+        }
+
+        return max(0, (int) $kloter->max_siswa - $this->jumlahKursiTerpakai($kloter));
+    }
+
+    private function jumlahKursiTerpakai(KloterBelajar $kloter): int
+    {
+        return AnggotaKloter::query()
+            ->where('kloter_belajar_id', $kloter->id)
+            ->where(function (Builder $query) {
+                $query->whereIn('status', ['active', 'paid_pending_approval'])
+                    ->orWhere(function (Builder $query) {
+                        $query->where('status', 'pending_payment')
+                            ->whereHas('transaction', fn (Builder $transactionQuery) => $transactionQuery
+                                ->where('status', 'pending')
+                                ->where('created_at', '>=', now()->subHours(48)));
+                    });
+            })
+            ->count();
     }
 }

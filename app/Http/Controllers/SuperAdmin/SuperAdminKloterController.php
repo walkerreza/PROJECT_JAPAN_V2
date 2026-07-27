@@ -205,7 +205,8 @@ class SuperAdminKloterController extends SuperAdminDasarController
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $plan = app(AksesLanggananService::class)->defaultAccessKeyPlan();
+        $kloter->loadMissing('programPembelajaran');
+        $plan = app(AksesLanggananService::class)->accessKeyPlanForProgram($kloter->programPembelajaran);
 
         $accessKey = KodeAkses::create([
             'payment_plan_id' => $plan->id,

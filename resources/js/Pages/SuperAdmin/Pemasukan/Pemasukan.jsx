@@ -11,7 +11,7 @@ const emptyPlan = {
     description: '',
     price: '',
     duration_days: 30,
-    scope_type: 'global',
+    scope_type: 'program',
     program_pembelajaran_id: '',
     features: '',
     is_active: true,
@@ -20,6 +20,7 @@ const emptyPlan = {
 const emptyTransaction = {
     user_id: '',
     payment_plan_id: '',
+    kloter_belajar_id: '',
     amount: '',
     payment_method: 'manual',
     status: 'pending',
@@ -32,10 +33,18 @@ const emptyAccessKey = {
     payment_plan_id: '',
     duration_days: 30,
     max_uses: 1,
-    scope_type: 'global',
+    scope_type: 'program',
     program_pembelajaran_id: '',
     expires_at: '',
     notes: '',
+};
+
+const accessStateMeta = {
+    active: { label: 'Akses aktif', className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' },
+    pending_approval: { label: 'Menunggu mentor', className: 'bg-sky-50 text-sky-700 dark:bg-sky-900/20 dark:text-sky-300' },
+    refund_required: { label: 'Perlu refund', className: 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300' },
+    payment_pending: { label: 'Belum dibayar', className: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300' },
+    inactive: { label: 'Tidak aktif', className: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400' },
 };
 
 export default function Pemasukan({
@@ -44,6 +53,7 @@ export default function Pemasukan({
     plans = [],
     users = [],
     programs = [],
+    kloters = [],
     accessKeys = [],
     filters = {},
 }) {
@@ -66,6 +76,8 @@ export default function Pemasukan({
     });
 
     const items = transactions?.data || [];
+    const availablePlans = plans.filter((plan) => plan.is_active && !plan.is_legacy);
+    const accessKeyPlans = availablePlans.filter((plan) => plan.scope_type === 'program');
 
     const submitFilters = (e) => {
         e.preventDefault();
@@ -105,7 +117,7 @@ export default function Pemasukan({
             description: plan.description || '',
             price: plan.price ?? '',
             duration_days: plan.duration_days || 30,
-            scope_type: plan.scope_type || 'global',
+            scope_type: plan.scope_type === 'global' ? 'program' : plan.scope_type,
             program_pembelajaran_id: plan.program_pembelajaran_id || '',
             features: plan.features || '',
             is_active: Boolean(plan.is_active),
@@ -230,14 +242,15 @@ export default function Pemasukan({
                                         <th className="px-4 py-3">Plan</th>
                                         <th className="px-4 py-3">Amount</th>
                                         <th className="px-4 py-3">Method</th>
-                                        <th className="px-4 py-3">Status</th>
+                                        <th className="px-4 py-3">Pembayaran</th>
+                                        <th className="px-4 py-3">Akses</th>
                                         <th className="px-4 py-3 text-right">Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {items.length === 0 && (
                                         <tr>
-                                            <td colSpan="7" className="px-4 py-10 text-center text-sm font-bold text-gray-400">Belum ada transaksi.</td>
+                                            <td colSpan="8" className="px-4 py-10 text-center text-sm font-bold text-gray-400">Belum ada transaksi.</td>
                                         </tr>
                                     )}
                                     {items.map((item) => (
@@ -257,6 +270,12 @@ export default function Pemasukan({
                                                 <span className={`rounded-full px-3 py-1 text-xs font-black ${item.status === 'success' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : item.status === 'pending' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'}`}>
                                                     {item.status}
                                                 </span>
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                <span className={`rounded-full px-3 py-1 text-xs font-black ${accessStateMeta[item.access_state]?.className || accessStateMeta.inactive.className}`}>
+                                                    {accessStateMeta[item.access_state]?.label || accessStateMeta.inactive.label}
+                                                </span>
+                                                {item.kloter_name && <div className="mt-1 max-w-32 truncate text-[11px] font-semibold text-gray-400">{item.kloter_name}</div>}
                                             </td>
                                             <td className="px-4 py-4">
                                                 <div className="flex justify-end gap-2">
@@ -335,13 +354,17 @@ export default function Pemasukan({
                                             <span className="rounded-full bg-gray-100 dark:bg-gray-800 px-3 py-1 text-xs font-bold text-gray-600 dark:text-gray-400">{plan.duration_days} hari</span>
                                             <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-bold text-sky-700 dark:bg-sky-900/20 dark:text-sky-300">{plan.scope_label}</span>
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => openPlanEditForm(plan)}
-                                            className="mt-3 rounded-lg border border-gray-200 px-3 py-2 text-xs font-black text-gray-700 hover:border-red-200 hover:bg-red-50 hover:text-red-600 dark:border-gray-700 dark:text-gray-300 dark:hover:border-red-900/40 dark:hover:bg-red-900/20 dark:hover:text-red-300"
-                                        >
-                                            Edit Harga
-                                        </button>
+                                        {plan.is_legacy ? (
+                                            <p className="mt-3 text-xs font-bold text-amber-700 dark:text-amber-300">Legacy, hanya dipertahankan sampai akses lama berakhir.</p>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={() => openPlanEditForm(plan)}
+                                                className="mt-3 rounded-lg border border-gray-200 px-3 py-2 text-xs font-black text-gray-700 hover:border-red-200 hover:bg-red-50 hover:text-red-600 dark:border-gray-700 dark:text-gray-300 dark:hover:border-red-900/40 dark:hover:bg-red-900/20 dark:hover:text-red-300"
+                                            >
+                                                Edit Harga
+                                            </button>
+                                        )}
                                     </div>
                                 ))}
                             </div>
@@ -422,18 +445,18 @@ export default function Pemasukan({
                                         planForm.setData({
                                             ...planForm.data,
                                             scope_type: e.target.value,
-                                            program_pembelajaran_id: e.target.value === 'global' ? '' : planForm.data.program_pembelajaran_id,
+                                            program_pembelajaran_id: planForm.data.program_pembelajaran_id,
                                         });
                                     }}
                                     className="h-11 rounded-xl border border-gray-200 bg-white px-4 text-sm font-bold dark:border-gray-700 dark:bg-gray-900"
                                 >
-                                    <option value="global">Semua kelas</option>
-                                    <option value="program">Per kelas</option>
+                                    <option value="program">Kelas Mandiri</option>
+                                    <option value="kloter">Kelas Mentor</option>
                                 </select>
                                 <select
                                     value={planForm.data.program_pembelajaran_id}
                                     onChange={(e) => planForm.setData('program_pembelajaran_id', e.target.value)}
-                                    disabled={planForm.data.scope_type !== 'program'}
+                                    disabled={!['program', 'kloter'].includes(planForm.data.scope_type)}
                                     className="h-11 rounded-xl border border-gray-200 bg-white px-4 text-sm disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900"
                                 >
                                     <option value="">Pilih kelas</option>
@@ -474,15 +497,28 @@ export default function Pemasukan({
                                             ...transactionForm.data,
                                             payment_plan_id: e.target.value,
                                             amount: selectedPlan ? selectedPlan.price : transactionForm.data.amount,
+                                            kloter_belajar_id: '',
                                         });
                                     }}
                                     className="h-11 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 text-sm"
                                 >
                                     <option value="">Pilih plan</option>
-                                    {plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} - {plan.scope_label}</option>)}
+                                    {availablePlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} - {plan.scope_label}</option>)}
                                 </select>
                                 <input type="number" value={transactionForm.data.amount} onChange={(e) => transactionForm.setData('amount', e.target.value)} placeholder="Nominal" className="h-11 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 text-sm" />
                             </div>
+                            {plans.find((plan) => String(plan.id) === String(transactionForm.data.payment_plan_id))?.scope_type === 'kloter' && (
+                                <select
+                                    value={transactionForm.data.kloter_belajar_id}
+                                    onChange={(e) => transactionForm.setData('kloter_belajar_id', e.target.value)}
+                                    className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm dark:border-gray-700 dark:bg-gray-900"
+                                >
+                                    <option value="">Pilih kloter mentor</option>
+                                    {kloters
+                                        .filter((kloter) => String(kloter.program_id) === String(plans.find((plan) => String(plan.id) === String(transactionForm.data.payment_plan_id))?.program_pembelajaran_id))
+                                        .map((kloter) => <option key={kloter.id} value={kloter.id}>{kloter.name} - {kloter.mentor_name}</option>)}
+                                </select>
+                            )}
                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <select value={transactionForm.data.payment_method} onChange={(e) => transactionForm.setData('payment_method', e.target.value)} className="h-11 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 text-sm">
                                     <option value="manual">Manual</option>
@@ -520,7 +556,7 @@ export default function Pemasukan({
                             <input value={accessKeyForm.data.name} onChange={(e) => accessKeyForm.setData('name', e.target.value)} placeholder="Nama campaign / kelas" className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm dark:border-gray-700 dark:bg-gray-900" />
                             <select value={accessKeyForm.data.payment_plan_id} onChange={(e) => accessKeyForm.setData('payment_plan_id', e.target.value)} className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm dark:border-gray-700 dark:bg-gray-900">
                                 <option value="">Pakai plan Access Key Premium</option>
-                                {plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} - {plan.scope_label}</option>)}
+                                {accessKeyPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} - {plan.scope_label}</option>)}
                             </select>
                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <select
@@ -529,19 +565,18 @@ export default function Pemasukan({
                                         accessKeyForm.setData({
                                             ...accessKeyForm.data,
                                             scope_type: e.target.value,
-                                            program_pembelajaran_id: e.target.value === 'global' ? '' : accessKeyForm.data.program_pembelajaran_id,
+                                            program_pembelajaran_id: accessKeyForm.data.program_pembelajaran_id,
                                         });
                                     }}
                                     disabled={Boolean(accessKeyForm.data.payment_plan_id)}
                                     className="h-11 rounded-xl border border-gray-200 bg-white px-4 text-sm font-bold disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900"
                                 >
-                                    <option value="global">Semua kelas</option>
                                     <option value="program">Per kelas</option>
                                 </select>
                                 <select
                                     value={accessKeyForm.data.program_pembelajaran_id}
                                     onChange={(e) => accessKeyForm.setData('program_pembelajaran_id', e.target.value)}
-                                    disabled={Boolean(accessKeyForm.data.payment_plan_id) || accessKeyForm.data.scope_type !== 'program'}
+                                    disabled={Boolean(accessKeyForm.data.payment_plan_id)}
                                     className="h-11 rounded-xl border border-gray-200 bg-white px-4 text-sm disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900"
                                 >
                                     <option value="">Pilih kelas</option>

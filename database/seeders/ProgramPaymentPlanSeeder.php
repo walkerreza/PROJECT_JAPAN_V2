@@ -11,6 +11,13 @@ class ProgramPaymentPlanSeeder extends Seeder
 {
     public function run(): void
     {
+        PaketPembayaran::query()
+            ->where(function ($query) {
+                $query->where('scope_type', 'global')
+                    ->orWhereNull('scope_type');
+            })
+            ->update(['is_active' => false]);
+
         ProgramPembelajaran::query()
             ->where('status', 'published')
             ->orderBy('sort_order')
@@ -18,18 +25,22 @@ class ProgramPaymentPlanSeeder extends Seeder
             ->get()
             ->each(function (ProgramPembelajaran $program) {
                 $setting = $this->setting($program->slug);
+                $hasActiveMentorPlan = $program->paymentPlans()
+                    ->where('scope_type', 'kloter')
+                    ->where('is_active', true)
+                    ->exists();
 
                 PaketPembayaran::updateOrCreate(
-                    ['slug' => 'akses-' . Str::slug($program->slug ?: $program->title) . '-' . $setting['duration_days'] . '-hari'],
+                    ['slug' => 'akses-'.Str::slug($program->slug ?: $program->title).'-'.$setting['duration_days'].'-hari'],
                     [
-                        'name' => 'Akses ' . $program->title,
+                        'name' => 'Akses '.$program->title,
                         'scope_type' => 'program',
                         'program_pembelajaran_id' => $program->id,
                         'description' => $setting['description'],
                         'price' => $setting['price'],
                         'duration_days' => $setting['duration_days'],
                         'features' => $setting['features'],
-                        'is_active' => true,
+                        'is_active' => ! $hasActiveMentorPlan,
                     ]
                 );
             });
@@ -59,7 +70,7 @@ class ProgramPaymentPlanSeeder extends Seeder
             default => [
                 'price' => 79000,
                 'duration_days' => 30,
-                'description' => 'Akses 30 hari untuk kelas ' . $slug . '.',
+                'description' => 'Akses 30 hari untuk kelas '.$slug.'.',
                 'features' => ['Roadmap mingguan', 'PPT kelas', 'Kosakata', 'Flashcard', 'Kuis'],
             ],
         };

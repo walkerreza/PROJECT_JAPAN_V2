@@ -355,6 +355,10 @@ class BerandaController extends Controller
                     abort(422, 'Access key tidak valid, sudah habis, atau sudah kedaluwarsa.');
                 }
 
+                if (($accessKey->scope_type ?? AksesLanggananService::SCOPE_GLOBAL) === AksesLanggananService::SCOPE_GLOBAL) {
+                    abort(422, 'Access key global sudah tidak berlaku. Gunakan access key yang terkait kelas.');
+                }
+
                 $alreadyRedeemed = PenukaranKodeAkses::where('access_key_id', $accessKey->id)
                     ->where('user_id', $user->id)
                     ->exists();

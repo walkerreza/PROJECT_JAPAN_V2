@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\KloterBelajar;
 use App\Models\LogTransaksi;
 use App\Models\PaketPembayaran;
 use App\Models\Pengguna;
@@ -9,14 +10,15 @@ use App\Models\Transaksi;
 use App\Notifications\PurchaseReceiptNotification;
 use App\Services\AksesLanggananService;
 use App\Services\AksesPremiumService;
+use App\Services\KloterBelajarService;
 use App\Services\NotifikasiPenggunaService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Illuminate\Database\QueryException;
 
 class PembayaranMidtransController extends Controller
 {
@@ -25,6 +27,7 @@ class PembayaranMidtransController extends Controller
         $validated = $request->validate([
             'payment_plan_id' => ['required', 'exists:payment_plans,id'],
             'checkout_request_key' => ['required', 'uuid'],
+            'kloter_belajar_id' => ['nullable', 'integer', 'exists:kloter_belajar,id'],
         ]);
 
         abort_unless($request->user()?->role === 'user', 403);
@@ -38,12 +41,20 @@ class PembayaranMidtransController extends Controller
             ->where('price', '>', 0)
             ->findOrFail($validated['payment_plan_id']);
         $scope = app(AksesLanggananService::class)->scopeFromPlan($plan);
+        abort_if($scope['scope_type'] === AksesLanggananService::SCOPE_GLOBAL, 422, 'Paket global sudah tidak tersedia untuk checkout baru.');
+
+        if ($scope['scope_type'] === AksesLanggananService::SCOPE_KLOTER) {
+            abort_unless($validated['kloter_belajar_id'] ?? null, 422, 'Pilih kloter untuk kelas mentor.');
+        } else {
+            $validated['kloter_belajar_id'] = null;
+        }
 
         [$transaction, $wasCreated] = $this->createOrReuseCheckout(
             $request,
             $plan,
             $scope,
-            $validated['checkout_request_key']
+            $validated['checkout_request_key'],
+            $validated['kloter_belajar_id'] ?? null
         );
         $snap = $this->prepareSnapPayment($transaction, $request);
 
@@ -52,7 +63,9 @@ class PembayaranMidtransController extends Controller
                 $request->user(),
                 'payment_pending',
                 'Pembayaran dibuat',
-                'Selesaikan pembayaran agar akses belajar kamu aktif.',
+                $scope['scope_type'] === AksesLanggananService::SCOPE_KLOTER
+                    ? 'Selesaikan pembayaran. Setelah berhasil, akses kelas menunggu persetujuan mentor.'
+                    : 'Selesaikan pembayaran agar akses belajar kamu aktif.',
                 route('user.checkout', $transaction->transaction_code),
                 ['transaction_id' => $transaction->id, 'source' => 'midtrans']
             );
@@ -102,12 +115,14 @@ class PembayaranMidtransController extends Controller
         $this->applyMidtransStatus($transaction, $response->json(), $request->user()->id, 'Sync status Midtrans dari frontend.');
 
         $freshTransaction = $transaction->fresh(['kloterBelajar.admin']);
+        $accessState = $this->accessState($freshTransaction);
 
         return response()->json([
             'status' => $transaction->fresh()->status,
             'subscription_status' => $request->user()->fresh()->subscription_status,
             'is_premium' => app(AksesPremiumService::class)->isPremium($request->user()->fresh()),
             'access_status' => app(AksesPremiumService::class)->statusAkses($request->user()->fresh()),
+            'access_state' => $accessState,
             'kloter' => $freshTransaction?->kloterBelajar ? [
                 'id' => $freshTransaction->kloterBelajar->id,
                 'nama' => $freshTransaction->kloterBelajar->nama,
@@ -289,7 +304,9 @@ class PembayaranMidtransController extends Controller
 
             if ($newStatus === 'success' && $oldStatus !== 'success') {
                 $activatedTransaction = $transaction->fresh(['paymentPlan.programPembelajaran', 'programPembelajaran', 'user']);
-                app(AksesLanggananService::class)->activateFromTransaction($activatedTransaction);
+                $subscription = app(AksesLanggananService::class)->activateFromTransaction($activatedTransaction);
+                $isPendingApproval = $activatedTransaction->scope_type === AksesLanggananService::SCOPE_KLOTER
+                    && ! $subscription;
 
                 if ($activatedTransaction->user) {
                     $scopeLabel = app(AksesLanggananService::class)->labelScope(
@@ -299,9 +316,11 @@ class PembayaranMidtransController extends Controller
 
                     app(NotifikasiPenggunaService::class)->kirimKePengguna(
                         $activatedTransaction->user,
-                        'payment_success',
+                        $isPendingApproval ? 'payment_success_pending_approval' : 'payment_success',
                         'Pembayaran berhasil',
-                        "Akses {$scopeLabel} sudah aktif.",
+                        $isPendingApproval
+                            ? "Pembayaran {$scopeLabel} berhasil. Akses menunggu persetujuan mentor."
+                            : "Akses {$scopeLabel} sudah aktif.",
                         route('user.kelas.index'),
                         ['transaction_id' => $activatedTransaction->id, 'source' => 'midtrans'],
                         'payment',
@@ -309,7 +328,7 @@ class PembayaranMidtransController extends Controller
                         false,
                     );
 
-                    DB::afterCommit(function () use ($activatedTransaction, $scopeLabel): void {
+                    DB::afterCommit(function () use ($activatedTransaction, $scopeLabel, $isPendingApproval): void {
                         try {
                             $activatedTransaction->user->notify(new PurchaseReceiptNotification(
                                 $activatedTransaction->transaction_code,
@@ -317,6 +336,7 @@ class PembayaranMidtransController extends Controller
                                 $scopeLabel,
                                 (int) $activatedTransaction->amount,
                                 optional($activatedTransaction->processed_at)->format('d M Y H:i') ?? now()->format('d M Y H:i'),
+                                $isPendingApproval,
                             ));
                         } catch (\Throwable $exception) {
                             Log::error('Invoice pembayaran tidak dapat dimasukkan ke antrean.', [
@@ -330,8 +350,9 @@ class PembayaranMidtransController extends Controller
                 $this->notifySuperadminTransaction($activatedTransaction, 'payment_success', 'Pembayaran Midtrans berhasil', 'success');
             }
 
-            if (in_array($newStatus, ['failed', 'expired'], true) && $oldStatus !== $newStatus) {
+            if (in_array($newStatus, ['failed', 'expired', 'canceled'], true) && $oldStatus !== $newStatus) {
                 $failedTransaction = $transaction->fresh(['user']);
+                app(KloterBelajarService::class)->releasePaymentReservation($failedTransaction);
                 if ($failedTransaction->user) {
                     app(NotifikasiPenggunaService::class)->kirimKePengguna(
                         $failedTransaction->user,
@@ -394,10 +415,15 @@ class PembayaranMidtransController extends Controller
         });
     }
 
-    private function createOrReuseCheckout(Request $request, PaketPembayaran $plan, array $scope, string $checkoutRequestKey): array
-    {
+    private function createOrReuseCheckout(
+        Request $request,
+        PaketPembayaran $plan,
+        array $scope,
+        string $checkoutRequestKey,
+        ?int $kloterId
+    ): array {
         try {
-            return DB::transaction(function () use ($request, $plan, $scope, $checkoutRequestKey) {
+            return DB::transaction(function () use ($request, $plan, $scope, $checkoutRequestKey, $kloterId) {
                 Pengguna::query()
                     ->whereKey($request->user()->id)
                     ->lockForUpdate()
@@ -409,9 +435,19 @@ class PembayaranMidtransController extends Controller
                     ->first();
 
                 if ($existing) {
-                    $this->assertReusableCheckout($existing, $request, $plan);
+                    $this->assertReusableCheckout($existing, $request, $plan, $kloterId);
 
                     return [$existing, false];
+                }
+
+                $kloter = null;
+
+                if ($scope['scope_type'] === AksesLanggananService::SCOPE_KLOTER) {
+                    $kloter = KloterBelajar::query()->lockForUpdate()->findOrFail($kloterId);
+                    app(KloterBelajarService::class)->validasiKloterCheckout(
+                        $kloter,
+                        (int) $scope['program_pembelajaran_id']
+                    );
                 }
 
                 $pendingTransaction = Transaksi::query()
@@ -424,6 +460,8 @@ class PembayaranMidtransController extends Controller
                     ->first();
 
                 if ($pendingTransaction) {
+                    $this->assertReusableCheckout($pendingTransaction, $request, $plan, $kloterId);
+
                     return [$pendingTransaction, false];
                 }
 
@@ -433,6 +471,7 @@ class PembayaranMidtransController extends Controller
                     'user_id' => $request->user()->id,
                     'payment_plan_id' => $plan->id,
                     ...$scope,
+                    'kloter_belajar_id' => $kloter?->id,
                     'amount' => $plan->price,
                     'payment_method' => 'midtrans',
                     'status' => 'pending',
@@ -446,6 +485,14 @@ class PembayaranMidtransController extends Controller
                     'notes' => 'Midtrans Snap checkout dibuat.',
                 ]);
 
+                if ($kloter) {
+                    app(KloterBelajarService::class)->reservePaymentSeat(
+                        $request->user(),
+                        $kloter,
+                        $transaction
+                    );
+                }
+
                 return [$transaction, true];
             }, 3);
         } catch (QueryException $exception) {
@@ -457,16 +504,25 @@ class PembayaranMidtransController extends Controller
                 throw $exception;
             }
 
-            $this->assertReusableCheckout($existing, $request, $plan);
+            $this->assertReusableCheckout($existing, $request, $plan, $kloterId);
 
             return [$existing, false];
         }
     }
 
-    private function assertReusableCheckout(Transaksi $transaction, Request $request, PaketPembayaran $plan): void
-    {
+    private function assertReusableCheckout(
+        Transaksi $transaction,
+        Request $request,
+        PaketPembayaran $plan,
+        ?int $kloterId
+    ): void {
         abort_unless($transaction->user_id === $request->user()->id, 403);
         abort_unless($transaction->payment_plan_id === $plan->id, 422, 'Checkout intent tidak sesuai paket pembayaran.');
+        abort_unless(
+            (int) ($transaction->kloter_belajar_id ?? 0) === (int) ($kloterId ?? 0),
+            409,
+            'Masih ada checkout untuk kloter lain. Batalkan pesanan lama sebelum mengganti kloter.'
+        );
         abort_if($transaction->status !== 'pending', 409, 'Checkout sebelumnya sudah selesai. Buat checkout baru untuk melanjutkan.');
     }
 
@@ -604,5 +660,25 @@ class PembayaranMidtransController extends Controller
         return config('services.midtrans.is_production')
             ? 'https://api.midtrans.com'
             : 'https://api.sandbox.midtrans.com';
+    }
+
+    private function accessState(?Transaksi $transaction): string
+    {
+        if (! $transaction) {
+            return 'unavailable';
+        }
+
+        if ($transaction->scope_type !== AksesLanggananService::SCOPE_KLOTER) {
+            return $transaction->status === 'success' ? 'active' : 'payment_pending';
+        }
+
+        $membershipStatus = $transaction->anggotaKloter()->value('status');
+
+        return match ($membershipStatus) {
+            'active' => 'active',
+            'paid_pending_approval' => 'pending_approval',
+            'rejected' => 'refund_required',
+            default => $transaction->status === 'success' ? 'pending_approval' : 'payment_pending',
+        };
     }
 }

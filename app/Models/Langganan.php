@@ -53,4 +53,9 @@ class Langganan extends Model
     {
         return $this->belongsTo(KloterBelajar::class, 'kloter_belajar_id');
     }
+
+    public function anggotaKloter()
+    {
+        return $this->hasOne(AnggotaKloter::class, 'subscription_id');
+    }
 }

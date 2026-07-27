@@ -26,7 +26,6 @@ import LightModeIcon from '@mui/icons-material/LightMode';
 import NotificationsOutlinedIcon from '@mui/icons-material/NotificationsOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
-import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -254,14 +253,12 @@ export default function AuthenticatedLayout({ children }) {
 
     const accessStatus = user?.access_status || {};
     const isPremiumUser = accessStatus.is_premium ?? user?.subscription_status === 'premium';
-    const shouldShowUpgrade = accessStatus.should_show_upgrade ?? !isPremiumUser;
 
     const userMenu = [
         { href: '/user/dashboard', icon: <DashboardIcon sx={{ fontSize: 28 }} />, label: 'Beranda' },
         { href: '/user/kelas', icon: <SchoolIcon sx={{ fontSize: 28 }} />, label: 'Kelas' },
         { href: '/user/leaderboard', icon: <EmojiEventsIcon sx={{ fontSize: 28 }} />, label: 'Peringkat' },
         { href: '/user/progress', icon: <MonitorHeartIcon sx={{ fontSize: 28 }} />, label: 'Progress' },
-        ...(shouldShowUpgrade ? [{ href: '/pricing', icon: <RocketLaunchIcon sx={{ fontSize: 24 }} />, label: 'Upgrade', variant: 'upgrade' }] : []),
     ];
 
     const adminMenu = [

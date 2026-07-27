@@ -131,6 +131,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::patch('/kloters/{kloter}/schedule', [AdminPenggunaController::class, 'updateKloterSchedule'])->name('kloters.schedule.update');
         Route::post('/kloters/{kloter}/users', [AdminPenggunaController::class, 'assignUser'])->name('kloters.users.store');
         Route::delete('/kloters/{kloter}/users/{user}', [AdminPenggunaController::class, 'removeUser'])->name('kloters.users.destroy');
+        Route::patch('/kloters/{kloter}/enrollments/{membership}/approve', [AdminPenggunaController::class, 'approveEnrollment'])->name('kloters.enrollments.approve');
+        Route::patch('/kloters/{kloter}/enrollments/{membership}/reject', [AdminPenggunaController::class, 'rejectEnrollment'])->name('kloters.enrollments.reject');
         Route::get('/analytics', AdminAnalitikController::class)->name('analytics');
         Route::get('/vocabulary', [AdminKosakataController::class, 'index'])->name('vocabulary.index');
         Route::post('/vocabulary', [AdminKosakataController::class, 'store'])->name('vocabulary.store');

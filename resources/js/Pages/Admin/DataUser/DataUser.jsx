@@ -12,9 +12,11 @@ export default function Users({
     kloters = [],
     selectedKloter = null,
     candidateStudents = [],
+    pendingEnrollments = [],
     filters = {},
 }) {
     const [search, setSearch] = useState(filters.search || '');
+    const [rejectTarget, setRejectTarget] = useState(null);
     const items = students?.data || [];
     const { confirmState, openConfirm, closeConfirm } = useConfirmAction();
     const scheduleForm = useForm({
@@ -22,6 +24,7 @@ export default function Users({
         tanggal_selesai: selectedKloter?.tanggal_selesai || '',
     });
     const assignForm = useForm({ user_id: '', catatan: '' });
+    const rejectForm = useForm({ reason: '' });
 
     useEffect(() => {
         scheduleForm.setData({
@@ -86,6 +89,39 @@ export default function Users({
         });
     };
 
+    const confirmApproval = (enrollment) => {
+        openConfirm({
+            variant: 'success',
+            title: 'Setujui Peserta?',
+            message: 'Subscription kelas akan aktif dan masa akses mulai dihitung hari ini.',
+            details: [
+                { label: 'Siswa', value: enrollment.user.username },
+                { label: 'Transaksi', value: enrollment.transaction_code },
+                { label: 'Nominal', value: enrollment.amount_formatted },
+            ],
+            confirmLabel: 'Setujui Peserta',
+            onConfirm: () => router.patch(
+                route('admin.kloters.enrollments.approve', [selectedKloter.id, enrollment.id]),
+                {},
+                { preserveScroll: true, onFinish: closeConfirm },
+            ),
+        });
+    };
+
+    const submitRejection = (event) => {
+        event.preventDefault();
+        rejectForm.patch(
+            route('admin.kloters.enrollments.reject', [selectedKloter.id, rejectTarget.id]),
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setRejectTarget(null);
+                    rejectForm.reset();
+                },
+            },
+        );
+    };
+
     const emptyMessage = adminScope === 'kloter' && kloters.length === 0
         ? 'Akun ini belum ditugaskan ke kloter. Hubungi superadmin untuk menentukan kloter pengampu.'
         : 'Belum ada siswa yang cocok dengan filter.';
@@ -130,6 +166,41 @@ export default function Users({
                         <button className="h-11 rounded-xl bg-gray-900 px-5 text-sm font-black text-white dark:bg-white dark:text-gray-900">Cari</button>
                     </form>
                 </Card>
+
+                {selectedKloter && (
+                    <Card className="!p-4 sm:!p-5">
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <h2 className="font-black text-gray-900 dark:text-white">Menunggu Persetujuan</h2>
+                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    Peserta di bawah sudah membayar kelas mentor. Setujui untuk memulai masa akses.
+                                </p>
+                            </div>
+                            <Badge color={pendingEnrollments.length ? 'yellow' : 'gray'}>{pendingEnrollments.length} pending</Badge>
+                        </div>
+
+                        <div className="mt-4 divide-y divide-gray-100 border-t border-gray-100 dark:divide-gray-800 dark:border-gray-800">
+                            {pendingEnrollments.map((enrollment) => (
+                                <article key={enrollment.id} className="grid gap-3 py-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+                                    <div className="min-w-0">
+                                        <p className="truncate text-sm font-black text-gray-900 dark:text-white">{enrollment.user.username}</p>
+                                        <p className="truncate text-xs text-gray-500">{enrollment.user.email}</p>
+                                        <p className="mt-1 text-xs font-bold text-gray-600 dark:text-gray-300">
+                                            {enrollment.transaction_code} - {enrollment.amount_formatted} - {enrollment.paid_at || 'Baru dibayar'}
+                                        </p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => confirmApproval(enrollment)} className="min-h-10 rounded-lg bg-emerald-600 px-4 text-xs font-black text-white">Setujui</button>
+                                        <button onClick={() => { setRejectTarget(enrollment); rejectForm.reset(); }} className="min-h-10 rounded-lg border border-red-200 px-4 text-xs font-black text-red-600">Tolak</button>
+                                    </div>
+                                </article>
+                            ))}
+                            {pendingEnrollments.length === 0 && (
+                                <p className="py-6 text-center text-sm text-gray-500 dark:text-gray-400">Tidak ada pembayaran yang menunggu persetujuan.</p>
+                            )}
+                        </div>
+                    </Card>
+                )}
 
                 {selectedKloter && (
                     <Card className="!p-4 sm:!p-5">
@@ -246,6 +317,31 @@ export default function Users({
             </div>
 
             <ConfirmActionDialog {...confirmState} onCancel={closeConfirm} />
+
+            {rejectTarget && (
+                <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-4">
+                    <form onSubmit={submitRejection} className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl dark:bg-gray-900">
+                        <h2 className="text-lg font-black text-gray-900 dark:text-white">Tolak Pendaftaran Mentor</h2>
+                        <p className="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-400">
+                            Transaksi tetap sukses dan superadmin akan menerima tugas refund manual untuk {rejectTarget.user.username}.
+                        </p>
+                        <textarea
+                            value={rejectForm.data.reason}
+                            onChange={(event) => rejectForm.setData('reason', event.target.value)}
+                            rows={4}
+                            placeholder="Tuliskan alasan penolakan"
+                            className="mt-4 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+                        />
+                        {rejectForm.errors.reason && <p className="mt-2 text-xs font-bold text-red-600">{rejectForm.errors.reason}</p>}
+                        <div className="mt-5 flex justify-end gap-2">
+                            <button type="button" onClick={() => { setRejectTarget(null); rejectForm.reset(); }} className="min-h-10 rounded-lg border border-gray-200 px-4 text-sm font-bold dark:border-gray-700">Batal</button>
+                            <button disabled={rejectForm.processing || !rejectForm.data.reason.trim()} className="min-h-10 rounded-lg bg-red-600 px-4 text-sm font-black text-white disabled:opacity-50">
+                                {rejectForm.processing ? 'Memproses...' : 'Tolak dan Tandai Refund'}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            )}
         </AuthenticatedLayout>
     );
 }

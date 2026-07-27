@@ -52,6 +52,20 @@ const statusPresentation = {
     iconClass: 'bg-emerald-50 text-emerald-700',
     Icon: CheckCircleIcon,
   },
+  pending_approval: {
+    label: 'Menunggu persetujuan mentor',
+    description: 'Pembayaran berhasil. Mentor akan meninjau pendaftaran kloter sebelum akses kelas diaktifkan.',
+    badgeClass: 'border-amber-200 bg-amber-50 text-amber-800',
+    iconClass: 'bg-amber-50 text-amber-700',
+    Icon: HourglassTopIcon,
+  },
+  refund_required: {
+    label: 'Refund sedang ditindaklanjuti',
+    description: 'Pendaftaran mentor ditolak. Tim Japanlingo akan menindaklanjuti pengembalian pembayaran.',
+    badgeClass: 'border-red-200 bg-red-50 text-red-800',
+    iconClass: 'bg-red-50 text-red-700',
+    Icon: ErrorOutlineIcon,
+  },
   failed: {
     label: 'Pembayaran gagal',
     description: 'Pembayaran belum berhasil diproses. Kamu dapat membuat pesanan baru.',
@@ -96,6 +110,7 @@ const formatDate = (value) => {
 
 export default function Checkout({ transaction, midtrans }) {
   const [status, setStatus] = useState(transaction.status);
+  const [accessState, setAccessState] = useState(transaction.access_state || 'payment_pending');
   const [snapToken, setSnapToken] = useState('');
   const [isOpening, setIsOpening] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -105,11 +120,16 @@ export default function Checkout({ transaction, midtrans }) {
   const [kloter, setKloter] = useState(transaction.kloter || null);
   const { confirmState, openConfirm, closeConfirm, setConfirmProcessing } = useConfirmAction();
 
-  const isDone = status === 'success';
+  const isDone = status === 'success' && accessState === 'active';
+  const isPendingApproval = status === 'success' && accessState === 'pending_approval';
+  const isRefundRequired = status === 'success' && accessState === 'refund_required';
   const isPending = status === 'pending';
   const shouldRestartCheckout = ['failed', 'expired', 'refunded', 'canceled'].includes(status);
   const storageKey = `midtrans:${transaction.transaction_code}`;
-  const presentation = statusPresentation[status] || statusPresentation.pending;
+  const presentationKey = status === 'success' && ['pending_approval', 'refund_required'].includes(accessState)
+    ? accessState
+    : status;
+  const presentation = statusPresentation[presentationKey] || statusPresentation.pending;
   const StatusIcon = presentation.Icon;
 
   const savedPayment = useMemo(() => {
@@ -134,11 +154,15 @@ export default function Checkout({ transaction, midtrans }) {
       const response = await window.axios.post(route('payments.midtrans.sync', transaction.transaction_code));
       const nextStatus = response.data?.status || status;
       setStatus(nextStatus);
+      const nextAccessState = response.data?.access_state || accessState;
+      setAccessState(nextAccessState);
 
-      if (nextStatus === 'success' || response.data?.is_premium) {
+      if (nextStatus === 'success') {
         setKloter(response.data?.kloter || null);
         window.sessionStorage?.removeItem(storageKey);
-        setNotice(successMessage || 'Pembayaran berhasil divalidasi. Akses belajar sudah aktif.');
+        setNotice(nextAccessState === 'pending_approval'
+          ? 'Pembayaran berhasil divalidasi. Pendaftaran sedang menunggu persetujuan mentor.'
+          : successMessage || 'Pembayaran berhasil divalidasi. Akses belajar sudah aktif.');
         router.reload({ only: ['auth'] });
         return;
       }
@@ -179,7 +203,7 @@ export default function Checkout({ transaction, midtrans }) {
       const token = await prepareSnapToken();
 
       window.snap.pay(token, {
-        onSuccess: async () => syncStatus('Pembayaran berhasil. Akses belajar sudah aktif.'),
+        onSuccess: async () => syncStatus('Pembayaran berhasil. Status akses kelas sudah diperbarui.'),
         onPending: async () => syncStatus(),
         onError: () => setError('Pembayaran gagal diproses. Kamu dapat mencoba lagi dari Midtrans.'),
         onClose: () => setNotice('Pembayaran belum diselesaikan. Kamu dapat melanjutkannya kapan saja dari halaman ini.'),
@@ -278,7 +302,7 @@ export default function Checkout({ transaction, midtrans }) {
                 </div>
               </dl>
 
-              {isDone && kloter && (
+              {status === 'success' && kloter && (
                 <div className="mt-6 border-l-2 border-slate-300 pl-4 text-sm leading-6 text-slate-600">
                   <p className="font-bold text-slate-800">Kelas kamu</p>
                   <p className="mt-1">
@@ -371,6 +395,34 @@ export default function Checkout({ transaction, midtrans }) {
                     >
                       Ke dashboard
                     </Link>
+                  </div>
+                )}
+
+                {isPendingApproval && (
+                  <div className="space-y-3">
+                    <Link
+                      href={route('user.kelas.index')}
+                      className="inline-flex min-h-12 w-full items-center justify-center rounded-lg bg-[#c33d4b] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#a9323f]"
+                    >
+                      Lihat status kelas
+                    </Link>
+                    <p className="text-center text-xs leading-5 text-slate-500">
+                      Kamu akan menerima notifikasi dan email setelah mentor mengambil keputusan.
+                    </p>
+                  </div>
+                )}
+
+                {isRefundRequired && (
+                  <div className="space-y-3">
+                    <Link
+                      href={route('user.kelas.index')}
+                      className="inline-flex min-h-12 w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-800 transition hover:bg-slate-50"
+                    >
+                      Kembali ke daftar kelas
+                    </Link>
+                    <p className="text-center text-xs leading-5 text-slate-500">
+                      Status transaksi tetap tersimpan sebagai pembayaran berhasil sampai refund selesai diproses melalui Midtrans.
+                    </p>
                   </div>
                 )}
 

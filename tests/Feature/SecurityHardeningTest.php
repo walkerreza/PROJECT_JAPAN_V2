@@ -8,6 +8,7 @@ use App\Models\LogReward;
 use App\Models\Modul;
 use App\Models\PaketPembayaran;
 use App\Models\Pengguna;
+use App\Models\ProgramPembelajaran;
 use App\Models\SetFlashcard;
 use App\Models\Transaksi;
 use App\Services\AksesFlashcardPenggunaService;
@@ -100,10 +101,16 @@ it('reuses one pending Midtrans checkout for the same checkout intent', function
     config(['services.midtrans.server_key' => 'test-server-key']);
 
     $user = Pengguna::factory()->create(['role' => 'user']);
+    $program = ProgramPembelajaran::create([
+        'title' => 'Program checkout idempotent',
+        'slug' => 'program-checkout-idempotent',
+        'status' => 'published',
+    ]);
     $plan = PaketPembayaran::create([
         'name' => 'Plan idempotent checkout',
         'slug' => 'plan-idempotent-checkout',
-        'scope_type' => 'global',
+        'scope_type' => 'program',
+        'program_pembelajaran_id' => $program->id,
         'price' => 99000,
         'duration_days' => 30,
         'is_active' => true,

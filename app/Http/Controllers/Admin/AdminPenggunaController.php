@@ -13,6 +13,7 @@ use App\Models\Pengguna;
 use App\Models\Progres;
 use App\Services\AksesLanggananService;
 use App\Services\KloterBelajarService;
+use App\Services\NotifikasiPenggunaService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -67,6 +68,7 @@ class AdminPenggunaController extends Controller
             'kloters' => $kloterService->pilihanKloterAdmin($admin),
             'selectedKloter' => $selectedKloter ? $this->selectedKloterPayload($selectedKloter) : null,
             'candidateStudents' => $selectedKloter ? $this->candidateStudents($selectedKloter) : [],
+            'pendingEnrollments' => $selectedKloter ? $this->pendingEnrollments($selectedKloter) : [],
             'filters' => [
                 'search' => $search,
                 'kloter' => $selectedKloter?->id,
@@ -303,6 +305,100 @@ class AdminPenggunaController extends Controller
         return back()->with('success', 'Siswa dikeluarkan dari kloter tanpa menghapus akses dan histori belajarnya.');
     }
 
+    public function approveEnrollment(
+        Request $request,
+        KloterBelajar $kloter,
+        AnggotaKloter $membership,
+        KloterBelajarService $kloterService
+    ): RedirectResponse {
+        /** @var Pengguna $admin */
+        $admin = $request->user();
+        $kloterService->abortJikaKloterDiLuarCakupan($admin, $kloter);
+        abort_unless((int) $membership->kloter_belajar_id === (int) $kloter->id, 404);
+
+        $subscription = app(AksesLanggananService::class)->approveMentorEnrollment($membership, $admin);
+        $membership->loadMissing('user');
+
+        app(NotifikasiPenggunaService::class)->kirimKePengguna(
+            $membership->user,
+            'kloter_approval_success',
+            'Akses kelas disetujui',
+            "Akses ke {$kloter->nama} sudah aktif. Masa belajar dimulai hari ini.",
+            route('user.kelas.index'),
+            [
+                'kloter_id' => $kloter->id,
+                'subscription_id' => $subscription->id,
+            ],
+            'access',
+            'success',
+            true
+        );
+
+        $this->logActivity(
+            $request,
+            $admin,
+            'kloter.enrollment_approved',
+            $kloter,
+            "Menyetujui {$membership->user->username} untuk {$kloter->nama}"
+        );
+
+        return back()->with('success', 'Peserta disetujui dan akses kelas sudah aktif.');
+    }
+
+    public function rejectEnrollment(
+        Request $request,
+        KloterBelajar $kloter,
+        AnggotaKloter $membership,
+        KloterBelajarService $kloterService
+    ): RedirectResponse {
+        /** @var Pengguna $admin */
+        $admin = $request->user();
+        $kloterService->abortJikaKloterDiLuarCakupan($admin, $kloter);
+        abort_unless((int) $membership->kloter_belajar_id === (int) $kloter->id, 404);
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'max:1000'],
+        ]);
+
+        app(AksesLanggananService::class)->rejectMentorEnrollment($membership, $admin, $validated['reason']);
+        $membership->loadMissing(['user', 'transaction']);
+
+        app(NotifikasiPenggunaService::class)->kirimKePengguna(
+            $membership->user,
+            'kloter_approval_rejected',
+            'Pendaftaran kelas ditolak',
+            'Pendaftaran mentor ditolak. Tim Japanlingo akan menindaklanjuti refund pembayaran.',
+            route('user.checkout', $membership->transaction->transaction_code),
+            ['kloter_id' => $kloter->id, 'transaction_id' => $membership->transaction_id],
+            'access',
+            'danger',
+            true
+        );
+
+        app(NotifikasiPenggunaService::class)->kirimKeRole(
+            'superadmin',
+            'manual_refund_required',
+            'Refund pembayaran perlu diproses',
+            "{$membership->user->username} ditolak dari {$kloter->nama}. Proses refund transaksi {$membership->transaction->transaction_code} melalui Midtrans.",
+            route('superadmin.payments', ['search' => $membership->transaction->transaction_code]),
+            ['transaction_id' => $membership->transaction_id, 'kloter_id' => $kloter->id],
+            'payment',
+            'danger',
+            true
+        );
+
+        $this->logActivity(
+            $request,
+            $admin,
+            'kloter.enrollment_rejected',
+            $kloter,
+            "Menolak {$membership->user->username} dari {$kloter->nama}",
+            ['reason' => $validated['reason'], 'transaction_id' => $membership->transaction_id]
+        );
+
+        return back()->with('success', 'Peserta ditolak dan refund ditandai untuk superadmin.');
+    }
+
     private function candidateStudents(KloterBelajar $kloter): Collection
     {
         return Pengguna::query()
@@ -329,6 +425,27 @@ class AdminPenggunaController extends Controller
             ->map(fn (Pengguna $student) => [
                 'id' => $student->id,
                 'label' => "{$student->username} ({$student->email})",
+            ]);
+    }
+
+    private function pendingEnrollments(KloterBelajar $kloter): Collection
+    {
+        return AnggotaKloter::query()
+            ->with(['user:id,username,email', 'transaction:id,transaction_code,amount,status,processed_at'])
+            ->where('kloter_belajar_id', $kloter->id)
+            ->where('status', 'paid_pending_approval')
+            ->oldest('updated_at')
+            ->get()
+            ->map(fn (AnggotaKloter $membership) => [
+                'id' => $membership->id,
+                'user' => [
+                    'id' => $membership->user?->id,
+                    'username' => $membership->user?->username,
+                    'email' => $membership->user?->email,
+                ],
+                'transaction_code' => $membership->transaction?->transaction_code,
+                'amount_formatted' => 'Rp '.number_format((int) $membership->transaction?->amount),
+                'paid_at' => optional($membership->transaction?->processed_at)->format('d M Y H:i'),
             ]);
     }
 

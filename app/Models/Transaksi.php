@@ -63,4 +63,9 @@ class Transaksi extends Model
     {
         return $this->belongsTo(KloterBelajar::class, 'kloter_belajar_id');
     }
+
+    public function anggotaKloter()
+    {
+        return $this->hasOne(AnggotaKloter::class, 'transaction_id');
+    }
 }

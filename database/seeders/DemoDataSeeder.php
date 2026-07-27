@@ -16,6 +16,7 @@ use App\Models\Modul;
 use App\Models\PaketPembayaran;
 use App\Models\PengerjaanKuis;
 use App\Models\Pengguna;
+use App\Models\ProgramPembelajaran;
 use App\Models\Progres;
 use App\Models\SetFlashcard;
 use App\Models\Soal;
@@ -35,9 +36,21 @@ class DemoDataSeeder extends Seeder
             ['stage' => 3, 'is_premium' => true]
         );
 
-        $module = Modul::updateOrCreate(
-            ['level_id' => $level->id, 'week_number' => 1],
+        $program = ProgramPembelajaran::updateOrCreate(
+            ['slug' => 'jlpt-n3-mingguan'],
             [
+                'level_id' => $level->id,
+                'title' => 'JLPT N3 Mingguan',
+                'description' => 'Program demo belajar JLPT N3.',
+                'status' => 'published',
+                'sort_order' => 1,
+            ]
+        );
+
+        $module = Modul::updateOrCreate(
+            ['program_pembelajaran_id' => $program->id, 'week_number' => 1],
+            [
+                'level_id' => $level->id,
                 'title' => 'Minggu 1: Kosakata dan Kanji Harian',
                 'description' => 'Demo modul N3 untuk validasi kelas, kuis, flashcard, progress, dan premium lock.',
                 'status' => 'published',
@@ -163,41 +176,39 @@ class DemoDataSeeder extends Seeder
             );
         });
 
+        $hasActiveMentorPlan = $program->paymentPlans()
+            ->where('scope_type', 'kloter')
+            ->where('is_active', true)
+            ->exists();
+
         $monthlyPlan = PaketPembayaran::updateOrCreate(
-            ['slug' => 'premium-monthly'],
+            ['slug' => 'akses-jlpt-n3-mingguan-30-hari'],
             [
-                'name' => 'Premium Monthly',
-                'scope_type' => 'global',
-                'program_pembelajaran_id' => null,
-                'description' => 'Akses premium 30 hari untuk demo.',
-                'price' => 99000,
+                'name' => 'Akses JLPT N3 Mingguan',
+                'scope_type' => 'program',
+                'program_pembelajaran_id' => $program->id,
+                'description' => 'Akses mandiri JLPT N3 selama 30 hari.',
+                'price' => 79000,
                 'duration_days' => 30,
-                'features' => ['Akses semua kelas N3', 'Priority access', 'Access key support'],
-                'is_active' => true,
+                'features' => ['Roadmap mingguan', 'PPT kelas', 'Kosakata', 'Flashcard', 'Kuis'],
+                'is_active' => ! $hasActiveMentorPlan,
             ]
         );
 
-        PaketPembayaran::updateOrCreate(
-            ['slug' => 'free-plan'],
-            [
-                'name' => 'Free Plan',
-                'scope_type' => 'global',
-                'program_pembelajaran_id' => null,
-                'description' => 'Akses dasar gratis.',
-                'price' => 0,
-                'duration_days' => 30,
-                'features' => ['Preview konten minggu pertama'],
-                'is_active' => true,
-            ]
-        );
+        PaketPembayaran::query()
+            ->where(function ($query) {
+                $query->where('scope_type', 'global')
+                    ->orWhereNull('scope_type');
+            })
+            ->update(['is_active' => false]);
 
         if ($superadmin) {
             KodeAkses::updateOrCreate(
                 ['code' => 'DEMO-N3-PREMIUM'],
                 [
                     'payment_plan_id' => $monthlyPlan->id,
-                    'scope_type' => 'global',
-                    'program_pembelajaran_id' => null,
+                    'scope_type' => 'program',
+                    'program_pembelajaran_id' => $program->id,
                     'created_by' => $superadmin->id,
                     'name' => 'Demo Premium N3',
                     'duration_days' => 30,
@@ -238,8 +249,8 @@ class DemoDataSeeder extends Seeder
             $subscription = Langganan::updateOrCreate(
                 ['user_id' => $student->id, 'payment_plan_id' => $monthlyPlan->id],
                 [
-                    'scope_type' => 'global',
-                    'program_pembelajaran_id' => null,
+                    'scope_type' => 'program',
+                    'program_pembelajaran_id' => $program->id,
                     'status' => 'active',
                     'start_date' => now()->toDateString(),
                     'end_date' => now()->addDays(30)->toDateString(),
@@ -253,9 +264,9 @@ class DemoDataSeeder extends Seeder
                     'user_id' => $student->id,
                     'payment_plan_id' => $monthlyPlan->id,
                     'subscription_id' => $subscription->id,
-                    'scope_type' => 'global',
-                    'program_pembelajaran_id' => null,
-                    'amount' => 99000,
+                    'scope_type' => 'program',
+                    'program_pembelajaran_id' => $program->id,
+                    'amount' => 79000,
                     'payment_method' => 'manual',
                     'status' => 'success',
                     'notes' => 'Demo successful transaction.',

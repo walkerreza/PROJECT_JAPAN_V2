@@ -19,6 +19,7 @@ class PurchaseReceiptNotification extends Notification implements ShouldQueue
         private readonly string $scopeLabel,
         private readonly int $amount,
         private readonly string $processedAt,
+        private readonly bool $pendingApproval = false,
     ) {
         $this->afterCommit();
         $this->onQueue('mail');
@@ -36,7 +37,9 @@ class PurchaseReceiptNotification extends Notification implements ShouldQueue
         return (new MailMessage)
             ->subject('Bukti pembayaran Japanlingo - '.$this->transactionCode)
             ->greeting('Halo '.($notifiable->username ?? 'Japanlingo User').',')
-            ->line('Pembayaran Anda berhasil diproses dan akses belajar telah diaktifkan.')
+            ->line($this->pendingApproval
+                ? 'Pembayaran Anda berhasil diproses. Akses kelas sedang menunggu persetujuan mentor.'
+                : 'Pembayaran Anda berhasil diproses dan akses belajar telah diaktifkan.')
             ->line('Paket: '.$this->planName)
             ->line('Akses: '.$this->scopeLabel)
             ->line('Nominal: Rp '.number_format($this->amount, 0, ',', '.'))
@@ -58,6 +61,7 @@ class PurchaseReceiptNotification extends Notification implements ShouldQueue
                 'amount' => 'Rp '.number_format($this->amount, 0, ',', '.'),
                 'processed_at' => $this->processedAt,
                 'invoice_url' => route('user.checkout', $this->transactionCode),
+                'access_status' => $this->pendingApproval ? 'Menunggu persetujuan mentor' : 'Akses aktif',
             ],
         ];
     }

@@ -7,9 +7,13 @@ use App\Models\LevelPembelajaran;
 use App\Models\PaketPembayaran;
 use App\Models\Pengguna;
 use App\Models\ProgramPembelajaran;
+use App\Models\Transaksi;
+use App\Services\AksesLanggananService;
+use App\Services\KloterBelajarService;
 use Database\Seeders\KloterDemoSeeder;
 use Database\Seeders\PenggunaSeeder;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Inertia\Testing\AssertableInertia as Assert;
 
 function createAdminGlobalKloterFixture(): array
@@ -105,6 +109,94 @@ it('keeps shared content routes available to global and kloter admins', function
     $this->actingAs($fixture['kloterAdmin'])
         ->get(route('admin.modules.index'))
         ->assertOk();
+});
+
+it('activates a self paced class immediately after successful payment', function () {
+    $fixture = createAdminGlobalKloterFixture();
+    $student = Pengguna::factory()->create(['role' => 'user', 'status' => 'active']);
+    $plan = PaketPembayaran::create([
+        'name' => 'Mandiri Scope A',
+        'slug' => 'mandiri-scope-a',
+        'scope_type' => 'program',
+        'program_pembelajaran_id' => $fixture['programA']->id,
+        'price' => 79000,
+        'duration_days' => 30,
+        'is_active' => true,
+    ]);
+    $transaction = Transaksi::create([
+        'transaction_code' => 'TRX-MANDIRI-SCOPE-A',
+        'user_id' => $student->id,
+        'payment_plan_id' => $plan->id,
+        'scope_type' => 'program',
+        'program_pembelajaran_id' => $fixture['programA']->id,
+        'amount' => 79000,
+        'payment_method' => 'midtrans',
+        'status' => 'success',
+        'processed_at' => now(),
+    ]);
+
+    $subscription = app(AksesLanggananService::class)->activateFromTransaction($transaction);
+
+    expect($subscription)->not->toBeNull()
+        ->and($subscription->scope_type)->toBe('program')
+        ->and($transaction->fresh()->subscription_id)->toBe($subscription->id)
+        ->and($student->fresh()->subscription_status)->toBe('premium');
+});
+
+it('keeps mentor access pending until its assigned admin approves it idempotently', function () {
+    Notification::fake();
+    $fixture = createAdminGlobalKloterFixture();
+    $student = Pengguna::factory()->create(['role' => 'user', 'status' => 'active']);
+    $plan = PaketPembayaran::create([
+        'name' => 'Mentor Scope A',
+        'slug' => 'mentor-scope-a',
+        'scope_type' => 'kloter',
+        'program_pembelajaran_id' => $fixture['programA']->id,
+        'price' => 99000,
+        'duration_days' => 30,
+        'is_active' => true,
+    ]);
+    $transaction = Transaksi::create([
+        'transaction_code' => 'TRX-MENTOR-SCOPE-A',
+        'user_id' => $student->id,
+        'payment_plan_id' => $plan->id,
+        'scope_type' => 'kloter',
+        'program_pembelajaran_id' => $fixture['programA']->id,
+        'kloter_belajar_id' => $fixture['kloterA']->id,
+        'amount' => 99000,
+        'payment_method' => 'midtrans',
+        'status' => 'success',
+        'processed_at' => now(),
+    ]);
+    $membership = app(KloterBelajarService::class)->reservePaymentSeat(
+        $student,
+        $fixture['kloterA'],
+        $transaction
+    );
+
+    $subscription = app(AksesLanggananService::class)->activateFromTransaction($transaction);
+    $membership->refresh();
+
+    expect($subscription)->toBeNull()
+        ->and($membership->status)->toBe('paid_pending_approval')
+        ->and($transaction->fresh()->subscription_id)->toBeNull();
+
+    $this->actingAs($fixture['otherKloterAdmin'])
+        ->patch(route('admin.kloters.enrollments.approve', [$fixture['kloterA'], $membership]))
+        ->assertForbidden();
+
+    $this->actingAs($fixture['kloterAdmin'])
+        ->patch(route('admin.kloters.enrollments.approve', [$fixture['kloterA'], $membership]))
+        ->assertRedirect();
+    $this->actingAs($fixture['kloterAdmin'])
+        ->patch(route('admin.kloters.enrollments.approve', [$fixture['kloterA'], $membership]))
+        ->assertRedirect();
+
+    expect($membership->fresh()->status)->toBe('active')
+        ->and($transaction->fresh()->subscription_id)->not->toBeNull()
+        ->and(Langganan::where('user_id', $student->id)
+            ->where('program_pembelajaran_id', $fixture['programA']->id)
+            ->count())->toBe(1);
 });
 
 it('shows every student to global admin and only assigned students to kloter admin', function () {

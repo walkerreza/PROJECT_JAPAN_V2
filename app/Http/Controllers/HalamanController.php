@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Auth\LoginSosialController;
+use App\Models\AnggotaKloter;
 use App\Models\DeckPresentasi;
 use App\Models\Kosakata;
 use App\Models\Modul;
@@ -32,35 +33,61 @@ class HalamanController extends Controller
     public function pricing()
     {
         return Inertia::render('Pricing', [
-            'paymentPlans' => PaketPembayaran::query()
-                ->with('programPembelajaran:id,title')
-                ->where('is_active', true)
-                ->where(function ($query) {
-                    $query->where('scope_type', AksesLanggananService::SCOPE_GLOBAL)
-                        ->orWhereNull('scope_type');
-                })
-                ->where(function ($query) {
-                    $query->where('price', 0)->orWhere('slug', 'premium-monthly');
-                })
-                ->orderBy('price')
-                ->get(['id', 'name', 'slug', 'scope_type', 'program_pembelajaran_id', 'description', 'price', 'duration_days', 'features'])
-                ->map(fn (PaketPembayaran $plan) => [
-                    'id' => $plan->id,
-                    'name' => $plan->name,
-                    'slug' => $plan->slug,
-                    'scope_type' => $plan->scope_type ?? AksesLanggananService::SCOPE_GLOBAL,
-                    'program_pembelajaran_id' => $plan->program_pembelajaran_id,
-                    'scope_label' => app(AksesLanggananService::class)->labelScope($plan->scope_type, $plan->programPembelajaran?->title),
-                    'description' => $plan->description,
-                    'price' => $plan->price,
-                    'price_formatted' => 'Rp ' . number_format($plan->price),
-                    'duration_days' => $plan->duration_days,
-                    'features' => $plan->features ?? [],
+            'programs' => ProgramPembelajaran::query()
+                ->with('level:id,level_name')
+                ->with(['modules' => fn ($query) => $query
+                    ->where('status', 'published')
+                    ->withCount([
+                        'presentationDecks' => fn ($relation) => $relation->where('status', 'published'),
+                        'flashcardSets' => fn ($relation) => $relation->where('status', 'published'),
+                        'quizzes' => fn ($relation) => $relation->where('status', 'published'),
+                    ])
+                    ->orderBy('week_number')
+                    ->orderBy('id')])
+                ->with(['paymentPlans' => fn ($query) => $query
+                    ->where('is_active', true)
+                    ->where('price', '>', 0)
+                    ->whereIn('scope_type', [
+                        AksesLanggananService::SCOPE_PROGRAM,
+                        AksesLanggananService::SCOPE_KLOTER,
+                    ])
+                    ->orderBy('price')])
+                ->where('status', 'published')
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->get()
+                ->map(fn (ProgramPembelajaran $program) => [
+                    'id' => $program->id,
+                    'title' => $program->title,
+                    'slug' => $program->slug,
+                    'description' => $program->description,
+                    'instructor_name' => $program->instructor_name,
+                    'thumbnail_url' => $this->thumbnailProgramUrl($program->thumbnail_url),
+                    'level' => $program->level?->level_name,
+                    'weeks_count' => $program->modules->count(),
+                    'preview_modules' => $program->modules->map(fn (Modul $module) => [
+                        'id' => $module->id,
+                        'week_number' => $module->week_number,
+                        'title' => $module->title,
+                        'description' => $module->description,
+                        'presentations_count' => $module->presentation_decks_count,
+                        'flashcards_count' => $module->flashcard_sets_count,
+                        'quizzes_count' => $module->quizzes_count,
+                    ])->values(),
+                    'payment_plans' => $program->paymentPlans->map(fn (PaketPembayaran $plan) => [
+                        'id' => $plan->id,
+                        'name' => $plan->name,
+                        'scope_type' => $plan->scope_type,
+                        'scope_label' => $plan->scope_type === AksesLanggananService::SCOPE_KLOTER
+                            ? 'Kelas Mentor'
+                            : 'Kelas Mandiri',
+                        'description' => $plan->description,
+                        'price' => $plan->price,
+                        'price_formatted' => 'Rp '.number_format($plan->price),
+                        'duration_days' => $plan->duration_days,
+                        'features' => $plan->features ?? [],
+                    ])->values(),
                 ]),
-            'midtrans' => [
-                'clientKey' => config('services.midtrans.client_key'),
-                'isProduction' => (bool) config('services.midtrans.is_production'),
-            ],
         ]);
     }
 
@@ -190,7 +217,7 @@ class HalamanController extends Controller
                         $transaction->programPembelajaran?->title
                     ),
                     'amount' => $transaction->amount,
-                    'amount_formatted' => 'Rp ' . number_format($transaction->amount),
+                    'amount_formatted' => 'Rp '.number_format($transaction->amount),
                     'status' => $transaction->status,
                     'status_label' => match ($transaction->status) {
                         'success' => 'Berhasil',
@@ -220,7 +247,7 @@ class HalamanController extends Controller
         ]);
     }
 
-    public function userKelas(AksesPremiumService $aksesPremium, KloterBelajarService $kloterService)
+    public function userKelas(Request $request, AksesPremiumService $aksesPremium, KloterBelajarService $kloterService)
     {
         $user = Auth::user();
 
@@ -231,7 +258,11 @@ class HalamanController extends Controller
             ->orderBy('id')])
             ->with(['paymentPlans' => fn ($query) => $query
                 ->where('is_active', true)
-                ->where('scope_type', AksesLanggananService::SCOPE_PROGRAM)
+                ->where('price', '>', 0)
+                ->whereIn('scope_type', [
+                    AksesLanggananService::SCOPE_PROGRAM,
+                    AksesLanggananService::SCOPE_KLOTER,
+                ])
                 ->orderBy('price')])
             ->where('status', 'published')
             ->orderBy('sort_order')
@@ -250,6 +281,21 @@ class HalamanController extends Controller
                 $hasClassAccess = $aksesPremium->punyaAksesKelas($user, $program->id);
                 $firstPaymentPlan = $program->paymentPlans->first();
                 $kloterAktif = $kloterService->kloterAktifUser($user, $program->id);
+                $enrollmentStates = AnggotaKloter::query()
+                    ->with(['kloterBelajar.admin:id,username', 'transaction:id,transaction_code'])
+                    ->where('user_id', $user->id)
+                    ->whereIn('status', ['paid_pending_approval', 'rejected'])
+                    ->whereHas('kloterBelajar', fn ($query) => $query
+                        ->where('program_pembelajaran_id', $program->id))
+                    ->whereHas('transaction', fn ($query) => $query->where('status', 'success'))
+                    ->latest('updated_at')
+                    ->get();
+                $pendingEnrollment = $enrollmentStates->firstWhere('status', 'paid_pending_approval');
+                $rejectedEnrollment = $enrollmentStates->firstWhere('status', 'rejected');
+                $mode = $firstPaymentPlan?->scope_type;
+                $availableKloters = $mode === AksesLanggananService::SCOPE_KLOTER
+                    ? $kloterService->kloterTersediaUntukCheckout($program->id)
+                    : collect();
 
                 return [
                     'id' => $program->id,
@@ -258,13 +304,17 @@ class HalamanController extends Controller
                     'instructor_name' => $program->instructor_name,
                     'thumbnail_url' => $this->thumbnailProgramUrl($program->thumbnail_url),
                     'level' => $program->level?->level_name,
-                    'type' => $program->level?->level_name ? 'Kelas ' . $program->level->level_name : 'Kelas utama',
+                    'type' => $program->level?->level_name ? 'Kelas '.$program->level->level_name : 'Kelas utama',
                     'lessons' => $modules->count(),
                     'completed_lessons' => $completedCount,
                     'accessible_lessons' => $accessibleCount,
                     'status' => $hasClassAccess ? 'Aktif' : 'Preview',
                     'has_class_access' => $hasClassAccess,
-                    'waiting_for_kloter' => $hasClassAccess && ! $kloterAktif,
+                    'waiting_for_kloter' => false,
+                    'waiting_for_approval' => (bool) $pendingEnrollment,
+                    'refund_required' => (bool) $rejectedEnrollment,
+                    'access_mode' => $mode,
+                    'access_mode_label' => $mode === AksesLanggananService::SCOPE_KLOTER ? 'Kelas Mentor' : 'Kelas Mandiri',
                     'kloter' => $kloterAktif ? [
                         'id' => $kloterAktif->id,
                         'nama' => $kloterAktif->nama,
@@ -280,8 +330,36 @@ class HalamanController extends Controller
                         'id' => $firstPaymentPlan->id,
                         'name' => $firstPaymentPlan->name,
                         'price' => $firstPaymentPlan->price,
-                        'price_formatted' => 'Rp ' . number_format($firstPaymentPlan->price),
+                        'price_formatted' => 'Rp '.number_format($firstPaymentPlan->price),
                         'duration_days' => $firstPaymentPlan->duration_days,
+                        'scope_type' => $firstPaymentPlan->scope_type,
+                    ] : null,
+                    'payment_plans' => $program->paymentPlans->map(fn (PaketPembayaran $plan) => [
+                        'id' => $plan->id,
+                        'name' => $plan->name,
+                        'price' => $plan->price,
+                        'price_formatted' => 'Rp '.number_format($plan->price),
+                        'duration_days' => $plan->duration_days,
+                        'scope_type' => $plan->scope_type,
+                    ])->values(),
+                    'available_kloters' => $availableKloters->map(fn ($kloter) => [
+                        'id' => $kloter->id,
+                        'name' => $kloter->nama,
+                        'mentor_name' => $kloter->admin?->username,
+                        'start_date' => optional($kloter->tanggal_mulai)->toDateString(),
+                        'start_date_label' => optional($kloter->tanggal_mulai)->format('d M Y'),
+                        'max_students' => $kloter->max_siswa,
+                        'remaining_seats' => $kloter->remaining_seats,
+                    ]),
+                    'pending_enrollment' => $pendingEnrollment ? [
+                        'kloter_name' => $pendingEnrollment->kloterBelajar?->nama,
+                        'mentor_name' => $pendingEnrollment->kloterBelajar?->admin?->username,
+                        'transaction_code' => $pendingEnrollment->transaction?->transaction_code,
+                    ] : null,
+                    'rejected_enrollment' => $rejectedEnrollment ? [
+                        'kloter_name' => $rejectedEnrollment->kloterBelajar?->nama,
+                        'mentor_name' => $rejectedEnrollment->kloterBelajar?->admin?->username,
+                        'transaction_code' => $rejectedEnrollment->transaction?->transaction_code,
                     ] : null,
                     'resource_summary' => [
                         'presentations' => DeckPresentasi::whereIn('module_id', $moduleIds)->where('status', 'published')->count(),
@@ -300,6 +378,7 @@ class HalamanController extends Controller
 
         return Inertia::render('User/Kelas/KelasPage', [
             'programs' => $programs,
+            'selectedPlanId' => $request->integer('plan') ?: null,
         ]);
     }
 
@@ -307,7 +386,13 @@ class HalamanController extends Controller
     {
         $user = Auth::user();
         $transaction = Transaksi::query()
-            ->with(['paymentPlan:id,name,slug,scope_type,program_pembelajaran_id,description,price,duration_days,features', 'programPembelajaran:id,title', 'kloterBelajar:id,nama,kode,tanggal_mulai,admin_id', 'kloterBelajar.admin:id,username'])
+            ->with([
+                'paymentPlan:id,name,slug,scope_type,program_pembelajaran_id,description,price,duration_days,features',
+                'programPembelajaran:id,title',
+                'kloterBelajar:id,nama,kode,tanggal_mulai,admin_id',
+                'kloterBelajar.admin:id,username',
+                'anggotaKloter:id,transaction_id,status',
+            ])
             ->where('user_id', $user?->id)
             ->where('transaction_code', $transactionCode)
             ->firstOrFail();
@@ -316,8 +401,9 @@ class HalamanController extends Controller
             'transaction' => [
                 'transaction_code' => $transaction->transaction_code,
                 'amount' => $transaction->amount,
-                'amount_formatted' => 'Rp ' . number_format($transaction->amount),
+                'amount_formatted' => 'Rp '.number_format($transaction->amount),
                 'status' => $transaction->status,
+                'access_state' => $this->transactionAccessState($transaction),
                 'scope_type' => $transaction->scope_type ?? AksesLanggananService::SCOPE_GLOBAL,
                 'scope_label' => app(AksesLanggananService::class)->labelScope($transaction->scope_type, $transaction->programPembelajaran?->title),
                 'program' => $transaction->programPembelajaran ? [
@@ -351,6 +437,20 @@ class HalamanController extends Controller
         ]);
     }
 
+    private function transactionAccessState(Transaksi $transaction): string
+    {
+        if ($transaction->scope_type !== AksesLanggananService::SCOPE_KLOTER) {
+            return $transaction->status === 'success' ? 'active' : 'payment_pending';
+        }
+
+        return match ($transaction->anggotaKloter?->status) {
+            'active' => 'active',
+            'paid_pending_approval' => 'pending_approval',
+            'rejected' => 'refund_required',
+            default => $transaction->status === 'success' ? 'pending_approval' : 'payment_pending',
+        };
+    }
+
     public function adminProfile()
     {
         return Inertia::render('Admin/Profil/Profil');
@@ -371,11 +471,11 @@ class HalamanController extends Controller
             return $thumbnailUrl;
         }
 
-        $relativePath = '/' . ltrim($thumbnailUrl, '/');
+        $relativePath = '/'.ltrim($thumbnailUrl, '/');
         $publicFile = public_path(ltrim($relativePath, '/'));
 
         if (is_file($publicFile)) {
-            return $relativePath . '?v=' . filemtime($publicFile);
+            return $relativePath.'?v='.filemtime($publicFile);
         }
 
         return $relativePath;

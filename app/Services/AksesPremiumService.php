@@ -12,7 +12,7 @@ class AksesPremiumService
 
     public function isPremium(Pengguna $user): bool
     {
-        return $this->punyaLanggananAktif($user) || $user->subscription_status === 'premium';
+        return $this->punyaLanggananAktif($user);
     }
 
     public function punyaAksesPenuh(Pengguna $user): bool
@@ -139,7 +139,7 @@ class AksesPremiumService
             return true;
         }
 
-        return $user->subscription_status === 'premium' && ! $this->punyaLanggananAktif($user);
+        return false;
     }
 
     private function punyaAksesProgram(Pengguna $user, int $programPembelajaranId): bool
@@ -147,8 +147,14 @@ class AksesPremiumService
         return $user->subscriptions()
             ->where('status', 'active')
             ->whereDate('end_date', '>=', now()->toDateString())
-            ->where('scope_type', AksesLanggananService::SCOPE_PROGRAM)
             ->where('program_pembelajaran_id', $programPembelajaranId)
+            ->where(function ($query) {
+                $query->where('scope_type', AksesLanggananService::SCOPE_PROGRAM)
+                    ->orWhere(function ($query) {
+                        $query->where('scope_type', AksesLanggananService::SCOPE_KLOTER)
+                            ->whereHas('anggotaKloter', fn ($membershipQuery) => $membershipQuery->where('status', 'active'));
+                    });
+            })
             ->exists();
     }
 
@@ -157,7 +163,13 @@ class AksesPremiumService
         return $user->subscriptions()
             ->where('status', 'active')
             ->whereDate('end_date', '>=', now()->toDateString())
-            ->where('scope_type', AksesLanggananService::SCOPE_PROGRAM)
+            ->where(function ($query) {
+                $query->where('scope_type', AksesLanggananService::SCOPE_PROGRAM)
+                    ->orWhere(function ($query) {
+                        $query->where('scope_type', AksesLanggananService::SCOPE_KLOTER)
+                            ->whereHas('anggotaKloter', fn ($membershipQuery) => $membershipQuery->where('status', 'active'));
+                    });
+            })
             ->whereNotNull('program_pembelajaran_id')
             ->pluck('program_pembelajaran_id')
             ->unique();
