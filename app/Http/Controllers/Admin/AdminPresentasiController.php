@@ -52,6 +52,10 @@ class AdminPresentasiController extends Controller
             $query->where('module_day_id', $request->integer('module_day_id'));
         }
 
+        if ($request->filled('week_slot') && $request->week_slot !== 'all') {
+            $query->where('week_slot', $request->week_slot);
+        }
+
         if ($request->filled('program_id')) {
             $query->whereHas('module', fn ($moduleQuery) => $moduleQuery
                 ->where('program_pembelajaran_id', $request->integer('program_id')));
@@ -59,7 +63,7 @@ class AdminPresentasiController extends Controller
 
         return Inertia::render('Admin/Presentasi/ManajemenPresentasi', [
             'decks' => $query->paginate(10)->withQueryString(),
-            'filters' => $request->only('search', 'status', 'program_id', 'module_id', 'module_day_id'),
+            'filters' => $request->only('search', 'status', 'program_id', 'module_id', 'module_day_id', 'week_slot'),
             'levels' => LevelPembelajaran::orderBy('stage')->get(['id', 'level_name']),
             'modules' => Modul::with('days:id,module_id,day_number,title,status')
                 ->when($request->filled('program_id'), fn ($moduleQuery) => $moduleQuery
@@ -75,6 +79,17 @@ class AdminPresentasiController extends Controller
         $validated = $this->validateDeck($request);
 
         $deck = DB::transaction(function () use ($validated) {
+            Modul::query()->lockForUpdate()->findOrFail($validated['module_id']);
+            $validated['sort_order'] ??= ((int) DeckPresentasi::query()
+                ->where('module_id', $validated['module_id'])
+                ->where('week_slot', $validated['week_slot'])
+                ->when(
+                    $validated['week_slot'] === 'after_day',
+                    fn ($query) => $query->where('module_day_id', $validated['module_day_id']),
+                    fn ($query) => $query->whereNull('module_day_id')
+                )
+                ->max('sort_order')) + 1;
+
             $deck = DeckPresentasi::create($validated);
             $deck->slides()->create([
                 'title' => $deck->title,
@@ -98,7 +113,7 @@ class AdminPresentasiController extends Controller
     public function update(Request $request, DeckPresentasi $presentationDeck, NotifikasiPenggunaService $notifikasi)
     {
         $oldStatus = $presentationDeck->status;
-        $presentationDeck->update($this->validateDeck($request));
+        $presentationDeck->update($this->validateDeck($request, $presentationDeck));
 
         if ($oldStatus !== 'published' && $presentationDeck->status === 'published' && $presentationDeck->module_id) {
             $this->kirimNotifikasiPresentasiTerbit($presentationDeck, $notifikasi);
@@ -107,31 +122,65 @@ class AdminPresentasiController extends Controller
         return redirect()->back()->with('success', 'Presentasi berhasil diperbarui.');
     }
 
-    public function destroy(DeckPresentasi $presentationDeck)
+    public function destroy(
+        Request $request,
+        DeckPresentasi $presentationDeck,
+        PresentasiStorageService $storage
+    )
     {
-        $presentationDeck->delete();
+        $moduleId = $presentationDeck->module_id;
+        $deckId = $presentationDeck->id;
+
+        DB::transaction(fn () => $presentationDeck->delete());
+
+        try {
+            $storage->deleteManagedDeckFiles($deckId);
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
+
+        if ($request->boolean('workspace') && $moduleId) {
+            return redirect()
+                ->route('admin.modules.presentations.builder', [
+                    'module' => $moduleId,
+                ])
+                ->with('success', 'Presentasi berhasil dihapus.');
+        }
 
         return redirect()->back()->with('success', 'Presentasi berhasil dihapus.');
     }
 
+    public function workspace(Request $request, Modul $module)
+    {
+        return $this->renderWorkspace(
+            $module,
+            $request->integer('deck_id'),
+            $request->boolean('create'),
+            $request->string('placement')->toString()
+        );
+    }
+
     public function builder(DeckPresentasi $presentationDeck)
     {
-        $presentationDeck->load([
-            'level:id,level_name',
-            'module:id,program_pembelajaran_id,title,week_number',
-            'day:id,module_id,day_number,title',
-            'slides',
-        ]);
+        abort_unless($presentationDeck->module_id, 404);
 
-        return Inertia::render('Admin/Presentasi/BuilderPresentasi', [
-            'deck' => $presentationDeck,
-        ]);
+        return $this->renderWorkspace(
+            $presentationDeck->module()->firstOrFail(),
+            $presentationDeck->id
+        );
     }
 
     public function updateSlides(Request $request, DeckPresentasi $presentationDeck, NotifikasiPenggunaService $notifikasi, PresentasiStorageService $storage)
     {
         $validated = $request->validate([
             'status' => ['required', 'in:draft,published'],
+            'week_slot' => ['required', Rule::in(['opening', 'after_day', 'closing'])],
+            'module_day_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('module_days', 'id')->where('module_id', $presentationDeck->module_id),
+            ],
+            'sort_order' => ['required', 'integer', 'min:0', 'max:65535'],
             'slides' => ['present', 'array'],
             'slides.*.id' => ['nullable', 'integer'],
             'slides.*.title' => ['nullable', 'string', 'max:255'],
@@ -151,11 +200,24 @@ class AdminPresentasiController extends Controller
             'slides.*.source_meta' => ['nullable', 'array'],
         ]);
 
+        if ($validated['week_slot'] === 'after_day' && empty($validated['module_day_id'])) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'module_day_id' => 'Pilih Day tempat presentasi ditampilkan.',
+            ]);
+        }
+
         $ids = [];
         $oldStatus = $presentationDeck->status;
 
         DB::transaction(function () use ($presentationDeck, $validated, $storage, &$ids) {
-            $presentationDeck->update(['status' => $validated['status']]);
+            $presentationDeck->update([
+                'status' => $validated['status'],
+                'week_slot' => $validated['week_slot'],
+                'module_day_id' => $validated['week_slot'] === 'after_day'
+                    ? $validated['module_day_id']
+                    : null,
+                'sort_order' => $validated['sort_order'],
+            ]);
 
             foreach ($validated['slides'] as $index => $slide) {
                 $snapshotUrl = $storage->storeSnapshotDataUrl($slide['snapshot_data'] ?? null, $presentationDeck->id)
@@ -297,6 +359,27 @@ class AdminPresentasiController extends Controller
         ]);
     }
 
+    public function uploadMedia(Request $request, DeckPresentasi $presentationDeck, PresentasiStorageService $storage)
+    {
+        $validated = $request->validate([
+            'media' => ['required', 'file', 'mimes:mp4', 'mimetypes:video/mp4', 'max:51200'],
+        ]);
+
+        $file = $validated['media'];
+        $path = $storage->storePublicUpload(
+            $file,
+            "presentations/assets/{$presentationDeck->id}/media",
+            'mp4'
+        );
+
+        return response()->json([
+            'url' => $storage->publicUrl($path),
+            'name' => $file->getClientOriginalName(),
+            'size' => $file->getSize(),
+            'type' => 'video/mp4',
+        ]);
+    }
+
     public function saveSlideBoard(Request $request, DeckPresentasi $presentationDeck, SlidePresentasi $presentationSlide)
     {
         abort_unless($presentationSlide->presentation_deck_id === $presentationDeck->id, 404);
@@ -326,20 +409,101 @@ class AdminPresentasiController extends Controller
         ]);
     }
 
-    private function validateDeck(Request $request): array
+    private function validateDeck(Request $request, ?DeckPresentasi $deck = null): array
     {
-        return $request->validate([
+        $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'level_id' => ['nullable', 'integer', 'exists:levels,id'],
-            'module_id' => ['nullable', 'integer', 'exists:modules,id'],
+            'module_id' => ['required', 'integer', 'exists:modules,id'],
             'module_day_id' => [
-                'required_with:module_id',
                 'nullable',
                 'integer',
                 Rule::exists('module_days', 'id')->where('module_id', $request->integer('module_id')),
             ],
+            'week_slot' => [
+                'required',
+                Rule::in(['opening', 'after_day', 'closing']),
+            ],
+            'sort_order' => ['nullable', 'integer', 'min:0', 'max:65535'],
             'status' => ['required', 'in:draft,published'],
+        ]);
+
+        if ($validated['week_slot'] === 'after_day') {
+            if (empty($validated['module_day_id'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'module_day_id' => 'Pilih Day tempat presentasi ditampilkan.',
+                ]);
+            }
+        } else {
+            $validated['module_day_id'] = null;
+        }
+
+        return $validated;
+    }
+
+    private function renderWorkspace(
+        Modul $module,
+        int $activeDeckId = 0,
+        bool $createMode = false,
+        string $placement = 'opening'
+    )
+    {
+        $placement = in_array($placement, ['opening', 'after_day', 'closing'], true)
+            ? $placement
+            : 'opening';
+
+        $module->loadMissing([
+            'level:id,level_name',
+            'programPembelajaran:id,title,slug',
+            'days:id,module_id,day_number,title',
+        ]);
+
+        $decks = DeckPresentasi::query()
+            ->where('module_id', $module->id)
+            ->whereIn('week_slot', ['opening', 'after_day', 'closing'])
+            ->with([
+                'level:id,level_name',
+                'module:id,program_pembelajaran_id,title,week_number',
+                'day:id,module_id,day_number,title',
+                'slides',
+            ])
+            ->withCount('slides')
+            ->get()
+            ->sortBy(fn (DeckPresentasi $deck) => [
+                ['opening' => 0, 'after_day' => 1, 'closing' => 2][$deck->week_slot] ?? 3,
+                $deck->day?->day_number ?? 0,
+                $deck->sort_order,
+                $deck->id,
+            ])
+            ->values();
+
+        $activeDeck = $createMode
+            ? null
+            : ($decks->firstWhere('id', $activeDeckId) ?? $decks->first());
+
+        return Inertia::render('Admin/Presentasi/BuilderPresentasi', [
+            'module' => [
+                'id' => $module->id,
+                'level_id' => $module->level_id,
+                'title' => $module->title,
+                'week_number' => $module->week_number,
+                'level' => $module->level,
+                'program' => $module->programPembelajaran,
+            ],
+            'deck' => $activeDeck,
+            'decks' => $decks->map(fn (DeckPresentasi $deck) => [
+                'id' => $deck->id,
+                'title' => $deck->title,
+                'status' => $deck->status,
+                'slides_count' => $deck->slides_count,
+                'week_slot' => $deck->week_slot,
+                'sort_order' => $deck->sort_order,
+                'day' => $deck->day,
+            ]),
+            'days' => $module->days->sortBy('day_number')->values(),
+            'createMode' => $createMode || $decks->isEmpty(),
+            'activePlacement' => $createMode ? $placement : ($activeDeck?->week_slot ?? $placement),
         ]);
     }
 

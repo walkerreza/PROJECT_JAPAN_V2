@@ -26,6 +26,11 @@ const emptyForm = {
     example_reading: '',
     example_meaning: '',
     audio_url: '',
+    onyomi: '',
+    kunyomi: '',
+    radicals_text: '',
+    stroke_count: '',
+    notes: '',
     source_type: 'manual',
     source_title: '',
     status: 'draft',
@@ -62,6 +67,11 @@ const toForm = (item) => ({
     example_reading: item.example_reading || '',
     example_meaning: item.example_meaning || '',
     audio_url: item.audio_url || '',
+    onyomi: item.metadata?.onyomi || '',
+    kunyomi: item.metadata?.kunyomi || '',
+    radicals_text: Array.isArray(item.metadata?.radicals) ? item.metadata.radicals.join(' | ') : '',
+    stroke_count: item.metadata?.stroke_count || '',
+    notes: item.metadata?.notes || '',
     source_type: item.source_type || 'manual',
     source_title: item.source_title || '',
     status: item.status || 'draft',
@@ -135,6 +145,15 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
             module_id: data.module_id || null,
             module_day_ids: data.module_day_ids || [],
             tags: parseTags(data.tags_text),
+            metadata: {
+                ...(editing?.metadata || {}),
+                content_type: data.content_type,
+                onyomi: data.onyomi || null,
+                kunyomi: data.kunyomi || null,
+                radicals: data.radicals_text.split('|').map((value) => value.trim()).filter(Boolean),
+                stroke_count: data.stroke_count ? Number(data.stroke_count) : null,
+                notes: data.notes || null,
+            },
         }));
 
         return editing
@@ -423,6 +442,21 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
                                         </Field>
                                         <Field label="Arti Contoh">
                                             <textarea value={form.data.example_meaning} onChange={(event) => form.setData('example_meaning', event.target.value)} placeholder="Arti contoh" className={`${inputClass} min-h-24`} />
+                                        </Field>
+                                        <Field label="Onyomi (opsional)">
+                                            <input value={form.data.onyomi} onChange={(event) => form.setData('onyomi', event.target.value)} placeholder="Contoh: カツ" className={inputClass} />
+                                        </Field>
+                                        <Field label="Kunyomi (opsional)">
+                                            <input value={form.data.kunyomi} onChange={(event) => form.setData('kunyomi', event.target.value)} placeholder="Contoh: わ.る" className={inputClass} />
+                                        </Field>
+                                        <Field label="Radikal (opsional)">
+                                            <input value={form.data.radicals_text} onChange={(event) => form.setData('radicals_text', event.target.value)} placeholder="Pisahkan dengan |" className={inputClass} />
+                                        </Field>
+                                        <Field label="Jumlah Guratan (opsional)">
+                                            <input type="number" min="1" max="64" value={form.data.stroke_count} onChange={(event) => form.setData('stroke_count', event.target.value)} placeholder="12" className={inputClass} />
+                                        </Field>
+                                        <Field label="Catatan Kanji" wide>
+                                            <textarea value={form.data.notes} onChange={(event) => form.setData('notes', event.target.value)} placeholder="Catatan atau contoh kata turunan" className={`${inputClass} min-h-20`} />
                                         </Field>
                                         <Field label="Audio URL" wide>
                                             <input value={form.data.audio_url} onChange={(event) => form.setData('audio_url', event.target.value)} placeholder="Opsional" className={inputClass} />

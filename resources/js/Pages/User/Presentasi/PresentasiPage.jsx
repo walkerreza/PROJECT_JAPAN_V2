@@ -49,11 +49,19 @@ const slideAspectStyle = (slide) => {
 function SlideFrame({ slide }) {
     const hasBoardSnapshot = slide.jamboard_snapshot || slide.snapshot_data;
     const visualUrl = slide.snapshot_url || slide.snapshot_data || slide.media_url;
+    const isEditableMedia = slide.layout === 'media' && slide.media_url;
 
     return (
         <article className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
             <div style={slideAspectStyle(slide)} className={`flex items-center justify-center ${backgroundClass[slide.background] || `bg-gradient-to-br ${theme.ctaBg} text-white`} p-3 text-center sm:p-4`}>
-                {hasBoardSnapshot ? (
+                {isEditableMedia ? (
+                    <div className="relative h-full w-full overflow-hidden rounded-xl bg-gray-950 shadow-lg">
+                        <EmbedFrame url={slide.media_url} title={slide.title || 'Media'} />
+                        {(slide.snapshot_url || slide.snapshot_data) && (
+                            <img src={slide.snapshot_url || slide.snapshot_data} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-contain" />
+                        )}
+                    </div>
+                ) : hasBoardSnapshot ? (
                     <img src={slide.jamboard_snapshot || slide.snapshot_data} alt={slide.title || 'Board'} className="max-h-full max-w-full rounded-xl bg-white object-contain shadow-lg" />
                 ) : visualUrl ? (
                     <div className="h-full w-full overflow-hidden rounded-xl bg-gray-950 shadow-lg">

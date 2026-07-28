@@ -11,7 +11,6 @@ export default function ModuleDayDialog({ open, onClose, module, day = null, nex
         title: '',
         description: '',
         status: 'draft',
-        checkpoint_quiz_id: '',
     });
 
     useEffect(() => {
@@ -22,7 +21,6 @@ export default function ModuleDayDialog({ open, onClose, module, day = null, nex
             title: day?.title || `Hari ${nextDayNumber}`,
             description: day?.description || '',
             status: day?.status || 'draft',
-            checkpoint_quiz_id: day?.checkpoint_quiz_id || '',
         });
         form.clearErrors();
         // The form instance is stable; reopening is intentionally keyed by context.
@@ -81,24 +79,19 @@ export default function ModuleDayDialog({ open, onClose, module, day = null, nex
                         <textarea value={form.data.description} onChange={(event) => form.setData('description', event.target.value)} className={`${inputClass} min-h-24`} placeholder="Target belajar pada hari ini" />
                     </label>
 
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        <label>
-                            <span className="mb-1.5 block text-xs font-black uppercase tracking-wider text-gray-400">Status</span>
-                            <select value={form.data.status} onChange={(event) => form.setData('status', event.target.value)} className={inputClass}>
-                                <option value="draft">Draft</option>
-                                <option value="published">Published</option>
-                            </select>
-                        </label>
-                        <label>
-                            <span className="mb-1.5 block text-xs font-black uppercase tracking-wider text-gray-400">Kuis Checkpoint</span>
-                            <select value={form.data.checkpoint_quiz_id} onChange={(event) => form.setData('checkpoint_quiz_id', event.target.value)} className={inputClass}>
-                                <option value="">Tanpa checkpoint</option>
-                                {(day?.quizzes || []).map((quiz) => (
-                                    <option key={quiz.id} value={quiz.id}>{quiz.title || `Kuis #${quiz.id}`} / {quiz.item_count ?? quiz.questions_count ?? 0} soal</option>
-                                ))}
-                            </select>
-                        </label>
-                    </div>
+                    <label className="block">
+                        <span className="mb-1.5 block text-xs font-black uppercase tracking-wider text-gray-400">Status</span>
+                        <select value={form.data.status} onChange={(event) => form.setData('status', event.target.value)} className={inputClass}>
+                            <option value="draft">Draft</option>
+                            <option value="published">Published</option>
+                        </select>
+                    </label>
+
+                    {!day && (
+                        <p className="rounded-xl border border-teal-100 bg-teal-50 px-4 py-3 text-sm font-bold text-teal-800 dark:border-teal-900/40 dark:bg-teal-900/15 dark:text-teal-200">
+                            Flashcard dan kuis checkpoint draft akan disiapkan otomatis untuk Day ini.
+                        </p>
+                    )}
 
                     {Object.values(form.errors).length > 0 && (
                         <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700 dark:bg-red-900/20 dark:text-red-300">

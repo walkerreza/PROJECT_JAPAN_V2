@@ -62,6 +62,83 @@ class ProgresRoadmapService
         return $this->selesaikanHari($user, $day, $score);
     }
 
+    public function selesaikanDariUjianMingguan(Pengguna $user, Kuis $quiz, int $score): array
+    {
+        $quiz->loadMissing('module.programPembelajaran');
+        $module = $quiz->module;
+
+        if (
+            ! $module
+            || ! $quiz->isWeeklyExam()
+        ) {
+            return $this->incompleteResult();
+        }
+
+        return DB::transaction(function () use ($user, $module) {
+            $publishedDayIds = HariModul::query()
+                ->where('module_id', $module->id)
+                ->where('status', 'published')
+                ->pluck('id');
+            $completedDayCount = ProgresHariModul::query()
+                ->where('user_id', $user->id)
+                ->whereIn('module_day_id', $publishedDayIds)
+                ->whereNotNull('completed_at')
+                ->count();
+
+            abort_if(
+                $publishedDayIds->isNotEmpty() && $completedDayCount !== $publishedDayIds->count(),
+                403,
+                'Selesaikan semua Hari sebelum mengikuti ujian Mingguan.'
+            );
+
+            $requiredExams = Kuis::query()
+                ->where('module_id', $module->id)
+                ->whereNotNull('exam_order')
+                ->where('status', 'published')
+                ->whereHas('questions')
+                ->orderBy('exam_order')
+                ->get(['id', 'passing_score']);
+            $bestScores = DB::table('attempts')
+                ->where('user_id', $user->id)
+                ->whereIn('quiz_id', $requiredExams->pluck('id'))
+                ->where('status', 'completed')
+                ->select('quiz_id', DB::raw('MAX(score) as best_score'))
+                ->groupBy('quiz_id')
+                ->pluck('best_score', 'quiz_id');
+            $allExamsPassed = $requiredExams->isNotEmpty()
+                && $requiredExams->every(
+                    fn (Kuis $exam) => (int) ($bestScores[$exam->id] ?? -1)
+                        >= (int) ($exam->passing_score ?? 70)
+                );
+
+            if (! $allExamsPassed) {
+                return $this->incompleteResult();
+            }
+
+            $moduleScore = (int) $requiredExams
+                ->map(fn (Kuis $exam) => (int) $bestScores[$exam->id])
+                ->min();
+            $progress = Progres::firstOrNew([
+                'user_id' => $user->id,
+                'module_id' => $module->id,
+            ]);
+            $wasModuleCompleted = (bool) $progress->completed_at;
+            $progress->score = max((int) ($progress->score ?? 0), $moduleScore);
+            $progress->completed_at = $progress->completed_at ?: now();
+            $progress->save();
+
+            if (! $wasModuleCompleted) {
+                $this->notifyWeekUnlocked($user, $module, $moduleScore);
+            }
+
+            return [
+                'day_completed' => false,
+                'module_completed' => true,
+                'was_module_completed' => $wasModuleCompleted,
+            ];
+        });
+    }
+
     public function selesaikanDariFlashcard(Pengguna $user, SetFlashcard $flashcardSet): array
     {
         $flashcardSet->loadMissing('day.module.programPembelajaran');
@@ -108,12 +185,11 @@ class ProgresRoadmapService
                 ['score' => $score, 'completed_at' => now()]
             );
 
-            $progress = Progres::firstOrNew([
+            $progress = Progres::query()->firstOrNew([
                 'user_id' => $user->id,
                 'module_id' => $day->module_id,
             ]);
             $wasModuleCompleted = (bool) $progress->completed_at;
-            $progress->score = max((int) ($progress->score ?? 0), (int) ($score ?? 0));
 
             $publishedDayIds = HariModul::query()
                 ->where('module_id', $day->module_id)
@@ -124,13 +200,20 @@ class ProgresRoadmapService
                 ->whereIn('module_day_id', $publishedDayIds)
                 ->whereNotNull('completed_at')
                 ->count();
-            $moduleCompleted = $publishedDayIds->isNotEmpty() && $completedDayCount === $publishedDayIds->count();
+            $allDaysCompleted = $publishedDayIds->isNotEmpty() && $completedDayCount === $publishedDayIds->count();
+            $hasWeeklyExam = Kuis::query()
+                ->where('module_id', $day->module_id)
+                ->whereNotNull('exam_order')
+                ->where('status', 'published')
+                ->whereHas('questions')
+                ->exists();
+            $moduleCompleted = $allDaysCompleted && ! $hasWeeklyExam;
 
             if ($moduleCompleted) {
+                $progress->score = max((int) ($progress->score ?? 0), (int) ($score ?? 0));
                 $progress->completed_at = $progress->completed_at ?: now();
+                $progress->save();
             }
-
-            $progress->save();
 
             if ($moduleCompleted && ! $wasModuleCompleted) {
                 $this->notifyWeekUnlocked($user, $day->module, $score);

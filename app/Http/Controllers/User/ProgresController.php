@@ -27,6 +27,78 @@ class ProgresController extends Controller
         return Inertia::render('User/Progress/Progress', $summary->summary(Auth::user()));
     }
 
+    public function startAttempt(
+        Request $request,
+        Kuis $quiz,
+        AksesKuisPenggunaService $aksesKuis
+    ) {
+        $validated = $request->validate([
+            'submission_token' => ['required', 'uuid'],
+        ]);
+        $user = Auth::user();
+        $quiz->loadMissing(['module', 'questions']);
+
+        abort_unless($quiz->status === 'published', 404);
+        $aksesKuis->abortJikaTerkunci($user, $quiz);
+        abort_if($quiz->questions->isEmpty(), 422, 'Kuis belum memiliki soal.');
+
+        $attempt = DB::transaction(function () use ($user, $quiz, $validated) {
+            Kuis::query()->whereKey($quiz->id)->lockForUpdate()->firstOrFail();
+
+            $tokenAttempt = PengerjaanKuis::query()
+                ->where('user_id', $user->id)
+                ->where('quiz_id', $quiz->id)
+                ->where('submission_token', $validated['submission_token'])
+                ->first();
+
+            if ($tokenAttempt) {
+                return $tokenAttempt;
+            }
+
+            $activeAttempt = PengerjaanKuis::query()
+                ->where('user_id', $user->id)
+                ->where('quiz_id', $quiz->id)
+                ->where('status', 'in_progress')
+                ->where('started_at', '>=', now()->subDay())
+                ->lockForUpdate()
+                ->latest('id')
+                ->first();
+
+            if ($activeAttempt) {
+                return $activeAttempt;
+            }
+
+            PengerjaanKuis::query()
+                ->where('user_id', $user->id)
+                ->where('quiz_id', $quiz->id)
+                ->where('status', 'in_progress')
+                ->update(['status' => 'expired']);
+
+            return PengerjaanKuis::create([
+                'user_id' => $user->id,
+                'quiz_id' => $quiz->id,
+                'submission_token' => $validated['submission_token'],
+                'status' => 'in_progress',
+                'score' => 0,
+                'xp_earned' => 0,
+                'started_at' => now(),
+                'attempted_at' => now(),
+            ]);
+        });
+
+        $elapsed = $attempt->started_at?->diffInSeconds(now()) ?? 0;
+        $remainingSeconds = $quiz->time_limit
+            ? max(0, (int) $quiz->time_limit - $elapsed)
+            : null;
+
+        return response()->json([
+            'attempt_id' => $attempt->id,
+            'submission_token' => $attempt->submission_token,
+            'started_at' => $attempt->started_at?->toISOString(),
+            'remaining_seconds' => $remainingSeconds,
+        ]);
+    }
+
     public function storeAttempt(
         Request $request,
         AksesKuisPenggunaService $aksesKuis,
@@ -43,6 +115,8 @@ class ProgresController extends Controller
             'answers.*.answer_payload' => ['nullable', 'array'],
             'module_flow' => ['nullable', 'boolean'],
             'finished_by_timeout' => ['nullable', 'boolean'],
+            'attempt_id' => ['nullable', 'integer', 'exists:attempts,id'],
+            'submission_token' => ['nullable', 'uuid'],
         ]);
 
         $user = Auth::user();
@@ -55,9 +129,15 @@ class ProgresController extends Controller
             ->findOrFail($validated['quiz_id']);
 
         $module = $quiz->module;
+        $isWeeklyExam = $quiz->isWeeklyExam();
 
         $aksesKuis->abortJikaTerkunci($user, $quiz);
         abort_if($quiz->questions->isEmpty(), 422, 'Kuis belum memiliki soal.');
+        abort_if(
+            $isWeeklyExam && (empty($validated['attempt_id']) || empty($validated['submission_token'])),
+            422,
+            'Sesi ujian belum dimulai.'
+        );
 
         $wrongAttemptCount = 0;
         $answeredUniqueCount = 0;
@@ -67,12 +147,33 @@ class ProgresController extends Controller
         $wasCompleted = false;
         $completedModule = false;
         $completedDay = false;
+        $attemptAlreadyCompleted = false;
         $rewardAlreadyGranted = LogReward::where('user_id', $user->id)
             ->where('source_type', 'quiz')
             ->where('source_id', $quiz->id)
             ->exists();
 
-        $attempt = DB::transaction(function () use ($validated, $quiz, $user, $repetisi, $gamifikasiConfig, &$wrongAttemptCount, &$answeredUniqueCount) {
+        $attempt = DB::transaction(function () use ($validated, $quiz, $user, $repetisi, $gamifikasiConfig, $isWeeklyExam, &$wrongAttemptCount, &$answeredUniqueCount, &$attemptAlreadyCompleted) {
+            $attempt = null;
+
+            if ($isWeeklyExam) {
+                $attempt = PengerjaanKuis::query()
+                    ->whereKey($validated['attempt_id'])
+                    ->where('user_id', $user->id)
+                    ->where('quiz_id', $quiz->id)
+                    ->where('submission_token', $validated['submission_token'])
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                if ($attempt->status === 'completed') {
+                    $attemptAlreadyCompleted = true;
+
+                    return $attempt;
+                }
+
+                abort_unless($attempt->status === 'in_progress', 422, 'Sesi ujian sudah tidak aktif.');
+            }
+
             $answerEvents = collect($validated['answers'] ?? [])
                 ->filter(fn ($answer) => isset($answer['question_id']))
                 ->values();
@@ -83,8 +184,20 @@ class ProgresController extends Controller
             $answeredUniqueCount = $answers->count();
             $correctCount = $this->scoreAnswers($answers, $questionMap);
             $totalQuestions = $quiz->questions->count();
-            $score = $totalQuestions > 0 ? (int) round(($correctCount / $totalQuestions) * 100) : 0;
-            $xpEarned = $gamifikasiConfig->quizXpForScore($correctCount, $totalQuestions);
+            $totalPoints = max(1, (int) $quiz->questions->sum(
+                fn ($question) => max(1, (int) ($question->points ?? 1))
+            ));
+            $earnedPoints = (int) $answers->sum(function ($answer) use ($questionMap) {
+                $question = $questionMap->get((int) $answer['question_id']);
+
+                return $question && $this->isAnswerCorrect($answer['answer_text'] ?? '', $question->correct_answer)
+                    ? max(1, (int) ($question->points ?? 1))
+                    : 0;
+            });
+            $score = (int) round(($earnedPoints / $totalPoints) * 100);
+            $xpEarned = $isWeeklyExam
+                ? 0
+                : $gamifikasiConfig->quizXpForScore($correctCount, $totalQuestions);
             $wrongAttemptCount = $answerEvents
                 ->filter(function ($answer) use ($questionMap) {
                     $question = $questionMap->get((int) $answer['question_id']);
@@ -93,13 +206,24 @@ class ProgresController extends Controller
                 })
                 ->count();
 
-            $attempt = PengerjaanKuis::create([
-                'user_id' => $user->id,
-                'quiz_id' => $quiz->id,
+            $attemptPayload = [
+                'status' => 'completed',
                 'score' => $score,
                 'xp_earned' => $xpEarned,
+                'completed_at' => now(),
                 'attempted_at' => now(),
-            ]);
+            ];
+
+            if ($attempt) {
+                $attempt->update($attemptPayload);
+            } else {
+                $attempt = PengerjaanKuis::create([
+                    'user_id' => $user->id,
+                    'quiz_id' => $quiz->id,
+                    'started_at' => now(),
+                    ...$attemptPayload,
+                ]);
+            }
 
             $answers->each(function ($answer) use ($attempt, $questionMap) {
                 $question = $questionMap->get((int) $answer['question_id']);
@@ -116,38 +240,75 @@ class ProgresController extends Controller
                     'answer_text' => $answerText,
                     'answer_payload' => $answer['answer_payload'] ?? null,
                     'is_correct' => $isCorrect,
-                    'earned_points' => $isCorrect ? 10 : 0,
+                    'earned_points' => $isCorrect ? max(1, (int) ($question->points ?? 1)) : 0,
                 ]);
             });
 
-            $answerEvents->each(function ($answer) use ($questionMap, $user, $quiz, $repetisi) {
-                $question = $questionMap->get((int) $answer['question_id']);
+            if (! $isWeeklyExam) {
+                $answerEvents->each(function ($answer) use ($questionMap, $user, $quiz, $repetisi) {
+                    $question = $questionMap->get((int) $answer['question_id']);
 
-                if (! $question) {
-                    return;
-                }
+                    if (! $question) {
+                        return;
+                    }
 
-                $repetisi->catatJawabanSoal(
-                    $user,
-                    $question,
-                    $this->isAnswerCorrect($answer['answer_text'] ?? '', $question->correct_answer),
-                    $quiz
-                );
-            });
+                    $repetisi->catatJawabanSoal(
+                        $user,
+                        $question,
+                        $this->isAnswerCorrect($answer['answer_text'] ?? '', $question->correct_answer),
+                        $quiz
+                    );
+                });
+            }
 
             return $attempt;
         });
 
+        if ($attemptAlreadyCompleted) {
+            $attempt->loadMissing('answers');
+            $passed = $attempt->score >= $passingScore;
+            $finishUrl = $module?->programPembelajaran
+                ? route('user.modul.program', $module->programPembelajaran->slug)
+                : route('user.kelas.index');
+
+            return response()->json([
+                'attempt_id' => $attempt->id,
+                'score' => $attempt->score,
+                'xp_earned' => 0,
+                'passed' => $passed,
+                'completed_day' => false,
+                'completed_module' => $user->progress()
+                    ->where('module_id', $module?->id)
+                    ->whereNotNull('completed_at')
+                    ->exists(),
+                'answered_count' => $attempt->answers->count(),
+                'total_questions' => $quiz->questions->count(),
+                'passing_score' => $passingScore,
+                'answer_review' => $this->attemptReview($attempt, $quiz),
+                'idempotent' => true,
+                'next_url' => $finishUrl,
+                'message' => 'Hasil ujian sebelumnya ditampilkan kembali.',
+            ]);
+        }
+
         if ($module) {
-            $passed = $attempt->score >= $passingScore
-                && $wrongAttemptCount < $maxLives
-                && $answeredUniqueCount >= $quiz->questions->count()
-                && ! ($validated['finished_by_timeout'] ?? false);
+            $passed = $isWeeklyExam
+                ? $attempt->score >= $passingScore
+                : (
+                    $attempt->score >= $passingScore
+                    && $wrongAttemptCount < $maxLives
+                    && $answeredUniqueCount >= $quiz->questions->count()
+                    && ! ($validated['finished_by_timeout'] ?? false)
+                );
 
             if ($passed) {
                 if ($quiz->module_day_id) {
                     $result = $roadmapProgress->selesaikanDariKuis($user, $quiz, (int) $attempt->score);
                     $completedDay = $result['day_completed'];
+                    $completedModule = $result['module_completed'];
+                    $wasCompleted = $result['was_module_completed'];
+                } elseif ($isWeeklyExam) {
+                    $result = $roadmapProgress->selesaikanDariUjianMingguan($user, $quiz, (int) $attempt->score);
                     $completedModule = $result['module_completed'];
                     $wasCompleted = $result['was_module_completed'];
                 } else {
@@ -163,12 +324,14 @@ class ProgresController extends Controller
                 }
             }
 
-            if ($completedModule && ! $wasCompleted && ! $quiz->module_day_id) {
+            if ($completedModule && ! $wasCompleted && ! $quiz->module_day_id && ! $isWeeklyExam) {
                 $roadmapProgress->notifyWeekUnlocked($user, $module, $attempt->score);
             }
         }
 
-        event(new KuisSelesai($user, $quiz->id, $attempt->score, $attempt->xp_earned));
+        if (! $isWeeklyExam) {
+            event(new KuisSelesai($user, $quiz->id, $attempt->score, $attempt->xp_earned));
+        }
         $summary->forget($user);
 
         if ($request->expectsJson()) {
@@ -189,14 +352,21 @@ class ProgresController extends Controller
                 'wrong_attempt_count' => $wrongAttemptCount,
                 'passing_score' => $passingScore,
                 'finished_by_timeout' => (bool) ($validated['finished_by_timeout'] ?? false),
+                'answer_review' => $isWeeklyExam ? $this->attemptReview($attempt, $quiz) : [],
                 'next_url' => $finishUrl,
-                'message' => $passed
-                    ? ($completedModule
-                        ? 'Kuis lulus. Week selesai dan roadmap berikutnya terbuka.'
-                        : ($completedDay
-                            ? 'Kuis lulus. Day berikutnya sudah terbuka.'
-                            : 'Kuis lulus. Kuis ini bukan checkpoint Day.'))
-                    : 'Kuis tersimpan. Ulangi sampai skor dan mastery cukup.',
+                'message' => $isWeeklyExam
+                    ? ($passed
+                        ? ($completedModule
+                            ? 'Semua ujian lulus. Week berikutnya sudah terbuka.'
+                            : 'Ujian ini lulus. Selesaikan ujian Mingguan lainnya untuk menutup Week.')
+                        : 'Hasil ujian tersimpan. Nilai belum mencapai batas kelulusan.')
+                    : ($passed
+                        ? ($completedModule
+                            ? 'Kuis lulus. Week selesai dan roadmap berikutnya terbuka.'
+                            : ($completedDay
+                                ? 'Kuis lulus. Day berikutnya sudah terbuka.'
+                                : 'Kuis lulus. Kuis ini bukan checkpoint Day.'))
+                        : 'Kuis tersimpan. Ulangi sampai skor dan mastery cukup.'),
             ]);
         }
 
@@ -249,6 +419,27 @@ class ProgresController extends Controller
                 $questionMap->get((int) $answer['question_id'])->correct_answer
             ))
             ->count();
+    }
+
+    private function attemptReview(PengerjaanKuis $attempt, Kuis $quiz): array
+    {
+        $attempt->loadMissing('answers');
+        $answers = $attempt->answers->keyBy('question_id');
+
+        return $quiz->questions->map(function ($question) use ($answers) {
+            $answer = $answers->get($question->id);
+
+            return [
+                'question_id' => $question->id,
+                'question' => $question->question_text,
+                'user_answer' => $answer?->answer_text,
+                'correct_answer' => $question->correct_answer,
+                'explanation' => $question->explanation,
+                'is_correct' => (bool) ($answer?->is_correct),
+                'earned_points' => (int) ($answer?->earned_points ?? 0),
+                'max_points' => max(1, (int) ($question->points ?? 1)),
+            ];
+        })->values()->all();
     }
 
     private function xpForScore(int $score, int $total): int

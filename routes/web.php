@@ -153,12 +153,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/presentations', [AdminPresentasiController::class, 'store'])->name('presentations.store');
         Route::put('/presentations/{presentationDeck}', [AdminPresentasiController::class, 'update'])->name('presentations.update');
         Route::delete('/presentations/{presentationDeck}', [AdminPresentasiController::class, 'destroy'])->name('presentations.destroy');
+        Route::get('/modules/{module}/presentations/builder', [AdminPresentasiController::class, 'workspace'])->name('modules.presentations.builder');
         Route::get('/presentations/{presentationDeck}/builder', [AdminPresentasiController::class, 'builder'])->name('presentations.builder');
         Route::post('/presentations/{presentationDeck}/builder', [AdminPresentasiController::class, 'updateSlides'])->name('presentations.builder.update');
         Route::post('/presentations/{presentationDeck}/import/pptx', [AdminPresentasiController::class, 'importPptx'])->middleware('throttle:admin-imports')->name('presentations.import.pptx');
         Route::post('/presentations/{presentationDeck}/import/pdf', [AdminPresentasiController::class, 'importPdf'])->middleware('throttle:admin-imports')->name('presentations.import.pdf');
         Route::post('/presentations/{presentationDeck}/import/images', [AdminPresentasiController::class, 'importImages'])->middleware('throttle:admin-imports')->name('presentations.import.images');
         Route::post('/presentations/{presentationDeck}/background-image', [AdminPresentasiController::class, 'uploadBackgroundImage'])->middleware('throttle:admin-uploads')->name('presentations.background.upload');
+        Route::post('/presentations/{presentationDeck}/media', [AdminPresentasiController::class, 'uploadMedia'])->middleware('throttle:admin-uploads')->name('presentations.media.upload');
         Route::post('/presentations/{presentationDeck}/slides/{presentationSlide}/jamboard', [AdminPresentasiController::class, 'saveSlideBoard'])->name('presentations.slides.jamboard.save');
         Route::get('/presentations/{presentationDeck}/presenter', [AdminPresentasiController::class, 'presenter'])->name('presentations.presenter');
         Route::redirect('/boards', '/admin/presentations')->name('boards.index');
@@ -175,6 +177,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/quizzes/{quiz}/questions/import/preview', [AdminKuisController::class, 'previewImportQuestions'])->middleware('throttle:admin-imports')->name('quizzes.questions.import.preview');
         Route::post('/quizzes/{quiz}/questions/import', [AdminKuisController::class, 'importQuestions'])->middleware('throttle:admin-imports')->name('quizzes.questions.import');
         Route::post('/quizzes/{quiz}/questions/generate-vocabulary', [AdminKuisController::class, 'generateVocabularyQuestions'])->name('quizzes.questions.generate-vocabulary');
+        Route::post('/quizzes/{quiz}/questions/generate-vocabulary/preview', [AdminKuisController::class, 'previewVocabularyQuestions'])->name('quizzes.questions.generate-vocabulary.preview');
 
         // LevelPembelajaran CRUD
         Route::apiResource('/levels', AdminLevelController::class)->only(['index', 'store', 'update', 'destroy']);
@@ -246,6 +249,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/progress', [ProgresController::class, 'index'])->name('progress');
 
         Route::post('/attempts', [ProgresController::class, 'storeAttempt'])->middleware('throttle:learning-actions')->name('attempts.store');
+        Route::post('/quizzes/{quiz}/attempts/start', [ProgresController::class, 'startAttempt'])->middleware('throttle:learning-actions')->name('attempts.start');
         Route::post('/modules/complete', [ProgresController::class, 'completeModule'])->name('modules.complete');
     });
 });

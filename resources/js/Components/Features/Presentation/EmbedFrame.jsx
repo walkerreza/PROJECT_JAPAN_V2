@@ -1,6 +1,7 @@
 import React from 'react';
 
 const imagePattern = /\.(png|jpe?g|webp|gif|avif|svg)(\?.*)?$/i;
+const videoPattern = /\.mp4(\?.*)?$/i;
 const embeddableHosts = [
     'canva.com',
     'docs.google.com',
@@ -26,6 +27,10 @@ function safeUrl(value) {
 
 export function isImageUrl(value = '') {
     return value.startsWith('data:image/') || imagePattern.test(value);
+}
+
+export function isVideoUrl(value = '') {
+    return videoPattern.test(value);
 }
 
 export function isEmbeddableUrl(value = '') {
@@ -55,6 +60,18 @@ export function toEmbedUrl(value = '') {
         }
     }
 
+    if (url.hostname.includes('youtu.be')) {
+        const videoId = url.pathname.split('/').filter(Boolean)[0];
+        return videoId ? `https://www.youtube.com/embed/${videoId}` : value;
+    }
+
+    if (url.hostname.includes('youtube.com')) {
+        const shortsMatch = url.pathname.match(/\/shorts\/([^/?#]+)/);
+        const embedMatch = url.pathname.match(/\/embed\/([^/?#]+)/);
+        const videoId = url.searchParams.get('v') || shortsMatch?.[1] || embedMatch?.[1];
+        return videoId ? `https://www.youtube.com/embed/${videoId}` : value;
+    }
+
     return url.toString();
 }
 
@@ -70,6 +87,18 @@ export default function EmbedFrame({ url, title = 'Media', compact = false }) {
     if (isImageUrl(url)) {
         return (
             <img src={url} alt={title} className="h-full w-full object-contain" />
+        );
+    }
+
+    if (isVideoUrl(url)) {
+        return compact ? (
+            <div className="grid h-full place-items-center bg-gray-950 px-3 text-center text-[10px] font-black uppercase tracking-[0.18em] text-white/80">
+                Video MP4
+            </div>
+        ) : (
+            <video src={url} controls playsInline preload="metadata" className="h-full w-full bg-black object-contain">
+                Browser tidak mendukung pemutar video.
+            </video>
         );
     }
 

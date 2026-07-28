@@ -17,6 +17,8 @@ class DeckPresentasi extends Model
         'level_id',
         'module_id',
         'module_day_id',
+        'week_slot',
+        'sort_order',
         'title',
         'description',
         'status',
@@ -30,6 +32,7 @@ class DeckPresentasi extends Model
 
     protected $casts = [
         'import_summary' => 'array',
+        'sort_order' => 'integer',
     ];
 
     protected $appends = [

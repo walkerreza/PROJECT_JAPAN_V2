@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use App\Models\Kuis;
 use App\Models\Kosakata;
+use App\Models\Kuis;
 use App\Models\Soal;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -12,7 +12,7 @@ class SoalKuisService
 {
     public function importHeaders(): array
     {
-        return ['type', 'question_text', 'correct_answer', 'options', 'explanation', 'audio_url'];
+        return ['module_week', 'day_number', 'type', 'question_text', 'correct_answer', 'options', 'explanation', 'audio_url', 'points'];
     }
 
     public function syncQuestions(Kuis $quiz, array $validated): void
@@ -43,6 +43,7 @@ class SoalKuisService
                         'explanation' => $normalized['explanation'],
                         'audio_url' => $normalized['audio_url'],
                         'order' => $index,
+                        'points' => $normalized['points'],
                     ]
                 );
 
@@ -55,6 +56,12 @@ class SoalKuisService
 
     public function importRows(Kuis $quiz, array $rows): int
     {
+        foreach ($rows as $index => $row) {
+            if ($scopeError = $this->importScopeError($quiz, $row, $index)) {
+                throw ValidationException::withMessages(['import_file' => $scopeError]);
+            }
+        }
+
         $nextOrder = (int) $quiz->questions()->max('order') + 1;
         $created = 0;
 
@@ -75,6 +82,7 @@ class SoalKuisService
                     'explanation' => $normalized['explanation'],
                     'audio_url' => $normalized['audio_url'],
                     'order' => $nextOrder + $index,
+                    'points' => $normalized['points'],
                 ]);
 
                 $created++;
@@ -98,6 +106,7 @@ class SoalKuisService
                     'message' => $normalized['error'],
                     'question_text' => $normalized['question_text'],
                 ];
+
                 continue;
             }
 
@@ -109,6 +118,7 @@ class SoalKuisService
                 'options' => $normalized['options'] ?? [],
                 'explanation' => $normalized['explanation'],
                 'audio_url' => $normalized['audio_url'],
+                'points' => $normalized['points'],
             ];
         }
 
@@ -125,15 +135,70 @@ class SoalKuisService
 
     public function generateFromVocabulary(Kuis $quiz, array $filters): int
     {
+        $generated = $this->vocabularyQuestionPayloads($quiz, $filters);
+        $nextOrder = (int) $quiz->questions()->max('order') + 1;
+        $created = 0;
+
+        DB::transaction(function () use ($quiz, $generated, $nextOrder, &$created) {
+            foreach ($generated as $payload) {
+                Soal::create([
+                    'quiz_id' => $quiz->id,
+                    'type' => 'multiple_choice',
+                    'question_text' => $payload['question_text'],
+                    'correct_answer' => $payload['correct_answer'],
+                    'options' => $payload['options'],
+                    'explanation' => $payload['explanation'],
+                    'audio_url' => $payload['audio_url'],
+                    'order' => $nextOrder + $created,
+                    'points' => 1,
+                ]);
+
+                $created++;
+            }
+        });
+
+        if ($created === 0) {
+            throw ValidationException::withMessages([
+                'generate' => 'Tidak ada konten N3 valid yang bisa dijadikan soal.',
+            ]);
+        }
+
+        return $created;
+    }
+
+    public function previewFromVocabulary(Kuis $quiz, array $filters): array
+    {
+        $generated = $this->vocabularyQuestionPayloads($quiz, $filters);
+
+        return [
+            'count' => count($generated),
+            'vocabulary_ids' => collect($generated)->pluck('vocabulary_id')->values()->all(),
+            'questions' => collect($generated)->map(fn (array $payload) => [
+                'question_text' => $payload['question_text'],
+                'correct_answer' => $payload['correct_answer'],
+                'options' => $payload['options'],
+                'explanation' => $payload['explanation'],
+            ])->values()->all(),
+        ];
+    }
+
+    private function vocabularyQuestionPayloads(Kuis $quiz, array $filters): array
+    {
         $mode = $filters['mode'] ?? 'word_to_meaning';
         $count = min(50, max(1, (int) ($filters['count'] ?? 10)));
         $status = $filters['status'] ?? 'published';
         $contentType = $filters['content_type'] ?? 'all';
         $moduleId = $filters['module_id'] ?? $quiz->module_id;
+        $selectedIds = collect($filters['vocabulary_ids'] ?? [])
+            ->filter(fn ($id) => is_numeric($id))
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
 
         $query = Kosakata::query()
             ->whereNotNull('word')
             ->where('word', '!=', '')
+            ->when($selectedIds->isNotEmpty(), fn ($query) => $query->whereIn('id', $selectedIds))
             ->when($contentType !== 'all', fn ($query) => $query->where('content_type', $contentType))
             ->when($moduleId, function ($query) use ($moduleId) {
                 $query->where(function ($query) use ($moduleId) {
@@ -156,10 +221,9 @@ class SoalKuisService
             $query->whereNotNull('reading')->where('reading', '!=', '');
         }
 
-        $pool = $query
-            ->inRandomOrder()
-            ->limit(max(20, $count * 4))
-            ->get();
+        $pool = $selectedIds->isNotEmpty()
+            ? $query->get()
+            : $query->inRandomOrder()->limit(max(20, $count * 4))->get();
 
         if ($pool->count() < 2) {
             throw ValidationException::withMessages([
@@ -167,48 +231,30 @@ class SoalKuisService
             ]);
         }
 
-        $nextOrder = (int) $quiz->questions()->max('order') + 1;
-        $created = 0;
-
-        DB::transaction(function () use ($quiz, $pool, $mode, $count, $nextOrder, &$created) {
-            foreach ($pool->take($count) as $vocabulary) {
+        return $pool
+            ->take($count)
+            ->map(function (Kosakata $vocabulary) use ($pool, $mode) {
                 $payload = $this->questionPayloadFromVocabulary($vocabulary, $pool, $mode);
 
-                if (! $payload) {
-                    continue;
-                }
-
-                Soal::create([
-                    'quiz_id' => $quiz->id,
-                    'type' => 'multiple_choice',
-                    'question_text' => $payload['question_text'],
-                    'correct_answer' => $payload['correct_answer'],
-                    'options' => $payload['options'],
-                    'explanation' => $payload['explanation'],
-                    'audio_url' => $payload['audio_url'],
-                    'order' => $nextOrder + $created,
-                ]);
-
-                $created++;
-            }
-        });
-
-        if ($created === 0) {
-            throw ValidationException::withMessages([
-                'generate' => 'Tidak ada konten N3 valid yang bisa dijadikan soal.',
-            ]);
-        }
-
-        return $created;
+                return $payload ? [...$payload, 'vocabulary_id' => $vocabulary->id] : null;
+            })
+            ->filter()
+            ->values()
+            ->all();
     }
 
-    public function templateRows(): array
+    public function templateRows(Kuis $quiz): array
     {
-        return [
+        $quiz->loadMissing(['module:id,week_number', 'day:id,day_number']);
+        $week = $quiz->module?->week_number;
+        $day = $quiz->day?->day_number;
+        $rows = [
             ['multiple_choice', 'Apa arti dari kanji 火?', 'api', 'api|air|tanah|angin', '火 berarti api. Untuk multiple_choice, correct_answer harus sama persis dengan salah satu opsi.', ''],
             ['fill_blank', '彼は___に行きました。', '学校', 'がっこう', 'Gunakan ___ untuk bagian kosong. Kolom options dipakai sebagai hint opsional.', ''],
             ['listening', 'Ketik kata yang kamu dengar dari audio.', '天気予報', '', 'Untuk listening, audio_url wajib diisi.', 'https://example.com/audio.mp3'],
         ];
+
+        return array_map(fn (array $row) => [$week, $day, ...$row, 1], $rows);
     }
 
     public function normalizeType(?string $type): string
@@ -256,6 +302,7 @@ class SoalKuisService
             'options' => $type === 'multiple_choice' ? $options : ($type === 'fill_blank' ? array_slice($options, 0, 1) : null),
             'explanation' => $data['explanation'] ?? null,
             'audio_url' => $audioUrl !== '' ? $audioUrl : null,
+            'points' => min(1000, max(1, (int) ($data['points'] ?? 1))),
         ];
     }
 
@@ -286,18 +333,33 @@ class SoalKuisService
         $correctAnswer = trim((string) ($row['correct_answer'] ?? $row['answer'] ?? $row['jawaban_benar'] ?? ''));
         $type = $this->normalizeType($row['type'] ?? $row['tipe'] ?? $quiz->type);
         $options = $this->parseOptions($row);
+        $scopeError = $this->importScopeError($quiz, $row, $index);
 
-        if ($questionText === '' || $correctAnswer === '') {
-            $missing = $questionText === '' ? 'question_text' : 'correct_answer';
-
+        if ($scopeError) {
             return [
-                'error' => 'Baris ' . ($index + 2) . ": kolom {$missing} wajib diisi.",
+                'error' => $scopeError,
                 'type' => $type,
                 'question_text' => $questionText,
                 'correct_answer' => $correctAnswer,
                 'options' => $options,
                 'explanation' => $row['explanation'] ?? $row['pembahasan'] ?? null,
                 'audio_url' => $row['audio_url'] ?? null,
+                'points' => $row['points'] ?? 1,
+            ];
+        }
+
+        if ($questionText === '' || $correctAnswer === '') {
+            $missing = $questionText === '' ? 'question_text' : 'correct_answer';
+
+            return [
+                'error' => 'Baris '.($index + 2).": kolom {$missing} wajib diisi.",
+                'type' => $type,
+                'question_text' => $questionText,
+                'correct_answer' => $correctAnswer,
+                'options' => $options,
+                'explanation' => $row['explanation'] ?? $row['pembahasan'] ?? null,
+                'audio_url' => $row['audio_url'] ?? null,
+                'points' => $row['points'] ?? 1,
             ];
         }
 
@@ -308,13 +370,36 @@ class SoalKuisService
             'options' => $options,
             'explanation' => $row['explanation'] ?? $row['pembahasan'] ?? null,
             'audio_url' => $row['audio_url'] ?? null,
+            'points' => $row['points'] ?? 1,
         ], $index);
 
         if ($normalized['error']) {
-            $normalized['error'] = str_replace('Soal ' . ($index + 1) . ':', 'Baris ' . ($index + 2) . ':', $normalized['error']);
+            $normalized['error'] = str_replace('Soal '.($index + 1).':', 'Baris '.($index + 2).':', $normalized['error']);
         }
 
         return $normalized;
+    }
+
+    private function importScopeError(Kuis $quiz, array $row, int $index): ?string
+    {
+        $quiz->loadMissing(['module:id,week_number', 'day:id,day_number']);
+        $week = $row['module_week'] ?? $row['week_number'] ?? null;
+        $day = $row['day_number'] ?? $row['module_day'] ?? null;
+        $rowNumber = $index + 2;
+
+        if (filled($week) && (int) $week !== (int) $quiz->module?->week_number) {
+            return "Baris {$rowNumber}: Week {$week} tidak sesuai dengan Week {$quiz->module?->week_number}.";
+        }
+
+        if (filled($day) && ! $quiz->day) {
+            return "Baris {$rowNumber}: kuis mingguan tidak boleh memakai day_number.";
+        }
+
+        if (filled($day) && (int) $day !== (int) $quiz->day?->day_number) {
+            return "Baris {$rowNumber}: Day {$day} tidak sesuai dengan Day {$quiz->day?->day_number}.";
+        }
+
+        return null;
     }
 
     private function questionPayloadFromVocabulary(Kosakata $vocabulary, $pool, string $mode): ?array
@@ -360,7 +445,7 @@ class SoalKuisService
             return null;
         }
 
-        $label = $vocabulary->word . ($reading !== '' ? " ({$reading})" : '');
+        $label = $vocabulary->word.($reading !== '' ? " ({$reading})" : '');
         $options = $this->optionsFromVocabularyPool($pool, $meaning, 'meaning');
 
         return [

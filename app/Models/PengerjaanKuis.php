@@ -16,12 +16,18 @@ class PengerjaanKuis extends Model
     protected $fillable = [
         'user_id',
         'quiz_id',
+        'submission_token',
+        'status',
         'score',
         'xp_earned',
+        'started_at',
+        'completed_at',
         'attempted_at',
     ];
 
     protected $casts = [
+        'started_at' => 'datetime',
+        'completed_at' => 'datetime',
         'attempted_at' => 'datetime',
     ];
 

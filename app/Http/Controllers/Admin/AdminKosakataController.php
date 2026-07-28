@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\HariModul;
 use App\Models\Kosakata;
 use App\Models\Modul;
 use App\Services\ImportSpreadsheetService;
@@ -10,6 +11,7 @@ use App\Services\NotifikasiPenggunaService;
 use App\Services\TemplateExcelService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class AdminKosakataController extends Controller
@@ -97,6 +99,7 @@ class AdminKosakataController extends Controller
         unset($validated['module_day_ids']);
         $vocabulary->update($validated);
         $vocabulary->days()->sync($dayIds);
+        $this->syncLinkedFlashcards($vocabulary);
 
         if ($oldStatus !== 'published' && $vocabulary->status === 'published') {
             $this->kirimNotifikasiKosakataTerbit($vocabulary, $notifikasi);
@@ -143,6 +146,7 @@ class AdminKosakataController extends Controller
         $created = 0;
 
         foreach ($rows as $data) {
+            $this->assertImportScope($data, $validated);
             $contentType = $this->normalizeContentType($data['content_type'] ?? $data['tipe_konten'] ?? $validated['content_type'] ?? Kosakata::TYPE_KOSAKATA);
             $word = trim((string) ($data['main_text'] ?? $data['word'] ?? $data['kata'] ?? $data['kanji'] ?? $data['pattern'] ?? $data['pola'] ?? ''));
 
@@ -180,6 +184,7 @@ class AdminKosakataController extends Controller
                 $content->days()->syncWithoutDetaching([(int) $validated['module_day_id']]);
             }
 
+            $this->syncLinkedFlashcards($content);
             $created++;
         }
 
@@ -243,6 +248,13 @@ class AdminKosakataController extends Controller
             'source_type' => ['nullable', 'string', 'max:30'],
             'source_title' => ['nullable', 'string', 'max:255'],
             'metadata' => ['nullable', 'array'],
+            'metadata.content_type' => ['nullable', Rule::in(Kosakata::contentTypes())],
+            'metadata.onyomi' => ['nullable', 'string'],
+            'metadata.kunyomi' => ['nullable', 'string'],
+            'metadata.radicals' => ['nullable', 'array'],
+            'metadata.radicals.*' => ['nullable', 'string', 'max:50'],
+            'metadata.stroke_count' => ['nullable', 'integer', 'min:1', 'max:64'],
+            'metadata.notes' => ['nullable', 'string'],
             'status' => ['required', 'in:draft,published'],
         ]);
     }
@@ -260,16 +272,18 @@ class AdminKosakataController extends Controller
 
     private function importHeaders(): array
     {
-        return ['content_type', 'module_id', 'module_week', 'main_text', 'reading', 'meaning_id', 'meaning_en', 'jlpt_level', 'category', 'tags', 'example_sentence', 'example_reading', 'example_meaning', 'notes', 'onyomi', 'kunyomi', 'source_type', 'source_title', 'audio_url', 'status'];
+        return ['content_type', 'module_id', 'module_week', 'main_text', 'reading', 'meaning_id', 'meaning_en', 'jlpt_level', 'category', 'tags', 'example_sentence', 'example_reading', 'example_meaning', 'notes', 'onyomi', 'kunyomi', 'source_type', 'source_title', 'audio_url', 'status', 'day_number', 'radicals', 'stroke_count'];
     }
 
     private function templateRows(): array
     {
-        return [
+        $rows = [
             ['kosakata', '', 1, '会議', 'かいぎ', 'rapat', 'meeting', 'N3', 'pekerjaan', 'work|office', '今日は一時から会議があります。', 'きょうはいちじからかいぎがあります。', 'Hari ini ada rapat mulai jam satu.', '', '', '', 'xlsx', 'ALL - KOSAKATA N3-2.pdf', '', 'draft'],
             ['kanji', '', 1, '割', 'わり', 'membagi, diskon', 'divide, discount', 'N3', 'belanja', 'kanji|shopping', '割引があります。', 'わりびきがあります。', 'Ada diskon.', 'Contoh kata: 割引', 'カツ', 'わ.る', 'xlsx', 'ALL - KANJI N3 2.pdf', '', 'draft'],
             ['bunpo', '', 1, '〜ように', 'Vる/ない + ように', 'agar, supaya', 'so that', 'N3', 'grammar', 'bunpo|pattern', '忘れないようにメモします。', 'わすれないようにメモします。', 'Saya mencatat supaya tidak lupa.', 'Pakai untuk tujuan atau harapan.', '', '', 'xlsx', 'ALL - BUNPO N3.pdf', '', 'draft'],
         ];
+
+        return array_map(fn (array $row) => [...$row, '', '', ''], $rows);
     }
 
     private function normalizeContentType(?string $type): string
@@ -284,14 +298,62 @@ class AdminKosakataController extends Controller
     private function resolveModuleId(array $row, ?int $fallback): ?int
     {
         if (! empty($row['module_id']) && is_numeric($row['module_id'])) {
-            return (int) $row['module_id'];
+            $moduleId = (int) $row['module_id'];
+
+            if (! Modul::whereKey($moduleId)->exists()) {
+                throw ValidationException::withMessages([
+                    'import_file' => "Module ID {$moduleId} tidak ditemukan.",
+                ]);
+            }
+
+            if ($fallback && $moduleId !== $fallback) {
+                throw ValidationException::withMessages([
+                    'import_file' => "Module ID {$moduleId} tidak sesuai dengan Week yang dipilih.",
+                ]);
+            }
+
+            return $moduleId;
         }
 
         if (! empty($row['module_week']) && is_numeric($row['module_week'])) {
-            return Modul::where('week_number', (int) $row['module_week'])->value('id');
+            if (! $fallback) {
+                throw ValidationException::withMessages([
+                    'import_file' => 'Pilih Week tujuan sebelum mengimport file yang memiliki module_week.',
+                ]);
+            }
+
+            $fallbackWeek = Modul::whereKey($fallback)->value('week_number');
+            if ((int) $row['module_week'] !== (int) $fallbackWeek) {
+                throw ValidationException::withMessages([
+                    'import_file' => "Week {$row['module_week']} di file tidak sesuai dengan Week {$fallbackWeek} yang dipilih.",
+                ]);
+            }
         }
 
         return $fallback;
+    }
+
+    private function assertImportScope(array $row, array $validated): void
+    {
+        $dayNumber = $row['day_number'] ?? $row['module_day'] ?? null;
+
+        if (! filled($dayNumber)) {
+            return;
+        }
+
+        $dayId = $validated['module_day_id'] ?? null;
+        if (! $dayId) {
+            throw ValidationException::withMessages([
+                'import_file' => 'Pilih Day tujuan sebelum mengimport file yang memiliki day_number.',
+            ]);
+        }
+
+        $selectedDay = HariModul::whereKey($dayId)->value('day_number');
+        if ((int) $dayNumber !== (int) $selectedDay) {
+            throw ValidationException::withMessages([
+                'import_file' => "Day {$dayNumber} di file tidak sesuai dengan Day {$selectedDay} yang dipilih.",
+            ]);
+        }
     }
 
     private function metadataFromImportRow(array $row, string $contentType): array
@@ -301,8 +363,27 @@ class AdminKosakataController extends Controller
             'notes' => $row['notes'] ?? $row['catatan'] ?? null,
             'onyomi' => $row['onyomi'] ?? null,
             'kunyomi' => $row['kunyomi'] ?? null,
+            'radicals' => filled($row['radicals'] ?? $row['radical'] ?? null)
+                ? array_values(array_filter(preg_split('/\s*\|\s*/', (string) ($row['radicals'] ?? $row['radical']))))
+                : null,
+            'stroke_count' => filled($row['stroke_count'] ?? null)
+                ? max(1, (int) $row['stroke_count'])
+                : null,
             'source_page' => $row['source_page'] ?? $row['halaman'] ?? null,
             'source_day' => $row['source_day'] ?? $row['hari'] ?? null,
         ], fn ($value) => $value !== null && $value !== '');
+    }
+
+    private function syncLinkedFlashcards(Kosakata $vocabulary): void
+    {
+        $vocabulary->flashcards()->update([
+            'front_text' => $vocabulary->word,
+            'reading' => $vocabulary->reading,
+            'back_text' => $vocabulary->meaning_id ?: $vocabulary->meaning_en,
+            'hint' => $vocabulary->category,
+            'example_sentence' => $vocabulary->example_sentence,
+            'example_meaning' => $vocabulary->example_meaning,
+            'audio_url' => $vocabulary->audio_url,
+        ]);
     }
 }

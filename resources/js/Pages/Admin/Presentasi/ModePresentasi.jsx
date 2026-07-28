@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Head, Link } from '@inertiajs/react';
 import BoardCanvas from '@/Components/Features/Board/BoardCanvas';
+import EmbedFrame from '@/Components/Features/Presentation/EmbedFrame';
 
 const backgroundClass = {
     light: 'bg-white text-gray-950',
@@ -19,6 +20,15 @@ const backgroundClass = {
 function PresenterSlide({ slide }) {
     const lines = String(slide.content || '').split('\n').filter(Boolean);
     const accent = slide.accent_color || '#E64A19';
+    const canvasSnapshot = slide.snapshot_url || slide.snapshot_data;
+
+    if (canvasSnapshot && slide.layout !== 'media') {
+        return (
+            <section className="flex min-h-screen items-center justify-center overflow-hidden bg-gray-950 p-4 sm:p-8">
+                <img src={canvasSnapshot} alt={slide.title || 'Slide presentasi'} className="max-h-[92vh] max-w-full object-contain" />
+            </section>
+        );
+    }
 
     return (
         <section className={`${backgroundClass[slide.background] || backgroundClass.light} relative flex min-h-screen overflow-hidden p-8 sm:p-12 lg:p-16`}>
@@ -72,9 +82,10 @@ function PresenterSlide({ slide }) {
                 {slide.layout === 'media' && (
                     <div className="my-auto">
                         <h1 className="mb-8 text-6xl font-black">{slide.title || 'Media'}</h1>
-                        {slide.snapshot_url || slide.media_url ? (
-                            <div className="overflow-hidden rounded-[2rem] bg-gray-950 shadow-2xl">
-                                <img src={slide.snapshot_url || slide.media_url} alt={slide.title || 'media'} className="h-[55vh] w-full object-contain" />
+                        {slide.media_url ? (
+                            <div className="relative h-[62vh] overflow-hidden rounded-[2rem] bg-gray-950 shadow-2xl">
+                                <EmbedFrame url={slide.media_url} title={slide.title || 'Media'} />
+                                {(slide.snapshot_url || slide.snapshot_data) && <img src={slide.snapshot_url || slide.snapshot_data} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-contain" />}
                             </div>
                         ) : (
                             <div className="grid h-[55vh] place-items-center rounded-[2rem] border-4 border-dashed border-gray-300 text-4xl font-black opacity-40">Media URL</div>

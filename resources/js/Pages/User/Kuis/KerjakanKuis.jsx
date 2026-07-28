@@ -83,6 +83,8 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
     const [attemptResult, setAttemptResult] = useState(null);
     const [attemptError, setAttemptError] = useState(null);
     const [isSubmittingAttempt, setIsSubmittingAttempt] = useState(false);
+    const [attemptSession, setAttemptSession] = useState(null);
+    const [attemptStarting, setAttemptStarting] = useState(Boolean(quiz?.is_weekly_exam));
     
     const submitted = useRef(false);
     const answerPendingRef = useRef(false);
@@ -103,6 +105,38 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
+
+    useEffect(() => {
+        if (!quiz?.is_weekly_exam) return undefined;
+
+        let active = true;
+        const submissionToken = window.crypto?.randomUUID?.()
+            || 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
+                const random = Math.floor(Math.random() * 16);
+                const value = character === 'x' ? random : (random & 0x3) | 0x8;
+
+                return value.toString(16);
+            });
+
+        window.axios.post(route('user.attempts.start', quiz.id), {
+            submission_token: submissionToken,
+        }).then((response) => {
+            if (!active) return;
+            setAttemptSession(response.data);
+            if (response.data?.remaining_seconds !== null && response.data?.remaining_seconds !== undefined) {
+                setSecondsLeft(Number(response.data.remaining_seconds));
+            }
+        }).catch((error) => {
+            if (!active) return;
+            setAttemptError(error.response?.data?.message || 'Sesi ujian tidak dapat dimulai.');
+        }).finally(() => {
+            if (active) setAttemptStarting(false);
+        });
+
+        return () => {
+            active = false;
+        };
+    }, [quiz?.id, quiz?.is_weekly_exam]);
 
     const currentQ = questions[currentIndex];
     const currentType = currentQ?.type || 'multiple_choice';
@@ -241,6 +275,10 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
 
     const submitAttempt = async ({ timeout = false } = {}) => {
         if (submitted.current || !quiz?.id) return;
+        if (quiz.is_weekly_exam && !attemptSession) {
+            setAttemptError('Sesi ujian belum siap. Muat ulang halaman sebelum mengirim jawaban.');
+            return;
+        }
         submitted.current = true;
         setIsSubmittingAttempt(true);
         setAttemptError(null);
@@ -250,6 +288,8 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                 quiz_id: quiz.id,
                 module_flow,
                 finished_by_timeout: timeout,
+                attempt_id: attemptSession?.attempt_id || null,
+                submission_token: attemptSession?.submission_token || null,
                 answers: answerEventsRef.current,
             });
 
@@ -263,7 +303,13 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
     };
 
     useEffect(() => {
-        if (!hasTimeLimit || questions.length === 0 || showResult || showFlashcard) return undefined;
+        if (
+            !hasTimeLimit
+            || questions.length === 0
+            || showResult
+            || showFlashcard
+            || (quiz?.is_weekly_exam && (attemptStarting || !attemptSession))
+        ) return undefined;
 
         const timer = window.setInterval(() => {
             setSecondsLeft((value) => {
@@ -280,7 +326,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
         }, 1000);
 
         return () => window.clearInterval(timer);
-    }, [hasTimeLimit, questions.length, showResult, showFlashcard, score]);
+    }, [attemptSession, attemptStarting, hasTimeLimit, questions.length, quiz?.is_weekly_exam, showResult, showFlashcard, score]);
 
     const handleNext = () => {
         const gameOver = lives <= 0;

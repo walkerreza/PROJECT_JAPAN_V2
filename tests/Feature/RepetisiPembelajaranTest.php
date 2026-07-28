@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\Kuis;
 use App\Models\Flashcard;
+use App\Models\Kuis;
 use App\Models\LevelPembelajaran;
 use App\Models\LogReward;
 use App\Models\Modul;
@@ -232,6 +232,7 @@ it('does not treat published quizzes without questions as available weekly conte
     Kuis::create([
         'module_id' => $module->id,
         'lesson_id' => null,
+        'exam_order' => 1,
         'type' => 'typing',
         'time_limit' => 300,
         'status' => 'published',
@@ -276,6 +277,7 @@ it('skips empty flashcard sets and sends weekly module users to the valid quiz',
     $quiz = Kuis::create([
         'module_id' => $module->id,
         'lesson_id' => null,
+        'exam_order' => 1,
         'type' => 'typing',
         'time_limit' => 300,
         'status' => 'published',

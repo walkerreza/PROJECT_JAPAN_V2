@@ -13,15 +13,21 @@ use App\Services\NotifikasiPenggunaService;
 use App\Services\SoalKuisService;
 use App\Services\TemplateExcelService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class AdminKuisController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Kuis::with(['module:id,program_pembelajaran_id,title,week_number', 'day:id,module_id,day_number,title'])
-            ->withCount('questions')
+        $query = Kuis::with([
+            'module:id,program_pembelajaran_id,title,week_number',
+            'day:id,module_id,day_number,title',
+            'questions:id,quiz_id,type',
+        ])
+            ->withCount(['questions', 'attempts'])
             ->latest();
 
         if ($request->filled('search')) {
@@ -47,11 +53,16 @@ class AdminKuisController extends Controller
 
         $quizzes = $query->paginate(10)->through(fn ($quiz) => [
             'id' => $quiz->id,
+            'exam_order' => $quiz->exam_order,
+            'is_weekly_exam' => $quiz->isWeeklyExam(),
             'type' => $quiz->type,
+            'question_types' => $quiz->questions->pluck('type')->filter()->unique()->values(),
             'time_limit' => $quiz->time_limit,
             'passing_score' => $quiz->passing_score ?? 70,
+            'available_at' => $quiz->available_at?->toISOString(),
             'status' => $quiz->status ?? 'published',
             'question_count' => $quiz->questions_count,
+            'attempt_count' => $quiz->attempts_count,
             'module' => $quiz->module,
             'day' => $quiz->day,
             'lesson' => null,
@@ -71,7 +82,26 @@ class AdminKuisController extends Controller
 
     public function store(KuisRequest $request, NotifikasiPenggunaService $notifikasi)
     {
-        $quiz = Kuis::create($request->validated());
+        $validated = $request->validated();
+        $validated['available_at'] = filled($validated['module_day_id'] ?? null)
+            ? null
+            : ($validated['available_at'] ?? null);
+        $validated['status'] = 'draft';
+
+        $quiz = DB::transaction(function () use ($validated) {
+            $module = Modul::query()->lockForUpdate()->findOrFail($validated['module_id']);
+
+            $validated['exam_order'] = empty($validated['module_day_id'])
+                ? ((int) Kuis::query()
+                    ->where('module_id', $module->id)
+                    ->whereNotNull('exam_order')
+                    ->max('exam_order')) + 1
+                : null;
+
+            $quiz = Kuis::create($validated);
+
+            return $quiz;
+        });
 
         if ($quiz->status === 'published') {
             $this->kirimNotifikasiKuisTerbit($quiz, $notifikasi);
@@ -83,7 +113,32 @@ class AdminKuisController extends Controller
     public function update(KuisRequest $request, Kuis $quiz, NotifikasiPenggunaService $notifikasi)
     {
         $oldStatus = $quiz->status;
-        $quiz->update($request->validated());
+        $validated = $request->validated();
+        $validated['available_at'] = filled($validated['module_day_id'] ?? null)
+            ? null
+            : ($validated['available_at'] ?? null);
+
+        DB::transaction(function () use ($quiz, $validated) {
+            $oldModuleId = $quiz->module_id;
+            $wasWeeklyExam = $quiz->isWeeklyExam();
+            $newModule = Modul::query()->lockForUpdate()->findOrFail($validated['module_id']);
+            $becomesWeeklyExam = empty($validated['module_day_id']);
+
+            $validated['exam_order'] = $becomesWeeklyExam
+                ? ($wasWeeklyExam && (int) $oldModuleId === (int) $newModule->id
+                    ? $quiz->exam_order
+                    : ((int) Kuis::query()
+                        ->where('module_id', $newModule->id)
+                        ->whereNotNull('exam_order')
+                        ->max('exam_order')) + 1)
+                : null;
+
+            $quiz->update($validated);
+
+            if ($wasWeeklyExam && ((int) $oldModuleId !== (int) $quiz->module_id || ! $becomesWeeklyExam)) {
+                $this->renumberWeeklyExams((int) $oldModuleId);
+            }
+        });
 
         if ($oldStatus !== 'published' && $quiz->status === 'published') {
             $this->kirimNotifikasiKuisTerbit($quiz, $notifikasi);
@@ -95,9 +150,17 @@ class AdminKuisController extends Controller
     public function updateStatus(Request $request, Kuis $quiz, NotifikasiPenggunaService $notifikasi)
     {
         $oldStatus = $quiz->status;
-        $quiz->update($request->validate([
+        $validated = $request->validate([
             'status' => ['required', 'in:draft,published'],
-        ]));
+        ]);
+
+        if ($validated['status'] === 'published' && ! $quiz->questions()->exists()) {
+            throw ValidationException::withMessages([
+                'status' => 'Ujian tanpa soal tidak dapat dipublikasikan.',
+            ]);
+        }
+
+        $quiz->update($validated);
 
         if ($oldStatus !== 'published' && $quiz->status === 'published') {
             $this->kirimNotifikasiKuisTerbit($quiz, $notifikasi);
@@ -108,7 +171,16 @@ class AdminKuisController extends Controller
 
     public function destroy(Kuis $quiz)
     {
-        $quiz->delete();
+        DB::transaction(function () use ($quiz) {
+            $moduleId = (int) $quiz->module_id;
+            $wasWeeklyExam = $quiz->isWeeklyExam();
+
+            $quiz->delete();
+
+            if ($wasWeeklyExam) {
+                $this->renumberWeeklyExams($moduleId);
+            }
+        });
 
         return redirect()->back()->with('success', 'Kuis berhasil dihapus');
     }
@@ -141,12 +213,21 @@ class AdminKuisController extends Controller
                 ->orderBy('order'),
         ]);
 
-        return Inertia::render('Admin/Kuis/BuilderKuis', [
+        $isWeeklyExam = $quiz->isWeeklyExam();
+
+        return Inertia::render($isWeeklyExam ? 'Admin/Ujian/BuilderUjian' : 'Admin/Kuis/BuilderKuis', [
             'quiz' => [
                 'id' => $quiz->id,
+                'title' => $isWeeklyExam
+                    ? 'Ujian '.($quiz->exam_order ?? 1).' - Minggu '.($quiz->module?->week_number ?? '')
+                    : 'Kuis '.($quiz->day?->title ?? $quiz->module?->title ?? ''),
+                'is_weekly_exam' => $isWeeklyExam,
+                'exam_order' => $quiz->exam_order,
+                'attempt_count' => $quiz->attempts()->count(),
                 'type' => $quiz->type,
                 'time_limit' => $quiz->time_limit,
                 'passing_score' => $quiz->passing_score ?? 70,
+                'available_at' => $quiz->available_at?->toISOString(),
                 'status' => $quiz->status ?? 'published',
                 'module' => $quiz->module,
                 'day' => $quiz->day,
@@ -161,6 +242,7 @@ class AdminKuisController extends Controller
                 'explanation' => $question->explanation,
                 'audio_url' => $question->audio_url,
                 'order' => $question->order,
+                'points' => (int) ($question->points ?? 1),
                 'attempts_count' => (int) $question->attempts_count,
                 'correct_count' => (int) $question->correct_count,
                 'correct_rate' => $question->attempts_count > 0
@@ -175,7 +257,7 @@ class AdminKuisController extends Controller
         $validated = $request->validate([
             'time_limit' => ['nullable', 'integer', 'min:0', 'max:1440'],
             'passing_score' => ['nullable', 'integer', 'min:1', 'max:100'],
-            'questions' => 'required|array',
+            'questions' => 'present|array',
             'questions.*.id' => 'nullable|integer',
             'questions.*.type' => ['required', Rule::in(['multiple_choice', 'fill_blank', 'listening'])],
             'questions.*.question_text' => 'required|string|max:5000',
@@ -184,14 +266,18 @@ class AdminKuisController extends Controller
             'questions.*.options.*' => 'nullable|string|max:1000',
             'questions.*.explanation' => 'nullable|string|max:5000',
             'questions.*.audio_url' => 'nullable|string|max:2048',
+            'questions.*.points' => ['nullable', 'integer', 'min:1', 'max:1000'],
         ]);
 
-        $quiz->update([
-            'time_limit' => $validated['time_limit'] ?? null,
-            'passing_score' => $validated['passing_score'] ?? ($quiz->passing_score ?? 70),
-        ]);
+        DB::transaction(function () use ($quiz, $validated, $questions) {
+            $quiz->update([
+                'time_limit' => $validated['time_limit'] ?? null,
+                'passing_score' => $validated['passing_score'] ?? ($quiz->passing_score ?? 70),
+                'status' => empty($validated['questions']) ? 'draft' : $quiz->status,
+            ]);
 
-        $questions->syncQuestions($quiz, $validated);
+            $questions->syncQuestions($quiz, $validated);
+        });
 
         return redirect()->back()->with('success', 'Soal kuis berhasil disimpan');
     }
@@ -271,7 +357,7 @@ class AdminKuisController extends Controller
         }
 
         $headers = $questions->importHeaders();
-        $rows = $questions->templateRows();
+        $rows = $questions->templateRows($quiz);
         $filename = 'japanlingo-quiz-import-template-v1.'.$format;
 
         if ($format === 'csv') {
@@ -289,6 +375,22 @@ class AdminKuisController extends Controller
 
     public function generateVocabularyQuestions(Request $request, Kuis $quiz, SoalKuisService $questions)
     {
+        $validated = $this->validateVocabularyGenerator($request, $quiz);
+
+        $created = $questions->generateFromVocabulary($quiz, $validated);
+
+        return redirect()->back()->with('success', "{$created} soal berhasil dibuat dari Bank Konten N3.");
+    }
+
+    public function previewVocabularyQuestions(Request $request, Kuis $quiz, SoalKuisService $questions)
+    {
+        return response()->json(
+            $questions->previewFromVocabulary($quiz, $this->validateVocabularyGenerator($request, $quiz))
+        );
+    }
+
+    private function validateVocabularyGenerator(Request $request, Kuis $quiz): array
+    {
         $validated = $request->validate([
             'jlpt_level' => ['nullable', 'string', 'max:8'],
             'category' => ['nullable', 'string', 'max:100'],
@@ -296,12 +398,20 @@ class AdminKuisController extends Controller
             'mode' => ['required', Rule::in(['word_to_meaning', 'meaning_to_word', 'reading_to_word'])],
             'status' => ['required', Rule::in(['published', 'draft', 'all'])],
             'content_type' => ['nullable', Rule::in([...Kosakata::contentTypes(), 'all'])],
-            'module_id' => ['nullable', 'integer', 'exists:modules,id'],
+            'vocabulary_ids' => ['nullable', 'array', 'max:50'],
+            'vocabulary_ids.*' => [
+                'integer',
+                Rule::exists('vocabulary_bank', 'id')->where(
+                    fn ($query) => $query
+                        ->whereNull('module_id')
+                        ->orWhere('module_id', $quiz->module_id)
+                ),
+            ],
         ]);
 
-        $created = $questions->generateFromVocabulary($quiz, $validated);
+        $validated['module_id'] = $quiz->module_id;
 
-        return redirect()->back()->with('success', "{$created} soal berhasil dibuat dari Bank Konten N3.");
+        return $validated;
     }
 
     private function kirimNotifikasiKuisTerbit(Kuis $quiz, NotifikasiPenggunaService $notifikasi): void
@@ -324,5 +434,22 @@ class AdminKuisController extends Controller
             $url,
             ['quiz_id' => $quiz->id, 'module_id' => $quiz->module_id]
         );
+    }
+
+    private function renumberWeeklyExams(int $moduleId): void
+    {
+        Kuis::query()
+            ->where('module_id', $moduleId)
+            ->whereNotNull('exam_order')
+            ->orderBy('exam_order')
+            ->orderBy('id')
+            ->get()
+            ->each(function (Kuis $exam, int $index) {
+                $expectedOrder = $index + 1;
+
+                if ((int) $exam->exam_order !== $expectedOrder) {
+                    $exam->update(['exam_order' => $expectedOrder]);
+                }
+            });
     }
 }

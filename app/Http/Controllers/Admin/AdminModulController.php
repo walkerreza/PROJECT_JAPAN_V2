@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ModulRequest;
+use App\Models\Kuis;
 use App\Models\LevelPembelajaran;
 use App\Models\Modul;
 use App\Models\ProgramPembelajaran;
@@ -80,6 +81,14 @@ class AdminModulController extends Controller
         $query = Modul::with([
             'level',
             'programPembelajaran',
+            'presentationDecks' => fn ($resourceQuery) => $resourceQuery
+                ->whereIn('week_slot', ['opening', 'after_day', 'closing'])
+                ->select(['id', 'module_id', 'module_day_id', 'week_slot', 'sort_order', 'title', 'status'])
+                ->with('day:id,module_id,day_number,title')
+                ->withCount('slides'),
+            'weeklyExams' => fn ($quizQuery) => $quizQuery
+                ->select(['id', 'module_id', 'module_day_id', 'exam_order', 'type', 'passing_score', 'available_at', 'status'])
+                ->withCount(['questions', 'attempts']),
             'days' => fn ($dayQuery) => $dayQuery
                 ->select([
                     'id',
@@ -135,6 +144,20 @@ class AdminModulController extends Controller
             'quiz_count' => $module->quizzes_count,
             'presentation_count' => $module->presentation_decks_count,
             'is_ready' => $module->flashcard_sets_count > 0 && $module->quizzes_count > 0,
+            'weekly_presentations' => $module->presentationDecks
+                ->map(fn ($deck) => $this->presentationPayload($deck))
+                ->values(),
+            'weekly_exams' => $module->weeklyExams->map(fn (Kuis $exam) => [
+                'id' => $exam->id,
+                'title' => 'Ujian '.$exam->exam_order,
+                'exam_order' => $exam->exam_order,
+                'type' => $exam->type,
+                'status' => $exam->status,
+                'passing_score' => $exam->passing_score,
+                'available_at' => $exam->available_at?->toISOString(),
+                'item_count' => $exam->questions_count,
+                'attempt_count' => $exam->attempts_count,
+            ])->values(),
             'days' => $module->days->map(function ($day) {
                 $publishedFlashcardCount = $day->flashcardSets
                     ->where('status', 'published')
@@ -189,6 +212,27 @@ class AdminModulController extends Controller
                 'focus' => $focus,
             ],
         ]);
+    }
+
+    private function presentationPayload($deck): ?array
+    {
+        if (! $deck) {
+            return null;
+        }
+
+        return [
+            'id' => $deck->id,
+            'title' => $deck->title,
+            'week_slot' => $deck->week_slot,
+            'sort_order' => $deck->sort_order,
+            'day' => $deck->day ? [
+                'id' => $deck->day->id,
+                'day_number' => $deck->day->day_number,
+                'title' => $deck->day->title,
+            ] : null,
+            'status' => $deck->status,
+            'item_count' => $deck->slides_count,
+        ];
     }
 
     public function store(ModulRequest $request, NotifikasiPenggunaService $notifikasi)
@@ -274,5 +318,4 @@ class AdminModulController extends Controller
             ['module_id' => $module->id]
         );
     }
-
 }

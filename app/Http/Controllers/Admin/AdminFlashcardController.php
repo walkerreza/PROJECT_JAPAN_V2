@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Flashcard;
 use App\Models\Kosakata;
 use App\Models\Kuis;
 use App\Models\LevelPembelajaran;
@@ -16,6 +15,7 @@ use App\Services\TemplateExcelService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class AdminFlashcardController extends Controller
@@ -134,7 +134,11 @@ class AdminFlashcardController extends Controller
             'set' => $flashcardSet,
             'vocabulary' => $vocabularyQuery->paginate(12)->withQueryString(),
             'filters' => $request->only('search', 'status', 'content_type'),
-            'quizzes' => Kuis::with('module:id,title,week_number')->orderByDesc('id')->get(['id', 'module_id', 'type', 'status']),
+            'quizzes' => Kuis::with('module:id,title,week_number')
+                ->where('module_id', $flashcardSet->module_id)
+                ->where('module_day_id', $flashcardSet->module_day_id)
+                ->orderByDesc('id')
+                ->get(['id', 'module_id', 'module_day_id', 'type', 'status']),
         ]);
     }
 
@@ -144,14 +148,32 @@ class AdminFlashcardController extends Controller
             'status' => ['required', 'in:draft,published'],
             'cards' => ['present', 'array'],
             'cards.*.id' => ['nullable', 'integer'],
-            'cards.*.vocabulary_id' => ['nullable', 'integer', 'exists:vocabulary_bank,id'],
+            'cards.*.vocabulary_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('vocabulary_bank', 'id')->where(
+                    fn ($query) => $query
+                        ->whereNull('module_id')
+                        ->orWhere('module_id', $flashcardSet->module_id)
+                ),
+            ],
             'cards.*.front_text' => ['required', 'string', 'max:255'],
             'cards.*.reading' => ['nullable', 'string', 'max:255'],
             'cards.*.back_text' => ['nullable', 'string'],
             'cards.*.hint' => ['nullable', 'string'],
             'cards.*.example_sentence' => ['nullable', 'string'],
+            'cards.*.example_reading' => ['nullable', 'string'],
             'cards.*.example_meaning' => ['nullable', 'string'],
             'cards.*.audio_url' => ['nullable', 'string', 'max:2048'],
+            'cards.*.content_type' => ['nullable', Rule::in(Kosakata::contentTypes())],
+            'cards.*.meaning_en' => ['nullable', 'string'],
+            'cards.*.jlpt_level' => ['nullable', 'string', 'max:8'],
+            'cards.*.onyomi' => ['nullable', 'string'],
+            'cards.*.kunyomi' => ['nullable', 'string'],
+            'cards.*.radicals' => ['nullable', 'array'],
+            'cards.*.radicals.*' => ['nullable', 'string', 'max:50'],
+            'cards.*.stroke_count' => ['nullable', 'integer', 'min:1', 'max:64'],
+            'cards.*.notes' => ['nullable', 'string'],
         ]);
 
         $ids = [];
@@ -161,17 +183,12 @@ class AdminFlashcardController extends Controller
             $flashcardSet->update(['status' => $validated['status']]);
 
             foreach ($validated['cards'] as $index => $card) {
+                $vocabulary = $this->syncVocabulary($card, $flashcardSet);
                 $model = $flashcardSet->flashcards()->updateOrCreate(
                     ['id' => $card['id'] ?? null],
                     [
-                        'vocabulary_id' => $card['vocabulary_id'] ?? null,
-                        'front_text' => $card['front_text'],
-                        'reading' => $card['reading'] ?? null,
-                        'back_text' => $card['back_text'] ?? null,
-                        'hint' => $card['hint'] ?? null,
-                        'example_sentence' => $card['example_sentence'] ?? null,
-                        'example_meaning' => $card['example_meaning'] ?? null,
-                        'audio_url' => $card['audio_url'] ?? null,
+                        'vocabulary_id' => $vocabulary->id,
+                        ...$this->flashcardAttributes($vocabulary),
                         'order' => $index,
                     ]
                 );
@@ -211,11 +228,21 @@ class AdminFlashcardController extends Controller
             return redirect()->back()->withErrors(['import_file' => 'File kosong atau header tidak valid.']);
         }
 
-        $nextOrder = (int) $flashcardSet->flashcards()->max('order') + 1;
-        $created = 0;
+        $flashcardSet->loadMissing(['module:id,week_number', 'day:id,module_id,day_number']);
+        abort_unless(
+            $flashcardSet->module
+            && $flashcardSet->day
+            && (int) $flashcardSet->day->module_id === (int) $flashcardSet->module_id,
+            422,
+            'Flashcard set belum memiliki konteks Week dan Day yang valid.'
+        );
 
-        DB::transaction(function () use ($flashcardSet, $rows, $nextOrder, &$created) {
+        $nextOrder = (int) $flashcardSet->flashcards()->max('order') + 1;
+        $processed = 0;
+
+        DB::transaction(function () use ($flashcardSet, $rows, $nextOrder, &$processed) {
             foreach ($rows as $index => $row) {
+                $this->assertImportScope($row, $flashcardSet, $index + 2);
                 $frontText = trim((string) ($row['front_text'] ?? $row['word'] ?? $row['kata'] ?? ''));
 
                 if ($frontText === '') {
@@ -223,30 +250,47 @@ class AdminFlashcardController extends Controller
                 }
 
                 $reading = trim((string) ($row['reading'] ?? $row['kana'] ?? ''));
-                $vocabularyId = $this->resolveVocabularyId($row, $frontText, $reading);
-
-                Flashcard::create([
-                    'flashcard_set_id' => $flashcardSet->id,
-                    'vocabulary_id' => $vocabularyId,
+                $vocabulary = $this->syncVocabulary([
+                    'vocabulary_id' => $row['vocabulary_id'] ?? null,
                     'front_text' => $frontText,
-                    'reading' => $reading !== '' ? $reading : null,
+                    'reading' => $reading,
                     'back_text' => $row['back_text'] ?? $row['meaning_id'] ?? $row['arti'] ?? null,
+                    'meaning_en' => $row['meaning_en'] ?? $row['english'] ?? null,
                     'hint' => $row['hint'] ?? $row['category'] ?? $row['kategori'] ?? null,
                     'example_sentence' => $row['example_sentence'] ?? $row['contoh_kalimat'] ?? null,
+                    'example_reading' => $row['example_reading'] ?? $row['reading_contoh'] ?? null,
                     'example_meaning' => $row['example_meaning'] ?? $row['arti_contoh'] ?? null,
                     'audio_url' => $row['audio_url'] ?? null,
-                    'order' => $nextOrder + $index,
-                ]);
+                    'content_type' => $row['content_type'] ?? null,
+                    'jlpt_level' => $row['jlpt_level'] ?? null,
+                    'onyomi' => $row['onyomi'] ?? null,
+                    'kunyomi' => $row['kunyomi'] ?? null,
+                    'radicals' => $this->parseList($row['radicals'] ?? $row['radical'] ?? null),
+                    'stroke_count' => $row['stroke_count'] ?? null,
+                    'notes' => $row['notes'] ?? $row['catatan'] ?? null,
+                ], $flashcardSet);
 
-                $created++;
+                $existing = $flashcardSet->flashcards()
+                    ->where('vocabulary_id', $vocabulary->id)
+                    ->first();
+                $flashcardSet->flashcards()->updateOrCreate(
+                    ['id' => $existing?->id],
+                    [
+                        'vocabulary_id' => $vocabulary->id,
+                        ...$this->flashcardAttributes($vocabulary),
+                        'order' => $existing?->order ?? ($nextOrder + $index),
+                    ]
+                );
+
+                $processed++;
             }
         });
 
-        if ($created === 0) {
+        if ($processed === 0) {
             return redirect()->back()->withErrors(['import_file' => 'Tidak ada kartu valid. Pastikan kolom front_text atau word terisi.']);
         }
 
-        return redirect()->back()->with('success', "{$created} flashcard berhasil diimport.");
+        return redirect()->back()->with('success', "{$processed} flashcard berhasil disinkronkan dengan Bank Konten N3.");
     }
 
     public function downloadImportTemplate(
@@ -261,7 +305,7 @@ class AdminFlashcardController extends Controller
         }
 
         $headers = $this->flashcardImportHeaders();
-        $rows = $this->flashcardTemplateRows();
+        $rows = $this->flashcardTemplateRows($flashcardSet);
         $filename = 'japanlingo-flashcard-template.'.$format;
 
         if ($format === 'csv') {
@@ -280,12 +324,23 @@ class AdminFlashcardController extends Controller
     public function generateQuiz(Request $request, SetFlashcard $flashcardSet)
     {
         $validated = $request->validate([
-            'quiz_id' => ['required', 'integer', 'exists:quizzes,id'],
+            'quiz_id' => [
+                'required',
+                'integer',
+                Rule::exists('quizzes', 'id')->where(
+                    fn ($query) => $query
+                        ->where('module_id', $flashcardSet->module_id)
+                        ->where('module_day_id', $flashcardSet->module_day_id)
+                ),
+            ],
             'mode' => ['required', Rule::in(['word_to_meaning', 'meaning_to_word', 'reading_to_word'])],
             'count' => ['required', 'integer', 'min:1', 'max:50'],
         ]);
 
-        $quiz = Kuis::findOrFail($validated['quiz_id']);
+        $quiz = Kuis::query()
+            ->where('module_id', $flashcardSet->module_id)
+            ->where('module_day_id', $flashcardSet->module_day_id)
+            ->findOrFail($validated['quiz_id']);
         $cards = $flashcardSet->flashcards()->whereNotNull('back_text')->inRandomOrder()->take($validated['count'])->get();
 
         if ($cards->count() < 2) {
@@ -405,31 +460,199 @@ class AdminFlashcardController extends Controller
         return count($options) >= 2 ? $options : [$correct];
     }
 
-    private function resolveVocabularyId(array $row, string $frontText, string $reading): ?int
+    private function syncVocabulary(array $data, SetFlashcard $flashcardSet): Kosakata
     {
-        if (! empty($row['vocabulary_id']) && is_numeric($row['vocabulary_id'])) {
-            return (int) $row['vocabulary_id'];
+        $frontText = trim((string) ($data['front_text'] ?? ''));
+        $reading = trim((string) ($data['reading'] ?? ''));
+        $vocabulary = null;
+
+        if (! empty($data['vocabulary_id']) && is_numeric($data['vocabulary_id'])) {
+            $vocabulary = Kosakata::query()
+                ->whereKey((int) $data['vocabulary_id'])
+                ->where(function ($query) use ($flashcardSet) {
+                    $query->whereNull('module_id')
+                        ->orWhere('module_id', $flashcardSet->module_id);
+                })
+                ->first();
+
+            if (! $vocabulary) {
+                throw ValidationException::withMessages([
+                    'cards' => "Vocabulary ID {$data['vocabulary_id']} tidak berasal dari Week flashcard ini.",
+                ]);
+            }
         }
 
-        $query = Kosakata::query()->where('word', $frontText);
+        $vocabulary ??= Kosakata::query()
+            ->where('word', $frontText)
+            ->where(function ($query) use ($flashcardSet) {
+                $query->whereNull('module_id')
+                    ->orWhere('module_id', $flashcardSet->module_id);
+            })
+            ->when(
+                $reading !== '',
+                fn ($query) => $query->where('reading', $reading),
+                fn ($query) => $query->whereNull('reading')
+            )
+            ->first();
 
-        if ($reading !== '') {
-            $query->where('reading', $reading);
+        // word + reading is globally unique; reuse the canonical bank record
+        // when the same item was already introduced by another Week.
+        $vocabulary ??= Kosakata::query()
+            ->where('word', $frontText)
+            ->when(
+                $reading !== '',
+                fn ($query) => $query->where('reading', $reading),
+                fn ($query) => $query->whereNull('reading')
+            )
+            ->first();
+
+        $metadata = array_replace($vocabulary?->metadata ?? [], array_filter([
+            'content_type' => $data['content_type'] ?? $vocabulary?->content_type,
+            'notes' => $data['notes'] ?? null,
+            'onyomi' => $data['onyomi'] ?? null,
+            'kunyomi' => $data['kunyomi'] ?? null,
+            'radicals' => $data['radicals'] ?? null,
+            'stroke_count' => filled($data['stroke_count'] ?? null)
+                ? max(1, (int) $data['stroke_count'])
+                : null,
+        ], fn ($value) => $value !== null && $value !== '' && $value !== []));
+        $contentType = in_array($data['content_type'] ?? null, Kosakata::contentTypes(), true)
+            ? $data['content_type']
+            : ($vocabulary?->content_type ?? Kosakata::TYPE_KOSAKATA);
+        $payload = [
+            'content_type' => $contentType,
+            'module_id' => $vocabulary?->module_id ?? $flashcardSet->module_id,
+            'word' => $frontText,
+            'reading' => $reading !== '' ? $reading : null,
+            'meaning_id' => $data['back_text'] ?? $vocabulary?->meaning_id,
+            'meaning_en' => $data['meaning_en'] ?? $vocabulary?->meaning_en,
+            'jlpt_level' => $data['jlpt_level'] ?? $vocabulary?->jlpt_level ?? 'N3',
+            'category' => $data['hint'] ?? $vocabulary?->category,
+            'example_sentence' => $data['example_sentence'] ?? $vocabulary?->example_sentence,
+            'example_reading' => $data['example_reading'] ?? $vocabulary?->example_reading,
+            'example_meaning' => $data['example_meaning'] ?? $vocabulary?->example_meaning,
+            'audio_url' => $data['audio_url'] ?? $vocabulary?->audio_url,
+            'metadata' => $metadata ?: null,
+            'status' => $vocabulary?->status ?? 'draft',
+        ];
+
+        if ($vocabulary) {
+            $vocabulary->update($payload);
+        } else {
+            $vocabulary = Kosakata::create($payload);
         }
 
-        return $query->value('id');
+        if ($flashcardSet->module_day_id) {
+            $vocabulary->days()->syncWithoutDetaching([
+                (int) $flashcardSet->module_day_id => [
+                    'sort_order' => (int) ($flashcardSet->flashcards()->max('order') ?? 0),
+                ],
+            ]);
+        }
+
+        return $vocabulary->refresh();
+    }
+
+    private function flashcardAttributes(Kosakata $vocabulary): array
+    {
+        return [
+            'front_text' => $vocabulary->word,
+            'reading' => $vocabulary->reading,
+            'back_text' => $vocabulary->meaning_id ?: $vocabulary->meaning_en,
+            'hint' => $vocabulary->category,
+            'example_sentence' => $vocabulary->example_sentence,
+            'example_meaning' => $vocabulary->example_meaning,
+            'audio_url' => $vocabulary->audio_url,
+        ];
+    }
+
+    private function assertImportScope(array $row, SetFlashcard $flashcardSet, int $rowNumber): void
+    {
+        $week = $row['module_week'] ?? $row['week_number'] ?? null;
+        $day = $row['day_number'] ?? $row['module_day'] ?? null;
+
+        if (filled($week) && (int) $week !== (int) $flashcardSet->module?->week_number) {
+            throw ValidationException::withMessages([
+                'import_file' => "Baris {$rowNumber}: Week {$week} tidak sesuai dengan Week {$flashcardSet->module?->week_number}.",
+            ]);
+        }
+
+        if (filled($day) && (int) $day !== (int) $flashcardSet->day?->day_number) {
+            throw ValidationException::withMessages([
+                'import_file' => "Baris {$rowNumber}: Day {$day} tidak sesuai dengan Day {$flashcardSet->day?->day_number}.",
+            ]);
+        }
+    }
+
+    private function parseList(mixed $value): array
+    {
+        if (is_array($value)) {
+            return array_values(array_filter(array_map('trim', $value)));
+        }
+
+        return filled($value)
+            ? array_values(array_filter(preg_split('/\s*\|\s*/', (string) $value)))
+            : [];
     }
 
     private function flashcardImportHeaders(): array
     {
-        return ['vocabulary_id', 'front_text', 'reading', 'back_text', 'hint', 'example_sentence', 'example_meaning', 'audio_url'];
+        return [
+            'module_week',
+            'day_number',
+            'vocabulary_id',
+            'front_text',
+            'reading',
+            'back_text',
+            'meaning_en',
+            'hint',
+            'example_sentence',
+            'example_reading',
+            'example_meaning',
+            'audio_url',
+            'content_type',
+            'jlpt_level',
+            'onyomi',
+            'kunyomi',
+            'radicals',
+            'stroke_count',
+            'notes',
+        ];
     }
 
-    private function flashcardTemplateRows(): array
+    private function flashcardTemplateRows(SetFlashcard $flashcardSet): array
     {
-        return [
+        $flashcardSet->loadMissing(['module:id,week_number', 'day:id,day_number']);
+        $week = $flashcardSet->module?->week_number;
+        $day = $flashcardSet->day?->day_number;
+        $rows = [
             ['', '会議', 'かいぎ', 'rapat', 'noun / kantor', '今日は一時から会議があります。', 'Hari ini ada rapat mulai jam satu.', ''],
             ['', '一つ', 'ひとつ', 'satu buah', 'counter', '机の上にりんごが一つあります。', 'Ada satu apel di atas meja.', ''],
         ];
+
+        return array_map(
+            fn (array $row) => [
+                $week,
+                $day,
+                $row[0],
+                $row[1],
+                $row[2],
+                $row[3],
+                '',
+                $row[4],
+                $row[5],
+                '',
+                $row[6],
+                $row[7],
+                'kosakata',
+                'N3',
+                '',
+                '',
+                '',
+                '',
+                '',
+            ],
+            $rows
+        );
     }
 }

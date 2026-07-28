@@ -30,6 +30,7 @@ export const emptyQuestion = (type = 'multiple_choice') => {
         explanation: '',
         audio_url: '',
         order: 0,
+        points: 1,
     };
 };
 
@@ -39,6 +40,7 @@ export const normalizeQuestions = (questions, quizType = 'multiple_choice') => (
             ...question,
             type: normalizeQuestionType(question.type || quizType),
             options: Array.isArray(question.options) ? question.options : [],
+            points: Math.max(1, Number(question.points || 1)),
         }))
         : [emptyQuestion(normalizeQuestionType(quizType))]
 );
@@ -51,12 +53,14 @@ export const getQuestionError = (question, index) => {
     const questionText = normalizeText(question.question_text);
     const correctAnswer = normalizeText(question.correct_answer);
     const options = Array.isArray(question.options) ? question.options.map(normalizeText).filter(Boolean) : [];
+    const points = Number(question.points || 0);
 
     if (!questionText) return `Q${number}: pertanyaan wajib diisi.`;
     if (!correctAnswer) return `Q${number}: jawaban benar wajib diisi.`;
     if (type === 'multiple_choice' && options.length < 2) return `Q${number}: multiple choice minimal 2 opsi.`;
     if (type === 'multiple_choice' && !options.includes(correctAnswer)) return `Q${number}: jawaban benar harus sama dengan salah satu opsi.`;
     if (type === 'listening' && !normalizeText(question.audio_url)) return `Q${number}: listening wajib memiliki Audio URL.`;
+    if (!Number.isInteger(points) || points < 1 || points > 1000) return `Q${number}: bobot harus berupa angka 1-1000.`;
 
     return null;
 };

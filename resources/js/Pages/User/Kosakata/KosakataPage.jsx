@@ -1,14 +1,22 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import theme from '@/Components/theme/themes';
 
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import CategoryIcon from '@mui/icons-material/Category';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import CloseIcon from '@mui/icons-material/Close';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import MenuBookIcon from '@mui/icons-material/MenuBook';
 import SearchIcon from '@mui/icons-material/Search';
-import TranslateIcon from '@mui/icons-material/Translate';
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
+
+const CONTENT_TYPES = [
+    { value: 'all', label: 'Semua' },
+    { value: 'kosakata', label: 'Kosakata' },
+    { value: 'kanji', label: 'Kanji' },
+    { value: 'bunpo', label: 'Bunpo' },
+];
 
 const typeLabels = {
     kosakata: 'Kosakata',
@@ -16,196 +24,434 @@ const typeLabels = {
     bunpo: 'Bunpo',
 };
 
-const cardVariants = {
-    hidden: { opacity: 0, y: 18 },
-    visible: (index) => ({ opacity: 1, y: 0, transition: { delay: index * 0.035, duration: 0.28, ease: 'easeOut' } }),
+const typeTones = {
+    kosakata: 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300',
+    kanji: 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300',
+    bunpo: 'bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300',
 };
 
-export default function KosakataPage({ program = {}, vocabulary = {}, filters = {}, categories = [], modules = [], selected_module_id = null }) {
+function MaterialDetail({ item, onClose, onPlayAudio }) {
+    const tags = Array.isArray(item.tags) ? item.tags : [];
+    const [desktopPanel, setDesktopPanel] = useState(false);
+
+    useEffect(() => {
+        const mediaQuery = window.matchMedia('(min-width: 640px)');
+        const syncPanelMode = () => setDesktopPanel(mediaQuery.matches);
+        const previousOverflow = document.body.style.overflow;
+        const closeOnEscape = (event) => {
+            if (event.key === 'Escape') onClose();
+        };
+
+        syncPanelMode();
+        document.body.style.overflow = 'hidden';
+        mediaQuery.addEventListener('change', syncPanelMode);
+        window.addEventListener('keydown', closeOnEscape);
+
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            mediaQuery.removeEventListener('change', syncPanelMode);
+            window.removeEventListener('keydown', closeOnEscape);
+        };
+    }, [onClose]);
+
+    return (
+        <motion.div
+            className="fixed inset-0 z-50 bg-black/45"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+        >
+            <motion.aside
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="material-detail-title"
+                className="absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-y-auto rounded-t-2xl bg-white shadow-2xl dark:bg-gray-900 sm:inset-y-0 sm:left-auto sm:w-[420px] sm:rounded-none"
+                initial={desktopPanel ? { x: '100%' } : { y: '100%' }}
+                animate={desktopPanel ? { x: 0 } : { y: 0 }}
+                exit={desktopPanel ? { x: '100%' } : { y: '100%' }}
+                transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+                onClick={(event) => event.stopPropagation()}
+            >
+                <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white/95 px-5 py-4 backdrop-blur dark:border-gray-800 dark:bg-gray-900/95">
+                    <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-red-600 dark:text-red-400">
+                            {typeLabels[item.content_type] || 'Materi'}
+                        </p>
+                        <h2 id="material-detail-title" className="mt-0.5 text-base font-black text-gray-900 dark:text-white">
+                            Detail Materi
+                        </h2>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        aria-label="Tutup detail"
+                        className="flex h-10 w-10 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-white"
+                    >
+                        <CloseIcon sx={{ fontSize: 21 }} />
+                    </button>
+                </div>
+
+                <div className="space-y-6 px-5 py-6 sm:px-6">
+                    <div>
+                        <div className="flex flex-wrap gap-2">
+                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${typeTones[item.content_type] || typeTones.kosakata}`}>
+                                {typeLabels[item.content_type] || 'Materi'}
+                            </span>
+                            {item.jlpt_level && (
+                                <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-black text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                                    JLPT {item.jlpt_level}
+                                </span>
+                            )}
+                            {item.category && (
+                                <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-black text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                                    {item.category}
+                                </span>
+                            )}
+                        </div>
+
+                        <div className="mt-5 flex items-start justify-between gap-4">
+                            <div className="min-w-0">
+                                <p className="break-words text-4xl font-black leading-tight text-gray-950 dark:text-white">{item.word}</p>
+                                {item.reading && (
+                                    <p className="mt-1 break-words text-base font-bold text-gray-500 dark:text-gray-400">{item.reading}</p>
+                                )}
+                            </div>
+                            {item.audio_url && (
+                                <button
+                                    type="button"
+                                    onClick={() => onPlayAudio(item.audio_url)}
+                                    aria-label={`Dengarkan ${item.word}`}
+                                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-600 text-white shadow-sm transition hover:bg-red-500 active:scale-95"
+                                >
+                                    <VolumeUpIcon sx={{ fontSize: 21 }} />
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    <section className="border-t border-gray-200 pt-5 dark:border-gray-800">
+                        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-gray-400">Arti</p>
+                        <p className="mt-2 text-lg font-black leading-relaxed text-gray-900 dark:text-white">
+                            {item.meaning_id || item.meaning_en || 'Arti belum tersedia'}
+                        </p>
+                        {item.meaning_en && item.meaning_en !== item.meaning_id && (
+                            <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-gray-400">{item.meaning_en}</p>
+                        )}
+                    </section>
+
+                    {(item.example_sentence || item.example_meaning || item.example_reading) && (
+                        <section className="border-t border-gray-200 pt-5 dark:border-gray-800">
+                            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-gray-400">Contoh penggunaan</p>
+                            <p className="mt-2 break-words text-base font-black leading-7 text-gray-900 dark:text-white">
+                                {item.example_sentence || '-'}
+                            </p>
+                            {item.example_reading && (
+                                <p className="mt-1 break-words text-sm font-semibold text-gray-500 dark:text-gray-400">{item.example_reading}</p>
+                            )}
+                            {item.example_meaning && (
+                                <p className="mt-2 break-words text-sm leading-6 text-gray-600 dark:text-gray-300">{item.example_meaning}</p>
+                            )}
+                        </section>
+                    )}
+
+                    {tags.length > 0 && (
+                        <section className="flex flex-wrap gap-2 border-t border-gray-200 pt-5 dark:border-gray-800">
+                            {tags.map((tag) => (
+                                <span key={tag} className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                                    {tag}
+                                </span>
+                            ))}
+                        </section>
+                    )}
+                </div>
+            </motion.aside>
+        </motion.div>
+    );
+}
+
+export default function KosakataPage({
+    program = {},
+    vocabulary = {},
+    filters = {},
+    categories = [],
+    modules = [],
+    selected_module_id = null,
+}) {
     const rows = vocabulary.data || [];
     const [search, setSearch] = useState(filters.search || '');
     const [category, setCategory] = useState(filters.category || 'all');
     const [jlptLevel, setJlptLevel] = useState(filters.jlpt_level || 'all');
     const [contentType, setContentType] = useState(filters.content_type || 'all');
     const [moduleFilter, setModuleFilter] = useState(selected_module_id || filters.module || 'all');
+    const [filtersOpen, setFiltersOpen] = useState(false);
+    const [selectedItem, setSelectedItem] = useState(null);
 
-    const stats = useMemo(() => ({
-        total: vocabulary.total ?? rows.length,
-        categories: categories.length,
-        shown: rows.length,
-    }), [categories.length, rows.length, vocabulary.total]);
-
-    const submitFilters = (event) => {
-        event.preventDefault();
-        router.get(route('user.modul.program.kosakata', program.slug), {
+    const applyFilters = (overrides = {}) => {
+        const nextFilters = {
             search,
             category,
             jlpt_level: jlptLevel,
             content_type: contentType,
             module: moduleFilter,
-        }, {
+            ...overrides,
+        };
+
+        router.get(route('user.modul.program.kosakata', program.slug), nextFilters, {
             preserveState: true,
+            preserveScroll: true,
             replace: true,
         });
     };
 
+    const submitSearch = (event) => {
+        event.preventDefault();
+        applyFilters();
+    };
+
+    const selectType = (value) => {
+        setContentType(value);
+        applyFilters({ content_type: value });
+    };
+
+    const resetAdvancedFilters = () => {
+        setCategory('all');
+        setJlptLevel('all');
+        setModuleFilter('all');
+        applyFilters({ category: 'all', jlpt_level: 'all', module: 'all' });
+    };
+
+    const activeAdvancedFilterCount = [
+        category !== 'all',
+        jlptLevel !== 'all',
+        String(moduleFilter) !== 'all',
+    ].filter(Boolean).length;
+
+    const playAudio = (url) => {
+        if (!url || typeof window === 'undefined') return;
+        const audio = new window.Audio(url);
+        audio.play().catch(() => {});
+    };
+
     return (
         <AuthenticatedLayout header={false}>
-            <Head title={`Konten N3 ${program.title || 'Kelas'} - Japanlingo`} />
+            <Head title={`Pustaka Materi ${program.level || 'N3'} - Japanlingo`} />
 
-            <div className="relative min-h-screen overflow-hidden bg-[#f5eadb] text-slate-900 dark:bg-gray-950 dark:text-white">
-                <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(140deg,rgba(16,185,129,0.14)_0%,transparent_32%),linear-gradient(230deg,rgba(245,158,11,0.14)_0%,transparent_34%),repeating-linear-gradient(90deg,rgba(120,53,15,0.045)_0_1px,transparent_1px_78px),repeating-linear-gradient(0deg,rgba(120,53,15,0.035)_0_1px,transparent_1px_78px)] dark:bg-[linear-gradient(140deg,rgba(16,185,129,0.10)_0%,transparent_32%),linear-gradient(230deg,rgba(245,158,11,0.10)_0%,transparent_34%)]" />
-                <div className="pointer-events-none absolute left-8 top-32 hidden text-[11rem] font-black leading-none text-emerald-900/[0.055] dark:text-white/[0.035] lg:block">語</div>
-                <div className="pointer-events-none absolute right-8 top-[620px] hidden text-[11rem] font-black leading-none text-amber-900/[0.05] dark:text-white/[0.03] lg:block">彙</div>
-
-                <main className="relative z-10 mx-auto max-w-7xl space-y-7 px-4 py-7 sm:px-6 lg:px-8">
-                    <section className={`relative overflow-hidden rounded-[1.8rem] bg-gradient-to-br ${theme.ctaBg} px-5 py-8 text-white shadow-2xl shadow-slate-900/10 sm:px-8`}>
-                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_16px_16px,rgba(255,255,255,0.24)_2px,transparent_3px)] bg-[length:30px_30px]" />
-                        <div className="absolute -right-12 -top-12 hidden h-52 w-52 rounded-full bg-white/18 lg:block" />
-                        <div className="relative grid gap-7 lg:grid-cols-[minmax(0,1fr)_330px] lg:items-end">
-                            <div>
-                                <Link href={program.roadmap_url || route('user.kelas.index')} className="mb-5 inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-xs font-black uppercase tracking-wider text-white/85 backdrop-blur transition hover:bg-white/20">
-                                    <ArrowBackIcon sx={{ fontSize: 16 }} />
-                                    Kembali ke Roadmap
-                                </Link>
-                                <p className="text-xs font-black uppercase tracking-[0.28em] text-white/75">Bank Konten N3 Kelas</p>
-                                <h1 className="mt-3 text-3xl font-black tracking-tight sm:text-5xl">{program.title || 'Konten JLPT'}</h1>
-                                <p className="mt-3 max-w-2xl text-sm font-semibold leading-relaxed text-white/85">
-                                    Kosakata, kanji, dan bunpo ini tersambung dari input admin, lalu dipakai lagi oleh flashcard dan kuis pada roadmap kelas.
-                                </p>
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                                <div className="min-w-0 rounded-2xl bg-white/15 px-2 py-3 backdrop-blur sm:px-4 sm:py-4">
-                                    <p className="text-2xl font-black sm:text-3xl">{stats.total}</p>
-                                    <p className="break-words text-[9px] font-bold uppercase tracking-[0.08em] text-white/70 sm:text-xs sm:tracking-wider">Konten</p>
-                                </div>
-                                <div className="min-w-0 rounded-2xl bg-white/15 px-2 py-3 backdrop-blur sm:px-4 sm:py-4">
-                                    <p className="text-2xl font-black sm:text-3xl">{stats.categories}</p>
-                                    <p className="break-words text-[9px] font-bold uppercase tracking-[0.08em] text-white/70 sm:text-xs sm:tracking-wider">Kategori</p>
-                                </div>
-                                <div className="min-w-0 rounded-2xl bg-white/15 px-2 py-3 backdrop-blur sm:px-4 sm:py-4">
-                                    <p className="text-2xl font-black sm:text-3xl">{stats.shown}</p>
-                                    <p className="break-words text-[9px] font-bold uppercase tracking-[0.08em] text-white/70 sm:text-xs sm:tracking-wider">Tampil</p>
-                                </div>
-                            </div>
+            <div className="min-h-[100dvh] bg-gray-50 text-gray-900 transition-colors dark:bg-gray-950 dark:text-white">
+                <main className="mx-auto max-w-5xl px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
+                    <header className="flex items-start gap-3 border-b border-gray-200 pb-5 dark:border-gray-800">
+                        <Link
+                            href={program.roadmap_url || route('user.kelas.index')}
+                            aria-label="Kembali ke roadmap"
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-gray-500 transition hover:bg-white hover:text-red-600 hover:shadow-sm dark:hover:bg-gray-900 dark:hover:text-red-400"
+                        >
+                            <ArrowBackIcon sx={{ fontSize: 21 }} />
+                        </Link>
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-400 text-amber-950 shadow-[0_3px_0_#b45309]">
+                            <MenuBookIcon sx={{ fontSize: 22 }} />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                            <h1 className="truncate text-xl font-black sm:text-2xl">
+                                Pustaka Materi {program.level || 'N3'}
+                            </h1>
+                            <p className="mt-0.5 truncate text-xs font-semibold text-gray-500 dark:text-gray-400">
+                                {program.title || 'Kelas'} · {vocabulary.total ?? rows.length} materi
+                            </p>
                         </div>
-                    </section>
+                    </header>
 
-                    <form onSubmit={submitFilters} className="grid gap-3 rounded-[1.4rem] border border-white/75 bg-white/75 p-4 shadow-xl shadow-amber-900/5 backdrop-blur dark:border-gray-800 dark:bg-gray-900/75 xl:grid-cols-[1fr_170px_190px_180px_160px_auto]">
-                        <label className="flex h-12 items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 dark:border-gray-700 dark:bg-gray-950">
-                            <SearchIcon sx={{ fontSize: 20 }} className="text-gray-400" />
-                            <input
-                                value={search}
-                                onChange={(event) => setSearch(event.target.value)}
-                                className="w-full border-0 bg-transparent text-sm font-bold outline-none focus:ring-0 dark:text-white"
-                                placeholder="Cari kata, reading, arti..."
-                            />
-                        </label>
-                        <select value={contentType} onChange={(event) => setContentType(event.target.value)} className="h-12 rounded-2xl border border-gray-200 bg-white px-4 text-sm font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
-                            <option value="all">Semua Tipe</option>
-                            <option value="kosakata">Kosakata</option>
-                            <option value="kanji">Kanji</option>
-                            <option value="bunpo">Bunpo</option>
-                        </select>
-                        <select value={category} onChange={(event) => setCategory(event.target.value)} className="h-12 rounded-2xl border border-gray-200 bg-white px-4 text-sm font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
-                            <option value="all">Semua Kategori</option>
-                            {categories.map((item) => (
-                                <option key={item} value={item}>{item}</option>
-                            ))}
-                        </select>
-                        <select value={moduleFilter} onChange={(event) => setModuleFilter(event.target.value)} className="h-12 rounded-2xl border border-gray-200 bg-white px-4 text-sm font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
-                            <option value="all">Semua Week</option>
-                            {modules.map((module) => (
-                                <option key={module.id} value={module.id}>Week {module.week_number ?? '-'} - {module.title}</option>
-                            ))}
-                        </select>
-                        <select value={jlptLevel} onChange={(event) => setJlptLevel(event.target.value)} className="h-12 rounded-2xl border border-gray-200 bg-white px-4 text-sm font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
-                            <option value="all">Semua JLPT</option>
-                            <option value="N3">N3</option>
-                            <option value="N4">N4</option>
-                            <option value="N5">N5</option>
-                        </select>
-                        <button className={`h-12 rounded-2xl bg-gradient-to-r ${theme.ctaBg} px-6 text-sm font-black text-white shadow-sm`}>
-                            Filter
-                        </button>
-                    </form>
-
-                    <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                        {rows.map((item, index) => (
-                            <motion.article
-                                key={item.id}
-                                custom={index}
-                                variants={cardVariants}
-                                initial="hidden"
-                                animate="visible"
-                                className="group overflow-hidden rounded-[1.4rem] border border-white/80 bg-white/82 shadow-xl shadow-slate-900/5 backdrop-blur transition hover:-translate-y-1 hover:shadow-2xl hover:shadow-slate-900/10 dark:border-gray-800 dark:bg-gray-900/82"
+                    <section className="sticky top-0 z-20 -mx-4 bg-gray-50/95 px-4 pb-3 pt-4 backdrop-blur dark:bg-gray-950/95 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+                        <form onSubmit={submitSearch} className="flex gap-2">
+                            <label className="flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-xl border border-gray-200 bg-white px-3 shadow-sm focus-within:border-red-400 focus-within:ring-4 focus-within:ring-red-100 dark:border-gray-800 dark:bg-gray-900 dark:focus-within:border-red-700 dark:focus-within:ring-red-950/50">
+                                <SearchIcon sx={{ fontSize: 20 }} className="shrink-0 text-gray-400" />
+                                <input
+                                    value={search}
+                                    onChange={(event) => setSearch(event.target.value)}
+                                    className="min-w-0 flex-1 border-0 bg-transparent p-0 text-sm font-semibold outline-none focus:ring-0 dark:text-white"
+                                    placeholder="Cari kata, bacaan, atau arti"
+                                />
+                            </label>
+                            <button
+                                type="button"
+                                onClick={() => setFiltersOpen((current) => !current)}
+                                aria-expanded={filtersOpen}
+                                className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border shadow-sm transition ${
+                                    filtersOpen || activeAdvancedFilterCount > 0
+                                        ? 'border-red-600 bg-red-600 text-white'
+                                        : 'border-gray-200 bg-white text-gray-600 hover:border-red-300 hover:text-red-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300'
+                                }`}
                             >
-                                <div className="relative overflow-hidden p-5">
-                                    <div className={`absolute -right-10 -top-10 h-28 w-28 rounded-full bg-gradient-to-br ${theme.ctaBg} opacity-20`} />
-                                    <div className="relative flex items-start justify-between gap-4">
-                                        <div className="min-w-0">
-                                            <div className="flex flex-wrap gap-2">
-                                                <span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">{item.jlpt_level || 'N3'}</span>
-                                                <span className="rounded-full bg-sky-50 px-3 py-1 text-[10px] font-black text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">{typeLabels[item.content_type || 'kosakata'] || 'Konten'}</span>
-                                                {item.category && (
-                                                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-[10px] font-black text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-                                                        <CategoryIcon sx={{ fontSize: 12 }} />
-                                                        {item.category}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <h2 className={`mt-4 break-words text-3xl font-black sm:text-4xl ${theme.heroAccent}`}>{item.word}</h2>
-                                            <p className="mt-1 break-words text-sm font-bold text-gray-500 sm:text-base dark:text-gray-400">{item.reading || '-'}</p>
-                                        </div>
-                                        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${theme.ctaBg} text-white shadow-sm`}>
-                                            <TranslateIcon />
+                                <FilterListIcon sx={{ fontSize: 21 }} />
+                                {activeAdvancedFilterCount > 0 && (
+                                    <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-gray-50 bg-amber-400 px-1 text-[9px] font-black text-amber-950 dark:border-gray-950">
+                                        {activeAdvancedFilterCount}
+                                    </span>
+                                )}
+                            </button>
+                        </form>
+
+                        <div className="mt-3 flex gap-1 overflow-x-auto rounded-xl bg-gray-200/70 p-1 dark:bg-gray-900">
+                            {CONTENT_TYPES.map((type) => (
+                                <button
+                                    key={type.value}
+                                    type="button"
+                                    onClick={() => selectType(type.value)}
+                                    className={`min-h-9 flex-1 whitespace-nowrap rounded-lg px-3 text-xs font-black transition ${
+                                        contentType === type.value
+                                            ? 'bg-white text-red-600 shadow-sm dark:bg-gray-800 dark:text-red-400'
+                                            : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
+                                    }`}
+                                >
+                                    {type.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        <AnimatePresence initial={false}>
+                            {filtersOpen && (
+                                <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    className="overflow-hidden"
+                                >
+                                    <div className="mt-3 grid gap-2 rounded-xl border border-gray-200 bg-white p-3 shadow-lg dark:border-gray-800 dark:bg-gray-900 sm:grid-cols-3">
+                                        <label className="grid gap-1">
+                                            <span className="text-[10px] font-black uppercase tracking-wide text-gray-400">Week</span>
+                                            <select value={moduleFilter} onChange={(event) => setModuleFilter(event.target.value)} className="h-10 rounded-lg border-gray-200 bg-white px-3 text-xs font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
+                                                <option value="all">Semua Week</option>
+                                                {modules.map((module) => (
+                                                    <option key={module.id} value={module.id}>Week {module.week_number ?? '-'} · {module.title}</option>
+                                                ))}
+                                            </select>
+                                        </label>
+                                        <label className="grid gap-1">
+                                            <span className="text-[10px] font-black uppercase tracking-wide text-gray-400">Kategori</span>
+                                            <select value={category} onChange={(event) => setCategory(event.target.value)} className="h-10 rounded-lg border-gray-200 bg-white px-3 text-xs font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
+                                                <option value="all">Semua Kategori</option>
+                                                {categories.map((item) => (
+                                                    <option key={item} value={item}>{item}</option>
+                                                ))}
+                                            </select>
+                                        </label>
+                                        <label className="grid gap-1">
+                                            <span className="text-[10px] font-black uppercase tracking-wide text-gray-400">Level</span>
+                                            <select value={jlptLevel} onChange={(event) => setJlptLevel(event.target.value)} className="h-10 rounded-lg border-gray-200 bg-white px-3 text-xs font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
+                                                <option value="all">Semua JLPT</option>
+                                                <option value="N3">N3</option>
+                                                <option value="N4">N4</option>
+                                                <option value="N5">N5</option>
+                                            </select>
+                                        </label>
+                                        <div className="flex justify-end gap-2 sm:col-span-3">
+                                            <button type="button" onClick={resetAdvancedFilters} className="h-9 rounded-lg px-3 text-xs font-black text-gray-500 transition hover:bg-gray-100 dark:hover:bg-gray-800">
+                                                Reset
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    applyFilters();
+                                                    setFiltersOpen(false);
+                                                }}
+                                                className="h-9 rounded-lg bg-red-600 px-4 text-xs font-black text-white shadow-[0_3px_0_#991b1b] transition hover:bg-red-500 active:translate-y-0.5 active:shadow-none"
+                                            >
+                                                Terapkan
+                                            </button>
                                         </div>
                                     </div>
-
-                                    <div className="mt-5 rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-950/60">
-                                        <p className="text-xs font-black uppercase tracking-wider text-gray-400">Arti</p>
-                                        <p className="mt-1 text-sm font-black text-gray-900 dark:text-white">{item.meaning_id || item.meaning_en || 'Belum ada arti'}</p>
-                                    </div>
-
-                                    {(item.example_sentence || item.example_meaning) && (
-                                        <div className="mt-3 rounded-2xl bg-white p-4 shadow-sm dark:bg-gray-800/60">
-                                            <p className="text-sm font-bold leading-6 text-gray-800 dark:text-gray-100">{item.example_sentence || '-'}</p>
-                                            <p className="mt-1 text-xs font-medium text-gray-500 dark:text-gray-400">{item.example_meaning || item.example_reading || ''}</p>
-                                        </div>
-                                    )}
-
-                                    {item.audio_url && (
-                                        <a href={item.audio_url} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                                            <VolumeUpIcon sx={{ fontSize: 16 }} />
-                                            Dengarkan audio
-                                        </a>
-                                    )}
-                                </div>
-                            </motion.article>
-                        ))}
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     </section>
 
-                    {rows.length === 0 && (
-                        <section className="rounded-[1.8rem] border border-dashed border-white/80 bg-white/65 px-6 py-16 text-center shadow-xl shadow-amber-900/5 backdrop-blur dark:border-gray-800 dark:bg-gray-900/65">
-                            <div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br ${theme.ctaBg} text-white shadow-lg`}>
-                                <TranslateIcon sx={{ fontSize: 36 }} />
+                    {rows.length > 0 ? (
+                        <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                            <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                                {rows.map((item) => (
+                                    <article key={item.id} className="flex min-h-[84px] items-center gap-2 px-3 transition hover:bg-gray-50 dark:hover:bg-gray-800/60 sm:px-4">
+                                        <button
+                                            type="button"
+                                            onClick={() => setSelectedItem(item)}
+                                            className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-3 text-left sm:grid-cols-[minmax(150px,0.8fr)_minmax(0,1.2fr)_auto]"
+                                        >
+                                            <span className="min-w-0">
+                                                <span className="block break-words text-xl font-black leading-tight text-gray-950 dark:text-white sm:text-2xl">{item.word}</span>
+                                                <span className="mt-0.5 block truncate text-xs font-bold text-gray-500 dark:text-gray-400">{item.reading || 'Tanpa reading'}</span>
+                                            </span>
+                                            <span className="hidden min-w-0 sm:block">
+                                                <span className="block truncate text-sm font-bold text-gray-800 dark:text-gray-200">
+                                                    {item.meaning_id || item.meaning_en || 'Arti belum tersedia'}
+                                                </span>
+                                                <span className="mt-1 flex items-center gap-1.5">
+                                                    <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${typeTones[item.content_type] || typeTones.kosakata}`}>
+                                                        {typeLabels[item.content_type] || 'Materi'}
+                                                    </span>
+                                                    {item.category && <span className="truncate text-[10px] font-semibold text-gray-400">{item.category}</span>}
+                                                </span>
+                                            </span>
+                                            <span className="flex items-center gap-1 text-gray-400">
+                                                <span className={`rounded-full px-2 py-0.5 text-[9px] font-black sm:hidden ${typeTones[item.content_type] || typeTones.kosakata}`}>
+                                                    {typeLabels[item.content_type] || 'Materi'}
+                                                </span>
+                                                <ChevronRightIcon sx={{ fontSize: 21 }} />
+                                            </span>
+                                            <span className="col-span-2 truncate text-xs font-semibold text-gray-600 dark:text-gray-300 sm:hidden">
+                                                {item.meaning_id || item.meaning_en || 'Arti belum tersedia'}
+                                            </span>
+                                        </button>
+
+                                        {item.audio_url && (
+                                            <button
+                                                type="button"
+                                                onClick={() => playAudio(item.audio_url)}
+                                                aria-label={`Dengarkan ${item.word}`}
+                                                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-gray-400 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+                                            >
+                                                <VolumeUpIcon sx={{ fontSize: 20 }} />
+                                            </button>
+                                        )}
+                                    </article>
+                                ))}
                             </div>
-                            <h2 className="mt-5 text-xl font-black">Konten N3 belum tersedia</h2>
-                            <p className="mx-auto mt-2 max-w-md text-sm font-medium text-gray-500 dark:text-gray-400">
-                                Admin perlu publish konten N3 dan menghubungkannya ke modul kelas ini agar tampil di halaman user.
+                        </section>
+                    ) : (
+                        <section className="rounded-xl border border-dashed border-gray-300 bg-white px-5 py-14 text-center dark:border-gray-700 dark:bg-gray-900">
+                            <MenuBookIcon sx={{ fontSize: 38 }} className="text-gray-300 dark:text-gray-600" />
+                            <h2 className="mt-3 text-base font-black">Materi belum ditemukan</h2>
+                            <p className="mt-1 text-sm font-medium text-gray-500 dark:text-gray-400">
+                                Ubah pencarian atau filter untuk melihat materi lainnya.
                             </p>
                         </section>
                     )}
 
-                    {vocabulary.links && (
-                        <div className="flex flex-wrap justify-center gap-2">
+                    {vocabulary.links?.length > 3 && (
+                        <nav aria-label="Navigasi halaman materi" className="mt-5 flex flex-wrap justify-center gap-1.5">
                             {vocabulary.links.map((link, index) => (
-                                <Link key={`${link.label}-${index}`} href={link.url || '#'} preserveScroll className={`rounded-xl px-3 py-2 text-xs font-black shadow-sm ${link.active ? `bg-gradient-to-r ${theme.ctaBg} text-white` : 'bg-white/80 text-gray-600 dark:bg-gray-900/80 dark:text-gray-300'} ${!link.url ? 'pointer-events-none opacity-40' : ''}`} dangerouslySetInnerHTML={{ __html: link.label }} />
+                                <Link
+                                    key={`${link.label}-${index}`}
+                                    href={link.url || '#'}
+                                    preserveScroll
+                                    className={`flex min-h-9 min-w-9 items-center justify-center rounded-lg px-2.5 text-xs font-black transition ${
+                                        link.active
+                                            ? 'bg-red-600 text-white'
+                                            : 'border border-gray-200 bg-white text-gray-600 hover:border-red-300 hover:text-red-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300'
+                                    } ${!link.url ? 'pointer-events-none opacity-35' : ''}`}
+                                    dangerouslySetInnerHTML={{ __html: link.label }}
+                                />
                             ))}
-                        </div>
+                        </nav>
                     )}
                 </main>
+
+                <AnimatePresence>
+                    {selectedItem && (
+                        <MaterialDetail
+                            item={selectedItem}
+                            onClose={() => setSelectedItem(null)}
+                            onPlayAudio={playAudio}
+                        />
+                    )}
+                </AnimatePresence>
             </div>
         </AuthenticatedLayout>
     );

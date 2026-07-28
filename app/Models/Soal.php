@@ -22,10 +22,12 @@ class Soal extends Model
         'options',
         'audio_url',
         'order',
+        'points',
     ];
 
     protected $casts = [
         'options' => 'array',
+        'points' => 'integer',
     ];
 
     public function quiz(): BelongsTo

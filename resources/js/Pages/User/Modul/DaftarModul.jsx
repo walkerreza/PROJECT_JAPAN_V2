@@ -1,706 +1,660 @@
 import React, { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { Head, Link } from '@inertiajs/react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import theme from '@/Components/theme/themes';
 
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import AutoStoriesIcon from '@mui/icons-material/AutoStories';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import CloseIcon from '@mui/icons-material/Close';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import LockIcon from '@mui/icons-material/Lock';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import StyleIcon from '@mui/icons-material/Style';
 import QuizIcon from '@mui/icons-material/Quiz';
 import SlideshowIcon from '@mui/icons-material/Slideshow';
-import TranslateIcon from '@mui/icons-material/Translate';
-import AutoStoriesIcon from '@mui/icons-material/AutoStories';
-import CloseIcon from '@mui/icons-material/Close';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import StyleIcon from '@mui/icons-material/Style';
 
-// Posisi zigzag kiri-kanan untuk path ala Duolingo
-const PATH_POSITIONS = ['50%', '30%', '65%', '25%', '60%', '35%', '50%', '70%', '40%', '55%'];
-
-// Warna state node
-const nodeStyles = {
-    done:    { bg: '#22c55e', shadow: '#15803d', text: '#fff' },
-    active:  { bg: '#dc2626', shadow: '#991b1b', text: '#fff' },
-    locked:  { bg: '#e5e7eb', shadow: '#d1d5db', text: '#9ca3af' },
-    unavailable: { bg: '#f3f4f6', shadow: '#d1d5db', text: '#9ca3af' },
+const RESOURCE_COLORS = {
+    presentation: { color: '#0284c7', shadow: '#075985' },
+    day: { color: '#dc2626', shadow: '#991b1b' },
+    flashcard: { color: '#f97316', shadow: '#c2410c' },
+    quiz: { color: '#e11d48', shadow: '#9f1239' },
+    exam: { color: '#16a34a', shadow: '#166534' },
 };
 
-function ModulDetailPanel({ week, initialDayId = null, onClose }) {
-    const [isDesktopPanel, setIsDesktopPanel] = useState(() => (
-        typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches
-    ));
-    const selectedDay = week.days?.find((day) => day.id === initialDayId) || null;
-    const activeResource = selectedDay || week;
-    const presentationPreviews = activeResource.presentation_previews || [];
-    const vocabularyPreview = activeResource.vocabulary_preview || [];
-    const flashcardSummary = activeResource.flashcard_summary || {
-        sets: [],
-        total: activeResource.flashcard_total || 0,
-        reviewed: activeResource.flashcard_reviewed || 0,
-    };
-    const checkpointSummary = activeResource.checkpoint_summary || null;
-    const defaultSection = presentationPreviews.length > 0
-        ? 'presentation'
-        : vocabularyPreview.length > 0
-            ? 'vocabulary'
-            : flashcardSummary.total > 0
-                ? 'flashcard'
-                : checkpointSummary
-                    ? 'quiz'
-                    : null;
-    const [openSection, setOpenSection] = useState(defaultSection);
+function itemStatusLabel(item) {
+    if (item.status === 'done') return 'Selesai';
+    if (item.status === 'active') return 'Lanjutkan';
+    if (item.status === 'unavailable') return 'Belum tersedia';
+    return 'Terkunci';
+}
 
-    useEffect(() => {
-        const mediaQuery = window.matchMedia('(min-width: 640px)');
-        const syncPanelMode = () => setIsDesktopPanel(mediaQuery.matches);
-
-        syncPanelMode();
-        mediaQuery.addEventListener('change', syncPanelMode);
-
-        return () => mediaQuery.removeEventListener('change', syncPanelMode);
-    }, []);
-
-    useEffect(() => {
-        setOpenSection(defaultSection);
-    }, [activeResource.id, defaultSection]);
-
-    useEffect(() => {
-        const previousOverflow = document.body.style.overflow;
-        const closeOnEscape = (event) => {
-            if (event.key === 'Escape') onClose();
+function nodeColors(item) {
+    if (item.status === 'done') {
+        return {
+            color: theme.doneColor || '#22c55e',
+            shadow: theme.doneShadow || '#15803d',
         };
-
-        document.body.style.overflow = 'hidden';
-        window.addEventListener('keydown', closeOnEscape);
-
-        return () => {
-            document.body.style.overflow = previousOverflow;
-            window.removeEventListener('keydown', closeOnEscape);
-        };
-    }, [onClose]);
-
-    const hasContent = activeResource.has_content ?? week.has_content ?? Boolean(week.flashcard_set_id || week.quiz_id);
-    const canOpenResource = ['active', 'done'].includes(activeResource.status);
-    const statusLabel = {
-        done: 'Selesai',
-        active: hasContent ? 'Sedang berjalan' : 'Konten belum tersedia',
-        locked: activeResource.lock_reason || 'Terkunci',
-        unavailable: activeResource.lock_reason || 'Konten belum tersedia',
-    }[activeResource.status] || 'Terkunci';
-    const statusTone = activeResource.status === 'done'
-        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
-        : activeResource.status === 'active'
-            ? 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300'
-            : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400';
-    const flashcardProgress = flashcardSummary.total > 0
-        ? Math.min(100, Math.round((flashcardSummary.reviewed / flashcardSummary.total) * 100))
-        : 0;
-
-    const sections = [
-        {
-            id: 'presentation',
-            label: 'PPT / Board',
-            count: activeResource.presentations_count ?? 0,
-            href: activeResource.presentation_url,
-            icon: <SlideshowIcon sx={{ fontSize: 22 }} />,
-            iconTone: 'bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300',
-        },
-        {
-            id: 'vocabulary',
-            label: 'Konten N3',
-            count: activeResource.vocabulary_count ?? 0,
-            href: activeResource.vocabulary_url,
-            icon: <TranslateIcon sx={{ fontSize: 22 }} />,
-            iconTone: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
-        },
-        {
-            id: 'flashcard',
-            label: 'Flashcard',
-            count: flashcardSummary.total,
-            href: activeResource.flashcard_url,
-            icon: <StyleIcon sx={{ fontSize: 22 }} />,
-            iconTone: 'bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300',
-        },
-        {
-            id: 'quiz',
-            label: 'Kuis Checkpoint',
-            count: checkpointSummary?.questions_count ?? activeResource.questions_count ?? 0,
-            href: activeResource.quiz_url,
-            locked: Boolean(checkpointSummary?.locked || activeResource.quiz_locked_reason),
-            lockedReason: checkpointSummary?.lock_reason || activeResource.quiz_locked_reason,
-            icon: <QuizIcon sx={{ fontSize: 22 }} />,
-            iconTone: 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300',
-        },
-    ];
-
-    const sectionBody = (section) => {
-        if (section.id === 'presentation') {
-            return (
-                <div className="space-y-3">
-                    {presentationPreviews.map((deck) => {
-                        const coverImage = deck.cover?.snapshot_url || deck.cover?.media_url;
-                        const coverColor = deck.cover?.background?.startsWith('#') ? deck.cover.background : '#f3f4f6';
-
-                        return (
-                            <div key={deck.id} className="flex gap-3 rounded-xl bg-gray-50 p-3 dark:bg-gray-900">
-                                <div
-                                    className="flex h-20 w-28 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-100 dark:border-gray-700 dark:bg-gray-800"
-                                    style={{ backgroundColor: coverColor }}
-                                >
-                                    {coverImage ? (
-                                        <img src={coverImage} alt="" className="h-full w-full object-cover" />
-                                    ) : (
-                                        <span className="line-clamp-3 px-2 text-center text-[10px] font-black text-gray-600 dark:text-gray-300">
-                                            {deck.cover?.title || deck.title}
-                                        </span>
-                                    )}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                    <p className="line-clamp-2 text-sm font-black text-gray-900 dark:text-white">{deck.title}</p>
-                                    <p className="mt-1 text-xs font-semibold text-gray-500 dark:text-gray-400">{deck.slides_count} slide</p>
-                                    {deck.description && <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500 dark:text-gray-400">{deck.description}</p>}
-                                </div>
-                            </div>
-                        );
-                    })}
-                    {canOpenResource && section.href && (
-                        <Link href={section.href} className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 text-sm font-black text-white hover:bg-sky-700">
-                            <PlayArrowIcon sx={{ fontSize: 19 }} />
-                            Buka presentasi
-                        </Link>
-                    )}
-                </div>
-            );
-        }
-
-        if (section.id === 'vocabulary') {
-            return (
-                <div className="space-y-3">
-                    <div className="divide-y divide-gray-100 rounded-xl bg-gray-50 px-3 dark:divide-gray-800 dark:bg-gray-900">
-                        {vocabularyPreview.map((item) => (
-                            <div key={item.id} className="grid grid-cols-2 gap-3 py-3">
-                                <div className="min-w-0">
-                                    <p className="truncate text-sm font-black text-gray-900 dark:text-white">{item.word}</p>
-                                    {item.reading && <p className="truncate text-xs font-semibold text-gray-500 dark:text-gray-400">{item.reading}</p>}
-                                </div>
-                                <p className="text-right text-sm font-semibold text-gray-600 dark:text-gray-300">{item.meaning}</p>
-                            </div>
-                        ))}
-                    </div>
-                    {canOpenResource && section.href && (
-                        <Link href={section.href} className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-black text-white hover:bg-emerald-700">
-                            <AutoStoriesIcon sx={{ fontSize: 19 }} />
-                            Buka Konten N3
-                        </Link>
-                    )}
-                </div>
-            );
-        }
-
-        if (section.id === 'flashcard') {
-            return (
-                <div className="space-y-3">
-                    <div className="rounded-xl bg-gray-50 p-3 dark:bg-gray-900">
-                        <div className="flex items-center justify-between gap-3 text-xs font-bold text-gray-500 dark:text-gray-400">
-                            <span>Sudah direview</span>
-                            <span>{flashcardSummary.reviewed}/{flashcardSummary.total} kartu</span>
-                        </div>
-                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-800">
-                            <div className="h-full rounded-full bg-orange-500 transition-all" style={{ width: `${flashcardProgress}%` }} />
-                        </div>
-                        {flashcardSummary.sets?.length > 0 && (
-                            <div className="mt-3 space-y-2">
-                                {flashcardSummary.sets.map((set) => {
-                                    const content = (
-                                        <>
-                                            <span className="min-w-0 flex-1 truncate text-xs font-black text-gray-700 dark:text-gray-200">{set.title}</span>
-                                            <span className="shrink-0 text-[11px] font-bold text-gray-500 dark:text-gray-400">{set.reviewed_count}/{set.cards_count}</span>
-                                        </>
-                                    );
-
-                                    return canOpenResource && set.url ? (
-                                        <Link key={set.id} href={set.url} className="flex min-h-9 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 hover:border-orange-300 dark:border-gray-700 dark:bg-gray-950">
-                                            {content}
-                                        </Link>
-                                    ) : (
-                                        <div key={set.id} className="flex min-h-9 items-center gap-2 rounded-lg border border-gray-200 px-3 opacity-60 dark:border-gray-700">
-                                            {content}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
-                    {canOpenResource && section.href && !flashcardSummary.sets?.length && (
-                        <Link href={section.href} className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-orange-600 px-4 text-sm font-black text-white hover:bg-orange-700">
-                            <StyleIcon sx={{ fontSize: 19 }} />
-                            {flashcardProgress === 100 ? 'Ulangi flashcard' : 'Review flashcard'}
-                        </Link>
-                    )}
-                </div>
-            );
-        }
-
-        return (
-            <div className="space-y-3">
-                <div className="grid grid-cols-3 gap-2">
-                    <div className="rounded-xl bg-gray-50 p-3 text-center dark:bg-gray-900">
-                        <p className="text-base font-black text-gray-900 dark:text-white">{checkpointSummary?.questions_count || 0}</p>
-                        <p className="text-[10px] font-bold text-gray-500">Soal</p>
-                    </div>
-                    <div className="rounded-xl bg-gray-50 p-3 text-center dark:bg-gray-900">
-                        <p className="text-base font-black text-gray-900 dark:text-white">{checkpointSummary?.passing_score || 70}</p>
-                        <p className="text-[10px] font-bold text-gray-500">Nilai lulus</p>
-                    </div>
-                    <div className="rounded-xl bg-gray-50 p-3 text-center dark:bg-gray-900">
-                        <p className="text-base font-black text-gray-900 dark:text-white">{checkpointSummary?.best_score ?? '-'}</p>
-                        <p className="text-[10px] font-bold text-gray-500">Terbaik</p>
-                    </div>
-                </div>
-                {section.locked ? (
-                    <div className="flex gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-xs font-semibold leading-5 text-gray-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300">
-                        <LockIcon sx={{ fontSize: 18 }} className="mt-0.5 shrink-0" />
-                        <span>{section.lockedReason || 'Selesaikan materi sebelumnya untuk membuka kuis.'}</span>
-                    </div>
-                ) : canOpenResource && section.href ? (
-                    <Link href={section.href} className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-black text-white hover:bg-red-700">
-                        <QuizIcon sx={{ fontSize: 19 }} />
-                        Mulai kuis
-                    </Link>
-                ) : null}
-            </div>
-        );
-    };
-
-    if (typeof document === 'undefined') {
-        return null;
     }
 
-    return createPortal(
+    if (['locked', 'unavailable'].includes(item.status)) {
+        return {
+            color: item.status === 'unavailable' ? '#f3f4f6' : '#e5e7eb',
+            shadow: '#cbd5e1',
+        };
+    }
+
+    return RESOURCE_COLORS[item.kind] || RESOURCE_COLORS.day;
+}
+
+function iconFor(item, size) {
+    if (item.status === 'done') {
+        return <CheckCircleIcon sx={{ fontSize: size, color: '#fff' }} />;
+    }
+
+    if (['locked', 'unavailable'].includes(item.status)) {
+        return <LockIcon sx={{ fontSize: size - 5, color: '#9ca3af' }} />;
+    }
+
+    if (item.kind === 'presentation') {
+        return <SlideshowIcon sx={{ fontSize: size - 3, color: '#fff' }} />;
+    }
+
+    if (item.kind === 'flashcard') {
+        return <StyleIcon sx={{ fontSize: size - 3, color: '#fff' }} />;
+    }
+
+    if (item.kind === 'quiz' || item.kind === 'exam') {
+        return <QuizIcon sx={{ fontSize: size - 3, color: '#fff' }} />;
+    }
+
+    return (
+        <span className="text-center text-white">
+            <span className="block text-[8px] font-black uppercase">Hari</span>
+            <span className="block text-xl font-black leading-none">{item.dayNumber}</span>
+        </span>
+    );
+}
+
+function flashcardItems(day, available) {
+    const sets = day.flashcard_summary?.sets || [];
+
+    if (sets.length === 0) {
+        return [{
+            key: `flashcard-empty-${day.id}`,
+            kind: 'flashcard',
+            level: 'child',
+            parentDayId: day.id,
+            eyebrow: `Materi Hari ${day.day_number}`,
+            title: 'Flashcard belum tersedia',
+            detail: 'Admin belum menambahkan flashcard.',
+            status: 'unavailable',
+            href: null,
+        }];
+    }
+
+    return sets.map((set) => {
+        const done = set.cards_count > 0 && set.reviewed_count >= set.cards_count;
+
+        return {
+            key: `flashcard-${set.id}`,
+            kind: 'flashcard',
+            level: 'child',
+            parentDayId: day.id,
+            eyebrow: `Flashcard Hari ${day.day_number}`,
+            title: 'Flashcard',
+            detail: null,
+            status: !available ? 'locked' : done ? 'done' : 'active',
+            lockReason: day.lock_reason,
+            href: available ? set.url : null,
+        };
+    });
+}
+
+function quizItem(day, available) {
+    const checkpoint = day.checkpoint_summary;
+
+    if (!checkpoint) {
+        return {
+            key: `quiz-empty-${day.id}`,
+            kind: 'quiz',
+            level: 'child',
+            parentDayId: day.id,
+            eyebrow: `Evaluasi Hari ${day.day_number}`,
+            title: `Kuis Hari ${day.day_number}`,
+            detail: 'Admin belum menambahkan kuis checkpoint.',
+            status: 'unavailable',
+            href: null,
+        };
+    }
+
+    return {
+        key: `quiz-${day.id}`,
+        kind: 'quiz',
+        level: 'child',
+        parentDayId: day.id,
+        eyebrow: `Evaluasi Hari ${day.day_number}`,
+        title: 'Kuis',
+        detail: null,
+        status: !available || checkpoint.locked
+            ? 'locked'
+            : day.status === 'done'
+                ? 'done'
+                : 'active',
+        lockReason: checkpoint.lock_reason || day.quiz_locked_reason || 'Review semua flashcard Hari ini.',
+        href: day.quiz_url,
+    };
+}
+
+function weeklyMainItems(week) {
+    const items = [];
+    const presentations = week.presentations || [];
+    const presentationItem = (presentation, eyebrow) => ({
+        key: `presentation-${presentation.id}`,
+        kind: 'presentation',
+        level: 'root',
+        eyebrow,
+        title: presentation.title,
+        detail: `${presentation.slides_count} slide`,
+        status: presentation.locked ? 'locked' : 'active',
+        lockReason: presentation.placement === 'closing'
+            ? 'Selesaikan ujian Mingguan untuk membuka presentasi ini.'
+            : presentation.placement === 'after_day'
+                ? 'Selesaikan Day terkait untuk membuka presentasi ini.'
+                : 'Minggu ini belum terbuka.',
+        href: presentation.url,
+        mainPosition: items.length % 2 === 0 ? 'left' : 'right',
+    });
+
+    presentations
+        .filter((presentation) => presentation.placement === 'opening')
+        .forEach((presentation) => items.push(presentationItem(
+            presentation,
+            `Pembuka Minggu ${week.week_number}`,
+        )));
+
+    const days = week.days || [];
+
+    days.forEach((day) => {
+        items.push({
+            key: `day-${day.id}`,
+            kind: 'day',
+            level: 'root',
+            dayId: day.id,
+            dayNumber: day.day_number,
+            eyebrow: `Hari ${day.day_number}`,
+            title: day.title || `Materi Hari ${day.day_number}`,
+            detail: null,
+            status: day.status,
+            lockReason: day.lock_reason,
+            day,
+            mainPosition: items.length % 2 === 0 ? 'left' : 'right',
+        });
+
+        presentations
+            .filter((presentation) => (
+                presentation.placement === 'after_day'
+                && Number(presentation.module_day_id) === Number(day.id)
+            ))
+            .forEach((presentation) => items.push(presentationItem(
+                presentation,
+                `Setelah Hari ${day.day_number}`,
+            )));
+    });
+
+    const exams = week.weekly_exams || [];
+
+    if (exams.length > 0) {
+        exams.forEach((exam, examIndex) => {
+            const scoreDetail = exam.best_score === null
+                ? `Belum dikerjakan - nilai lulus ${exam.passing_score}%`
+                : exam.done
+                    ? `Lulus - nilai terbaik ${exam.best_score}`
+                    : `Belum lulus - nilai terbaik ${exam.best_score} - minimal ${exam.passing_score}%`;
+
+            items.push({
+                key: `exam-${exam.id}`,
+                kind: 'exam',
+                level: 'root',
+                eyebrow: `Evaluasi Minggu ${week.week_number}`,
+                title: exam.title || `Ujian ${examIndex + 1}`,
+                detail: scoreDetail,
+                status: exam.done ? 'done' : exam.locked ? 'locked' : 'active',
+                lockReason: exam.lock_reason,
+                href: exam.url,
+                mainPosition: items.length % 2 === 0 ? 'left' : 'right',
+            });
+        });
+    } else {
+        items.push({
+            key: `exam-empty-${week.id}`,
+            kind: 'exam',
+            level: 'root',
+            eyebrow: `Evaluasi Minggu ${week.week_number}`,
+            title: 'Ujian Mingguan',
+            detail: 'Admin belum menambahkan ujian Mingguan.',
+            status: 'unavailable',
+            href: null,
+            mainPosition: 'center',
+        });
+    }
+
+    presentations
+        .filter((presentation) => presentation.placement === 'closing')
+        .forEach((presentation) => items.push(presentationItem(
+            presentation,
+            `Penutup Minggu ${week.week_number}`,
+        )));
+
+    return items;
+}
+
+function dayChildItems(day) {
+    const available = ['active', 'done'].includes(day.status);
+
+    return [
+        ...flashcardItems(day, available),
+        quizItem(day, available),
+    ];
+}
+
+function PathNodeCircle({ item, selected = false, size = 68 }) {
+    const colors = nodeColors(item);
+    const active = item.status === 'active';
+
+    return (
+        <span
+            className="relative z-10 flex shrink-0 items-center justify-center rounded-full border-[3px] border-white transition-transform duration-200 group-hover:scale-105 dark:border-gray-950"
+            style={{
+                width: `${size}px`,
+                height: `${size}px`,
+                backgroundColor: colors.color,
+                boxShadow: `0 6px 0 ${colors.shadow}`,
+                outline: selected
+                    ? `4px solid ${colors.color}88`
+                    : active
+                        ? `3px solid ${colors.color}55`
+                        : 'none',
+            }}
+        >
+            {active && (
+                <span
+                    className="absolute inset-1 animate-pulse rounded-full border-2 border-white/45"
+                    aria-hidden="true"
+                />
+            )}
+            {iconFor(item, size <= 48 ? 23 : 32)}
+        </span>
+    );
+}
+
+function StatusBadge({ item }) {
+    return (
+        <span className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[9px] font-black ${
+            item.status === 'done'
+                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+                : item.status === 'active'
+                    ? 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300'
+                    : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+        }`}>
+            {itemStatusLabel(item)}
+        </span>
+    );
+}
+
+function PathNode({ item, selected, onDayToggle }) {
+    const locked = ['locked', 'unavailable'].includes(item.status);
+    const className = `group relative inline-flex items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-300 ${
+        locked ? 'cursor-not-allowed' : ''
+    }`;
+
+    if (item.kind === 'day') {
+        return (
+            <button
+                type="button"
+                onClick={() => !locked && onDayToggle(item.dayId)}
+                disabled={locked}
+                aria-expanded={selected}
+                aria-controls={`day-materials-${item.dayId}`}
+                className={className}
+            >
+                <PathNodeCircle item={item} selected={selected} />
+                {!locked && (
+                    <span className={`absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 shadow-sm transition-transform dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 ${selected ? 'rotate-180' : ''}`}>
+                        <ExpandMoreIcon sx={{ fontSize: 17 }} />
+                    </span>
+                )}
+            </button>
+        );
+    }
+
+    if (!locked && item.href) {
+        return (
+            <Link href={item.href} className={className}>
+                <PathNodeCircle item={item} />
+            </Link>
+        );
+    }
+
+    return (
+        <div className={className}>
+            <PathNodeCircle item={item} />
+        </div>
+    );
+}
+
+function PathNodeLabel({ item }) {
+    return (
+        <div className="mt-3 w-44 rounded-lg bg-[#f7efe6]/90 px-2 py-1 text-center backdrop-blur-sm dark:bg-[#050b18]/90">
+            <p className="text-[9px] font-black uppercase tracking-[0.14em] text-red-600 dark:text-red-400">
+                {item.eyebrow}
+            </p>
+            <h3 className="mt-0.5 text-sm font-black leading-5 text-gray-900 dark:text-white">
+                {item.title}
+            </h3>
+            <StatusBadge item={item} />
+        </div>
+    );
+}
+
+function DayDetailContent({ day, onClose, mobile = false }) {
+    const items = dayChildItems(day);
+
+    return (
+        <div
+            id={`day-materials-${day.id}`}
+            className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl shadow-black/20 dark:border-gray-800 dark:bg-gray-900"
+        >
+            <div className="flex items-start justify-between gap-4 bg-gray-950 px-5 py-4 text-white dark:bg-black">
+                <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-[0.15em] text-red-400">
+                        Materi Hari {day.day_number}
+                    </p>
+                    <h3 className="mt-1 text-base font-black leading-5">
+                        {day.title || `Hari ${day.day_number}`}
+                    </h3>
+                </div>
+                <button
+                    type="button"
+                    onClick={onClose}
+                    aria-label="Tutup detail Hari"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 text-white transition hover:bg-white/20"
+                >
+                    <CloseIcon sx={{ fontSize: 19 }} />
+                </button>
+            </div>
+
+            <div className={`space-y-3 p-4 ${mobile ? 'max-h-[55dvh] overflow-y-auto' : ''}`}>
+                {items.map((item, index) => {
+                    const locked = ['locked', 'unavailable'].includes(item.status);
+                    const flashcard = item.kind === 'flashcard';
+                    const row = (
+                        <>
+                            <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${
+                                locked
+                                    ? 'bg-gray-200 text-gray-400 dark:bg-gray-700'
+                                    : flashcard
+                                        ? 'bg-amber-300 text-amber-950'
+                                        : 'bg-red-700 text-white'
+                            }`}>
+                                {flashcard
+                                    ? <StyleIcon sx={{ fontSize: 24 }} />
+                                    : <QuizIcon sx={{ fontSize: 24 }} />}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                                <span className="block text-sm font-black">
+                                    {flashcard ? 'Flashcard' : 'Kuis'}
+                                </span>
+                                {locked && (
+                                    <span className="mt-0.5 block line-clamp-2 text-[10px] font-semibold opacity-70">
+                                        {item.lockReason || 'Materi belum tersedia.'}
+                                    </span>
+                                )}
+                            </span>
+                            <span className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[10px] font-black ${
+                                locked ? 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-300' : 'bg-white/25'
+                            }`}>
+                                {locked ? itemStatusLabel(item) : 'Buka'}
+                            </span>
+                        </>
+                    );
+                    const className = `group flex min-h-[86px] w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/60 ${
+                        locked
+                            ? 'cursor-not-allowed bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500'
+                            : flashcard
+                                ? 'bg-amber-400 text-amber-950 shadow-[0_4px_0_#b45309] hover:bg-amber-300 active:translate-y-1 active:shadow-none'
+                                : 'bg-red-600 text-white shadow-[0_4px_0_#991b1b] hover:bg-red-500 active:translate-y-1 active:shadow-none'
+                    }`;
+
+                    return (
+                        <motion.div
+                            key={item.key}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, x: 0, scale: 1 }}
+                            transition={{ delay: index * 0.06 }}
+                        >
+                            {!locked && item.href ? (
+                                <Link href={item.href} className={className}>{row}</Link>
+                            ) : (
+                                <div className={className}>{row}</div>
+                            )}
+                        </motion.div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
+function DesktopDayPopover({ day, x, onClose }) {
+    const openToRight = x <= 50;
+
+    return (
         <motion.div
-            className="fixed inset-0 z-[90] flex items-end bg-black/40 sm:justify-end"
+            initial={{ opacity: 0, scale: 0.9, x: openToRight ? -12 : 12 }}
+            animate={{ opacity: 1, scale: 1, x: 0 }}
+            exit={{ opacity: 0, scale: 0.92, x: openToRight ? -12 : 12 }}
+            transition={{ type: 'spring', stiffness: 330, damping: 27 }}
+            className="absolute top-0 z-50 hidden w-[360px] sm:block lg:w-[420px]"
+            style={openToRight
+                ? { left: `calc(${x}% + 54px)` }
+                : { right: `calc(${100 - x}% + 54px)` }}
+        >
+            <span className={`absolute top-9 h-4 w-4 rotate-45 border bg-gray-950 dark:bg-black ${
+                openToRight
+                    ? '-left-2 border-b-0 border-l border-r-0 border-t border-gray-800'
+                    : '-right-2 border-b border-l-0 border-r border-t-0 border-gray-800'
+            }`} />
+            <DayDetailContent day={day} onClose={onClose} />
+        </motion.div>
+    );
+}
+
+function MobileDaySheet({ day, onClose }) {
+    return (
+        <motion.div
+            className="fixed inset-0 z-[90] sm:hidden"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onClose}
         >
-            <motion.aside
-                className="flex max-h-[88dvh] w-full flex-col overflow-hidden rounded-t-[1.5rem] bg-white shadow-2xl dark:bg-gray-950 sm:h-full sm:max-h-none sm:max-w-[480px] sm:rounded-none"
-                initial={isDesktopPanel ? { x: '100%', y: 0 } : { x: 0, y: '100%' }}
-                animate={{ x: 0, y: 0 }}
-                exit={isDesktopPanel ? { x: '100%', y: 0 } : { x: 0, y: '100%' }}
-                transition={{ type: 'spring', stiffness: 260, damping: 28 }}
-                onClick={(event) => event.stopPropagation()}
-            >
-                <div className="shrink-0 border-b border-gray-100 bg-white px-4 pb-4 pt-3 dark:border-gray-800 dark:bg-gray-950 sm:px-6 sm:pt-5">
-                    <div className="mx-auto mb-3 h-1 w-12 rounded-full bg-gray-200 dark:bg-gray-800 sm:hidden" />
-                    <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                            <div className="mb-2 flex flex-wrap items-center gap-2">
-                                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-red-600">
-                                    Minggu {week.week_number}{selectedDay ? ` / Hari ${selectedDay.day_number}` : ''}
-                                </p>
-                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${statusTone}`}>{statusLabel}</span>
-                            </div>
-                            <h2 className="text-lg font-black text-gray-900 sm:text-xl dark:text-white">
-                            {selectedDay?.title || week.display_title || week.title}
-                        </h2>
-                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500 dark:text-gray-400 sm:text-sm">
-                            {selectedDay?.description || week.subtitle}
-                        </p>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-900 text-gray-500 hover:text-gray-900 dark:hover:text-white flex items-center justify-center"
-                        aria-label="Tutup detail modul"
-                    >
-                        <CloseIcon sx={{ fontSize: 20 }} />
-                    </button>
-                    </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6">
-                    <div className="space-y-2">
-                        {sections.map((section) => {
-                            const available = section.count > 0;
-                            const expanded = openSection === section.id;
-
-                            return (
-                                <section key={section.id} className={`overflow-hidden rounded-xl border ${expanded ? 'border-gray-300 dark:border-gray-700' : 'border-gray-200 dark:border-gray-800'} ${available ? '' : 'opacity-55'}`}>
-                                    <button
-                                        type="button"
-                                        disabled={!available}
-                                        onClick={() => setOpenSection((current) => current === section.id ? null : section.id)}
-                                        aria-expanded={expanded}
-                                        className="flex min-h-14 w-full items-center gap-3 px-3 py-2.5 text-left"
-                                    >
-                                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${section.iconTone}`}>
-                                            {section.locked ? <LockIcon sx={{ fontSize: 19 }} /> : section.icon}
-                                        </span>
-                                        <span className="min-w-0 flex-1">
-                                            <span className="block text-sm font-black text-gray-900 dark:text-white">{section.label}</span>
-                                            <span className="block text-xs font-semibold text-gray-500 dark:text-gray-400">
-                                                {available ? `${section.count} item` : 'Belum tersedia'}
-                                                {section.id === 'flashcard' && available ? ` / ${flashcardSummary.reviewed} direview` : ''}
-                                            </span>
-                                        </span>
-                                        {available && <ExpandMoreIcon className={`shrink-0 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />}
-                                    </button>
-                                    <AnimatePresence initial={false}>
-                                        {expanded && available && (
-                                            <motion.div
-                                                initial={{ height: 0, opacity: 0 }}
-                                                animate={{ height: 'auto', opacity: 1 }}
-                                                exit={{ height: 0, opacity: 0 }}
-                                                className="overflow-hidden"
-                                            >
-                                                <div className="border-t border-gray-100 p-3 dark:border-gray-800">
-                                                    {sectionBody(section)}
-                                                </div>
-                                            </motion.div>
-                                        )}
-                                    </AnimatePresence>
-                                </section>
-                            );
-                        })}
-                    </div>
-
-                    {!hasContent && (
-                        <p className="rounded-xl bg-gray-50 px-4 py-4 text-center text-sm font-semibold text-gray-500 dark:bg-gray-900 dark:text-gray-400">
-                            Konten untuk Hari ini belum tersedia.
-                        </p>
-                    )}
-                </div>
-            </motion.aside>
-        </motion.div>,
-        document.body
-    );
-}
-
-function ResourceBar({ resources = {} }) {
-    const [isOpen, setIsOpen] = useState(false);
-    const items = [
-        {
-            label: 'PPT / Board',
-            count: resources.presentations_count ?? 0,
-            href: resources.presentations_url,
-            icon: <SlideshowIcon sx={{ fontSize: 22 }} />,
-            tone: 'from-sky-500 to-cyan-600',
-        },
-        {
-            label: 'Konten N3',
-            count: resources.vocabulary_count ?? 0,
-            href: resources.vocabulary_url,
-            icon: <TranslateIcon sx={{ fontSize: 22 }} />,
-            tone: 'from-emerald-500 to-teal-600',
-        },
-        {
-            label: 'Flashcard',
-            count: resources.flashcard_count ?? 0,
-            href: resources.flashcards_url,
-            icon: <StyleIcon sx={{ fontSize: 22 }} />,
-            tone: 'from-orange-500 to-amber-600',
-        },
-        {
-            label: 'Kuis',
-            count: resources.quiz_count ?? 0,
-            href: resources.quizzes_url,
-            icon: <QuizIcon sx={{ fontSize: 22 }} />,
-            tone: 'from-red-500 to-rose-600',
-        },
-    ];
-    const totalItems = items.reduce((total, item) => total + item.count, 0);
-
-    return (
-        <section className="relative z-10 px-4 pb-6 sm:px-6 lg:px-20">
-            <div className="mx-auto max-w-3xl">
-                <button
-                    type="button"
-                    onClick={() => setIsOpen((open) => !open)}
-                    aria-expanded={isOpen}
-                    aria-controls="roadmap-resource-library"
-                    className="flex min-h-12 w-full items-center justify-between gap-4 rounded-2xl border border-white/70 bg-white/70 px-4 py-3 text-left shadow-lg shadow-red-900/5 backdrop-blur-md transition hover:border-red-200 dark:border-gray-800 dark:bg-gray-900/70"
-                >
-                    <span className="flex min-w-0 items-center gap-3">
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-600 text-white">
-                            <AutoStoriesIcon sx={{ fontSize: 21 }} />
-                        </span>
-                        <span className="min-w-0">
-                             <span className="block text-sm font-black text-gray-900 dark:text-white">Perpustakaan Materi</span>
-                             <span className="block truncate text-xs font-semibold text-gray-500 dark:text-gray-400">
-                                 {totalItems} materi dan latihan dari seluruh minggu
-                             </span>
-                        </span>
-                    </span>
-                    <ExpandMoreIcon
-                        className={`shrink-0 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-                        sx={{ fontSize: 24 }}
-                    />
-                </button>
-
-                <AnimatePresence initial={false}>
-                    {isOpen && (
-                        <motion.div
-                            id="roadmap-resource-library"
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            className="overflow-hidden"
-                        >
-                            <div className="grid grid-cols-2 gap-2 pt-3 sm:gap-3 lg:grid-cols-4">
-                                {items.map((item) => {
-                                    const disabled = !item.href || item.count === 0;
-                                    const className = `group flex min-h-[88px] flex-col items-start gap-2 rounded-xl border border-white/70 bg-white/70 px-3 py-3 text-left shadow-md backdrop-blur-md transition sm:min-h-0 sm:flex-row sm:items-center sm:gap-3 dark:border-gray-800 dark:bg-gray-900/70 ${
-                                        disabled ? 'cursor-not-allowed opacity-55' : 'hover:-translate-y-0.5 hover:border-red-200'
-                                    }`;
-                                    const content = (
-                                        <>
-                                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${item.tone} text-white shadow-md`}>
-                                                {item.icon}
-                                            </div>
-                                            <div className="min-w-0">
-                                                <p className="text-xs font-black text-gray-900 sm:text-sm dark:text-white">{item.label}</p>
-                                                <p className="text-[10px] font-bold text-gray-500 sm:text-xs dark:text-gray-400">{item.count} item</p>
-                                            </div>
-                                        </>
-                                    );
-
-                                    return disabled ? (
-                                        <div key={item.label} className={className}>
-                                            {content}
-                                        </div>
-                                    ) : (
-                                        <Link key={item.label} href={item.href} className={className}>
-                                            {content}
-                                        </Link>
-                                    );
-                                })}
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-            </div>
-        </section>
-    );
-}
-
-function WeekRoadmapSection({ week, expanded, onToggle, onSelect }) {
-    const days = week.days || [];
-    const hasDays = days.length > 0;
-    const roadmapItems = hasDays
-        ? days
-        : [{
-            id: `week-${week.id}`,
-            day_number: null,
-            title: 'Materi Minggu',
-            status: week.status,
-            has_content: week.has_content,
-            lock_reason: week.lock_reason,
-        }];
-    const completedDays = days.filter((day) => day.status === 'done').length;
-    const progressPercent = hasDays ? Math.round((completedDays / days.length) * 100) : (week.status === 'done' ? 100 : 0);
-    const nextDay = days.find((day) => day.status === 'active');
-    const isLocked = ['locked', 'unavailable'].includes(week.status);
-    const statusText = week.status === 'done'
-        ? 'Selesai'
-        : week.status === 'active'
-            ? 'Sedang berjalan'
-            : 'Terkunci';
-    const statusTone = week.status === 'done'
-        ? 'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300'
-        : week.status === 'active'
-            ? 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300'
-            : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400';
-    const pathHeight = roadmapItems.length * 124 + 116;
-
-    return (
-        <section className="mx-auto mb-5 max-w-xl sm:mb-7">
             <button
                 type="button"
-                onClick={() => !isLocked && onToggle()}
-                disabled={isLocked}
+                aria-label="Tutup detail Hari"
+                onClick={onClose}
+                className="absolute inset-0 bg-black/55"
+            />
+            <motion.div
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+                className="absolute inset-x-0 bottom-0 px-3 pb-[max(12px,env(safe-area-inset-bottom))]"
+            >
+                <DayDetailContent day={day} onClose={onClose} mobile />
+            </motion.div>
+        </motion.div>
+    );
+}
+
+function pathX(index) {
+    return 50 - (Math.sin(index * 1.05) * 14);
+}
+
+function DuolingoPath({ week, selectedDayId, onDayToggle }) {
+    const items = weeklyMainItems(week);
+    const selectedDay = items.find((item) => item.dayId === selectedDayId) || null;
+
+    useEffect(() => {
+        if (!selectedDay) return undefined;
+
+        const closeOnEscape = (event) => {
+            if (event.key === 'Escape') onDayToggle(selectedDay.dayId);
+        };
+
+        window.addEventListener('keydown', closeOnEscape);
+
+        return () => window.removeEventListener('keydown', closeOnEscape);
+    }, [onDayToggle, selectedDay]);
+
+    return (
+        <div className="relative mx-auto w-full max-w-3xl py-4 sm:py-6">
+            {selectedDay && (
+                <button
+                    type="button"
+                    aria-label="Tutup detail Hari"
+                    onClick={() => onDayToggle(selectedDay.dayId)}
+                    className="fixed inset-0 z-30 hidden bg-transparent sm:block"
+                />
+            )}
+
+            {items.map((item, index) => {
+                const x = pathX(index);
+                const selected = item.dayId === selectedDayId;
+
+                return (
+                    <div
+                        key={item.key}
+                        className={`relative h-[142px] overflow-visible sm:h-[150px] ${selected ? 'z-50' : 'z-10'}`}
+                    >
+                        <motion.div
+                            initial={{ opacity: 0, y: 10, scale: 0.94 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            transition={{ delay: index * 0.035 }}
+                            className="absolute top-0 flex -translate-x-1/2 flex-col items-center"
+                            style={{ left: `${x}%` }}
+                        >
+                            <PathNode item={item} selected={selected} onDayToggle={onDayToggle} />
+                            <PathNodeLabel item={item} />
+                        </motion.div>
+
+                        <AnimatePresence initial={false}>
+                            {item.kind === 'day' && selected && (
+                                <DesktopDayPopover
+                                    key={`popover-${item.dayId}`}
+                                    day={item.day}
+                                    x={x}
+                                    onClose={() => onDayToggle(item.dayId)}
+                                />
+                            )}
+                        </AnimatePresence>
+                    </div>
+                );
+            })}
+
+            <AnimatePresence initial={false}>
+                {selectedDay && (
+                    <MobileDaySheet
+                        key={`sheet-${selectedDay.dayId}`}
+                        day={selectedDay.day}
+                        onClose={() => onDayToggle(selectedDay.dayId)}
+                    />
+                )}
+            </AnimatePresence>
+        </div>
+    );
+}
+
+function WeekRoadmapSection({ week, expanded, onToggle }) {
+    const days = week.days || [];
+    const [selectedDayId, setSelectedDayId] = useState(null);
+    const locked = ['locked', 'unavailable'].includes(week.status);
+    const completedDays = days.filter((day) => day.status === 'done').length;
+    const progress = days.length > 0 ? Math.round((completedDays / days.length) * 100) : 0;
+
+    useEffect(() => {
+        setSelectedDayId(null);
+    }, [week.id]);
+
+    const toggleDay = (dayId) => {
+        setSelectedDayId((current) => current === dayId ? null : dayId);
+    };
+
+    return (
+        <section className="mx-auto mb-7 max-w-4xl">
+            <button
+                type="button"
+                onClick={() => !locked && onToggle()}
+                disabled={locked}
                 aria-expanded={expanded}
-                className={`flex min-h-[76px] w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left shadow-lg shadow-red-900/5 transition sm:px-5 ${
+                className={`flex min-h-[76px] w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left shadow-lg shadow-red-900/5 transition sm:px-5 ${
                     week.status === 'active'
                         ? 'border-red-200 bg-white hover:border-red-300 dark:border-red-900/60 dark:bg-gray-900'
                         : 'border-white/70 bg-white/75 hover:border-gray-200 dark:border-gray-800 dark:bg-gray-900/75'
-                } ${isLocked ? 'cursor-not-allowed opacity-75' : ''}`}
+                } ${locked ? 'cursor-not-allowed opacity-75' : ''}`}
             >
-                <span className="flex min-w-0 items-center gap-3">
-                    <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-black ${
-                        week.status === 'done'
-                            ? 'bg-green-600 text-white'
-                            : week.status === 'active'
-                                ? 'bg-red-600 text-white'
-                                : 'bg-gray-200 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
-                    }`}>
-                        {week.status === 'done'
-                            ? <CheckCircleIcon sx={{ fontSize: 23 }} />
-                            : isLocked
-                                ? <LockIcon sx={{ fontSize: 20 }} />
-                                : week.week_number}
-                    </span>
-                    <span className="min-w-0">
-                        <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-red-600 dark:text-red-400">
-                            Minggu {week.week_number}
-                        </span>
-                         <span className="mt-0.5 block truncate text-sm font-black text-gray-900 sm:text-base dark:text-white">
-                             {week.display_title || week.title}
-                         </span>
-                         {hasDays && !isLocked && (
-                             <span className="mt-1.5 block">
-                                 <span className="flex items-center justify-between gap-2 text-[10px] font-bold text-gray-500 dark:text-gray-400">
-                                     <span>{nextDay ? `Lanjut Hari ${nextDay.day_number}` : `${completedDays}/${days.length} Hari selesai`}</span>
-                                     <span>{progressPercent}%</span>
-                                 </span>
-                                 <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
-                                     <span
-                                         className={`block h-full rounded-full ${week.status === 'done' ? 'bg-green-500' : 'bg-red-500'}`}
-                                         style={{ width: `${progressPercent}%` }}
-                                     />
-                                 </span>
-                             </span>
-                         )}
-                         {isLocked && (
-                            <span className="mt-0.5 block truncate text-[11px] font-semibold text-gray-500 dark:text-gray-400">
-                                {week.lock_reason || 'Selesaikan minggu sebelumnya.'}
-                            </span>
-                        )}
-                    </span>
+                <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-sm font-black ${
+                    week.status === 'done'
+                        ? 'bg-emerald-600 text-white'
+                        : week.status === 'active'
+                            ? 'bg-red-600 text-white'
+                            : 'bg-gray-200 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                }`}>
+                    {week.status === 'done'
+                        ? <CheckCircleIcon sx={{ fontSize: 24 }} />
+                        : locked
+                            ? <LockIcon sx={{ fontSize: 21 }} />
+                            : week.week_number}
                 </span>
-
-                <span className="flex shrink-0 items-center gap-2">
-                    <span className="hidden text-right sm:block">
-                        <span className={`block rounded-full px-2.5 py-1 text-[10px] font-black ${statusTone}`}>{statusText}</span>
-                        {hasDays && <span className="mt-1 block text-[10px] font-bold text-gray-400">{completedDays}/{days.length} Hari</span>}
+                <span className="min-w-0 flex-1">
+                    <span className="block text-[10px] font-black uppercase tracking-[0.15em] text-red-600 dark:text-red-400">
+                        Minggu {week.week_number}
                     </span>
-                    {!isLocked && (
-                        <ExpandMoreIcon
-                            className={`text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
-                            sx={{ fontSize: 24 }}
-                        />
+                    <span className="block truncate text-sm font-black text-gray-900 sm:text-base dark:text-white">
+                        {week.display_title || week.title}
+                    </span>
+                    {!locked && days.length > 0 ? (
+                        <span className="mt-1.5 flex items-center gap-3">
+                            <span className="h-1.5 max-w-sm flex-1 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
+                                <span className={`block h-full rounded-full ${week.status === 'done' ? 'bg-emerald-500' : 'bg-red-500'}`} style={{ width: `${progress}%` }} />
+                            </span>
+                            <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400">{completedDays}/{days.length} Hari</span>
+                        </span>
+                    ) : (
+                        <span className="mt-1 block line-clamp-2 text-[10px] font-semibold text-gray-400">{week.lock_reason}</span>
                     )}
                 </span>
+                {!locked && (
+                    <ExpandMoreIcon className={`shrink-0 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} sx={{ fontSize: 24 }} />
+                )}
             </button>
 
             <AnimatePresence initial={false}>
-                {expanded && !isLocked && (
+                {expanded && !locked && (
                     <motion.div
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
                         className="overflow-hidden"
                     >
-                        <div
-                            className="relative mx-auto mt-3 max-w-lg rounded-2xl border border-white/70 bg-white/35 py-6 shadow-xl shadow-red-900/5 backdrop-blur-sm sm:rounded-3xl sm:py-8 dark:border-gray-800 dark:bg-gray-900/35"
-                            style={{ minHeight: `${pathHeight}px` }}
-                        >
-                            <svg
-                                className="pointer-events-none absolute inset-0 h-full w-full"
-                                viewBox={`0 0 400 ${pathHeight}`}
-                                preserveAspectRatio="none"
-                                aria-hidden="true"
-                            >
-                                <defs>
-                                    <linearGradient id={`dayPathGrad-${week.id}`} x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor={theme.pathGrad?.[0] || '#dc2626'} />
-                                        <stop offset="50%" stopColor={theme.pathGrad?.[1] || '#f97316'} />
-                                        <stop offset="100%" stopColor={theme.pathGrad?.[2] || '#e5e7eb'} />
-                                    </linearGradient>
-                                </defs>
-                                {roadmapItems.slice(0, -1).map((item, index) => {
-                                    const x1 = (parseFloat(PATH_POSITIONS[index % PATH_POSITIONS.length]) / 100) * 400;
-                                    const x2 = (parseFloat(PATH_POSITIONS[(index + 1) % PATH_POSITIONS.length]) / 100) * 400;
-                                    const y1 = index * 124 + 64;
-                                    const y2 = (index + 1) * 124 + 64;
+                        <div className="mt-4 rounded-2xl border border-white/70 bg-white/30 px-2 py-4 shadow-xl shadow-red-900/5 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/30 sm:px-6 sm:py-6">
+                            <DuolingoPath
+                                week={week}
+                                selectedDayId={selectedDayId}
+                                onDayToggle={toggleDay}
+                            />
 
-                                    return (
-                                        <line
-                                            key={item.id}
-                                            x1={x1}
-                                            y1={y1}
-                                            x2={x2}
-                                            y2={y2}
-                                            stroke={item.status === 'done' ? '#22c55e' : `url(#dayPathGrad-${week.id})`}
-                                            strokeWidth="5"
-                                            strokeDasharray="12 7"
-                                            strokeLinecap="round"
-                                            opacity={item.status === 'done' ? 0.9 : 0.45}
-                                        />
-                                    );
-                                })}
-                            </svg>
-
-                            {roadmapItems.map((item, index) => {
-                                const left = PATH_POSITIONS[index % PATH_POSITIONS.length];
-                                const style = nodeStyles[item.status] || nodeStyles.locked;
-                                const itemLocked = ['locked', 'unavailable'].includes(item.status);
-                                const itemDone = item.status === 'done';
-                                const itemActive = item.status === 'active';
-
-                                return (
-                                    <div
-                                        key={item.id}
-                                        className="absolute"
-                                        style={{ left, top: `${index * 124 + 28}px`, transform: 'translateX(-50%)' }}
-                                    >
-                                        {itemActive && (
-                                            <div
-                                                className="absolute inset-0 animate-ping rounded-full opacity-20"
-                                                style={{ backgroundColor: style.bg, margin: '-6px' }}
-                                            />
-                                        )}
-                                        <button
-                                            type="button"
-                                            disabled={itemLocked}
-                                            onClick={() => onSelect(hasDays ? item.id : null)}
-                                            aria-label={`${hasDays ? `Hari ${item.day_number}` : 'Materi Minggu'}: ${item.title}${itemLocked ? ', terkunci' : ''}`}
-                                            className={`group relative flex w-[112px] flex-col items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-4 ${
-                                                itemLocked ? 'cursor-not-allowed' : ''
-                                            }`}
-                                        >
-                                            <motion.span
-                                                whileHover={!itemLocked ? { scale: 1.08 } : {}}
-                                                whileTap={!itemLocked ? { scale: 0.96 } : {}}
-                                                className="flex h-16 w-16 items-center justify-center rounded-full transition-all sm:h-[72px] sm:w-[72px]"
-                                                style={{
-                                                    backgroundColor: style.bg,
-                                                    boxShadow: `0 5px 0 ${style.shadow}`,
-                                                    border: itemActive ? '3px solid #fff' : 'none',
-                                                    outline: itemActive ? `3px solid ${style.bg}` : 'none',
-                                                }}
-                                            >
-                                                {itemDone ? (
-                                                    <CheckCircleIcon sx={{ fontSize: 34, color: '#fff' }} />
-                                                ) : itemLocked ? (
-                                                    <LockIcon sx={{ fontSize: 27, color: '#9ca3af' }} />
-                                                ) : (
-                                                    <span className="text-center text-white">
-                                                        <span className="block text-[9px] font-black uppercase">Hari</span>
-                                                        <span className="block text-lg font-black leading-none">{item.day_number || week.week_number}</span>
-                                                    </span>
-                                                )}
-                                            </motion.span>
-
-                                            <span className={`line-clamp-2 max-w-[112px] text-center text-[11px] font-bold leading-tight ${
-                                                itemLocked ? 'text-gray-400' : 'text-gray-700 dark:text-gray-200'
-                                            }`}>
-                                                {item.title}
-                                            </span>
-
-                                            {itemActive && (
-                                                <span className="rounded-full bg-red-600 px-3 py-1 text-[10px] font-black text-white shadow-sm">
-                                                    LANJUTKAN
-                                                </span>
-                                            )}
-                                        </button>
-                                    </div>
-                                );
-                            })}
                         </div>
                     </motion.div>
                 )}
@@ -709,16 +663,19 @@ function WeekRoadmapSection({ week, expanded, onToggle, onSelect }) {
     );
 }
 
-
-export default function DaftarModul({ weeks = [], userProgress = {}, program = null, back_url = null }) {
-    // Jika tidak ada data dari backend, tampilkan placeholder
-    const displayWeeks = weeks.length > 0 ? weeks : [
-        { id: 1, title: 'Week 1 - Perkenalan', display_title: 'Perkenalan', week_number: 1, subtitle: 'Admin belum menambahkan modul.', status: 'unavailable', has_content: false, flashcard_set_id: null, quiz_id: null, days: [] },
-    ];
+export default function DaftarModul({ weeks = [], program = null, back_url = null }) {
+    const displayWeeks = weeks.length > 0 ? weeks : [{
+        id: 'empty',
+        display_title: 'Roadmap belum tersedia',
+        week_number: 1,
+        status: 'unavailable',
+        lock_reason: 'Admin belum menambahkan Minggu.',
+        days: [],
+    }];
     const defaultExpandedWeekId = displayWeeks.find((week) => week.status === 'active')?.id
         || [...displayWeeks].reverse().find((week) => week.status === 'done')?.id
-        || displayWeeks[0]?.id
         || null;
+    const [expandedWeekId, setExpandedWeekId] = useState(defaultExpandedWeekId);
     const completedWeekCount = displayWeeks.filter((week) => week.status === 'done').length;
     const roadmapProgress = displayWeeks.length > 0
         ? Math.round((completedWeekCount / displayWeeks.length) * 100)
@@ -726,26 +683,24 @@ export default function DaftarModul({ weeks = [], userProgress = {}, program = n
     const activeWeek = displayWeeks.find((week) => week.status === 'active');
     const activeDay = activeWeek?.days?.find((day) => day.status === 'active');
     const nextAction = activeWeek
-        ? `Lanjutkan Week ${activeWeek.week_number}${activeDay ? `, Hari ${activeDay.day_number}` : ''}`
+        ? `Lanjutkan Minggu ${activeWeek.week_number}${activeDay ? `, Hari ${activeDay.day_number}` : ''}`
         : completedWeekCount === displayWeeks.length
-            ? 'Semua Week sudah selesai'
-            : 'Belum ada Week yang dapat dibuka';
-    const [expandedWeekId, setExpandedWeekId] = useState(defaultExpandedWeekId);
-    const [selectedItem, setSelectedItem] = useState(null);
+            ? 'Semua Minggu sudah selesai'
+            : 'Belum ada Minggu yang dapat dibuka';
 
     useEffect(() => {
         setExpandedWeekId(defaultExpandedWeekId);
-        setSelectedItem(null);
-    }, [program?.id]);
+    }, [defaultExpandedWeekId, program?.id]);
 
     return (
         <AuthenticatedLayout header={false}>
-            <Head title={`${program?.title || 'Modul'} - Japanlingo`} />
+            <Head title={`${program?.title || 'Roadmap'} - Japanlingo`} />
 
             <div className="relative min-h-[100dvh] overflow-hidden bg-[#f7efe6] text-gray-900 transition-colors duration-300 dark:bg-gray-950">
                 <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(220,38,38,0.10)_0%,transparent_28%),linear-gradient(240deg,rgba(245,158,11,0.12)_0%,transparent_30%),repeating-linear-gradient(90deg,rgba(120,53,15,0.055)_0_1px,transparent_1px_82px),repeating-linear-gradient(0deg,rgba(120,53,15,0.045)_0_1px,transparent_1px_82px)] dark:bg-[linear-gradient(120deg,rgba(220,38,38,0.14)_0%,transparent_28%),linear-gradient(240deg,rgba(245,158,11,0.08)_0%,transparent_30%),repeating-linear-gradient(90deg,rgba(255,255,255,0.035)_0_1px,transparent_1px_82px),repeating-linear-gradient(0deg,rgba(255,255,255,0.028)_0_1px,transparent_1px_82px)]" />
                 <div className="pointer-events-none absolute left-4 top-40 hidden text-[13rem] font-black leading-none text-red-900/[0.045] dark:text-white/[0.035] lg:block">道</div>
                 <div className="pointer-events-none absolute right-8 top-[560px] hidden text-[12rem] font-black leading-none text-amber-900/[0.05] dark:text-white/[0.03] lg:block">週</div>
+
                 <header className="relative z-10 px-4 pb-3 pt-5 sm:px-6 sm:pb-5 sm:pt-7 lg:px-20">
                     <div className="mx-auto max-w-3xl">
                         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -776,7 +731,7 @@ export default function DaftarModul({ weeks = [], userProgress = {}, program = n
 
                             <div className="mt-4 w-full sm:mt-0 sm:max-w-xs">
                                 <div className="flex items-center justify-between text-xs font-bold text-gray-500 dark:text-gray-400">
-                                    <span>{completedWeekCount} dari {displayWeeks.length} Week selesai</span>
+                                    <span>{completedWeekCount} dari {displayWeeks.length} Minggu selesai</span>
                                     <span>{roadmapProgress}%</span>
                                 </div>
                                 <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/80 shadow-inner dark:bg-gray-800">
@@ -790,8 +745,8 @@ export default function DaftarModul({ weeks = [], userProgress = {}, program = n
                             {program?.kloter ? (
                                 <>
                                     <span className="font-black text-gray-700 dark:text-gray-200">{program.kloter.nama}</span>
-                                    <span>· Week aktif {program.kloter.minggu_aktif || 0}</span>
-                                    <span>· Mulai {program.kloter.tanggal_mulai || '-'}</span>
+                                    <span>- Minggu aktif {program.kloter.minggu_aktif || 0}</span>
+                                    <span>- Mulai {program.kloter.tanggal_mulai || '-'}</span>
                                 </>
                             ) : (
                                 <span>Jadwal umum aktif</span>
@@ -800,30 +755,49 @@ export default function DaftarModul({ weeks = [], userProgress = {}, program = n
                     </div>
                 </header>
 
-                {/* Path Section */}
-                <div className="relative z-10 px-4 pb-8 pt-3 sm:px-6 sm:pb-14 sm:pt-5">
+                <main className="relative z-10 px-4 pb-8 pt-3 sm:px-6 sm:pb-14 sm:pt-5">
+                    {program?.resources?.vocabulary_url && (
+                        <Link
+                            href={program.resources.vocabulary_url}
+                            className="group mx-auto mb-5 flex min-h-16 max-w-4xl items-center gap-3 rounded-2xl border border-white/80 bg-white/80 px-3 py-2.5 shadow-lg shadow-amber-900/5 backdrop-blur-sm transition hover:border-amber-300 hover:bg-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300/40 dark:border-gray-800 dark:bg-gray-900/80 dark:hover:border-amber-700 dark:hover:bg-gray-900 sm:px-4"
+                        >
+                            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-400 text-amber-950 shadow-[0_3px_0_#b45309]">
+                                <AutoStoriesIcon sx={{ fontSize: 23 }} />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-black text-gray-900 dark:text-white">
+                                    Pustaka Materi {program?.level || 'N3'}
+                                </span>
+                                <span className="block truncate text-[11px] font-semibold text-gray-500 dark:text-gray-400">
+                                    Kosakata · Kanji · Bunpo
+                                </span>
+                            </span>
+                            <span className="flex shrink-0 items-center gap-1.5">
+                                <span className="hidden text-right sm:block">
+                                    <span className="block text-sm font-black text-gray-800 dark:text-gray-100">
+                                        {program.resources.vocabulary_count || 0}
+                                    </span>
+                                    <span className="block text-[9px] font-bold uppercase tracking-wide text-gray-400">
+                                        Materi
+                                    </span>
+                                </span>
+                                <ChevronRightIcon
+                                    className="text-gray-400 transition-transform group-hover:translate-x-0.5 group-hover:text-amber-600"
+                                    sx={{ fontSize: 24 }}
+                                />
+                            </span>
+                        </Link>
+                    )}
+
                     {displayWeeks.map((week) => (
                         <WeekRoadmapSection
                             key={week.id}
                             week={week}
                             expanded={expandedWeekId === week.id}
                             onToggle={() => setExpandedWeekId((current) => current === week.id ? null : week.id)}
-                            onSelect={(dayId) => setSelectedItem({ week, dayId })}
                         />
                     ))}
-                </div>
-
-                <ResourceBar resources={program?.resources} />
-
-                <AnimatePresence>
-                    {selectedItem && (
-                        <ModulDetailPanel
-                            week={selectedItem.week}
-                            initialDayId={selectedItem.dayId}
-                            onClose={() => setSelectedItem(null)}
-                        />
-                    )}
-                </AnimatePresence>
+                </main>
             </div>
         </AuthenticatedLayout>
     );

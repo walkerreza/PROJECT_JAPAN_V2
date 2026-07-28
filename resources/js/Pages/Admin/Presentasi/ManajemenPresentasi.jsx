@@ -19,6 +19,8 @@ const emptyForm = {
     level_id: '',
     module_id: '',
     module_day_id: '',
+    week_slot: 'opening',
+    sort_order: 0,
     status: 'draft',
 };
 
@@ -36,7 +38,6 @@ function Field({ label, children, wide = false }) {
 export default function ManajemenPresentasi({ decks = {}, filters = {}, levels = [], modules = [] }) {
     const rows = decks.data || [];
     const contextualModule = modules.find((module) => String(module.id) === String(filters.module_id));
-    const contextualDay = (contextualModule?.days || []).find((day) => String(day.id) === String(filters.module_day_id));
     const [showCreateDialog, setShowCreateDialog] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [editing, setEditing] = useState(null);
@@ -70,8 +71,10 @@ export default function ManajemenPresentasi({ decks = {}, filters = {}, levels =
     const normalizePayload = (data) => ({
         ...data,
         level_id: data.level_id || null,
-        module_id: data.module_id || null,
-        module_day_id: data.module_day_id || null,
+        module_id: data.module_id,
+        module_day_id: data.week_slot === 'after_day' ? data.module_day_id : null,
+        week_slot: data.week_slot,
+        sort_order: Number(data.sort_order || 0),
     });
 
     const openCreate = () => {
@@ -86,6 +89,8 @@ export default function ManajemenPresentasi({ decks = {}, filters = {}, levels =
             level_id: deck.level_id || '',
             module_id: deck.module_id || '',
             module_day_id: deck.module_day_id || '',
+            week_slot: deck.week_slot || 'opening',
+            sort_order: deck.sort_order || 0,
             status: deck.status || 'draft',
         });
         setShowForm(true);
@@ -200,7 +205,17 @@ export default function ManajemenPresentasi({ decks = {}, filters = {}, levels =
                                                 <div className="flex flex-wrap gap-2">
                                                     <span className={`rounded-full px-3 py-1 text-[10px] font-black ${deck.status === 'published' ? 'bg-white text-green-700' : 'bg-white/20 text-white'}`}>{deck.status}</span>
                                                     <span className="rounded-full bg-white/20 px-3 py-1 text-[10px] font-black">{deck.slides_count || 0} slide</span>
-                                                    <span className="rounded-full bg-white/20 px-3 py-1 text-[10px] font-black">{deck.module ? `Week ${deck.module.week_number ?? '-'} / Day ${deck.day?.day_number ?? '-'}` : 'No Week'}</span>
+                                                    <span className="rounded-full bg-white/20 px-3 py-1 text-[10px] font-black">
+                                                        {deck.module
+                                                        ? `Week ${deck.module.week_number ?? '-'} / ${
+                                                            deck.week_slot === 'closing'
+                                                                ? 'Akhir'
+                                                                : deck.week_slot === 'after_day'
+                                                                    ? `Setelah Day ${deck.day?.day_number || '-'}`
+                                                                    : 'Awal'
+                                                        }`
+                                                            : 'No Week'}
+                                                    </span>
                                                 </div>
                                                 <h2 className="line-clamp-2 text-xl font-black">{deck.title}</h2>
                                             </div>
@@ -279,7 +294,7 @@ export default function ManajemenPresentasi({ decks = {}, filters = {}, levels =
                                         </Field>
                                         <Field label="Level">
                                             <select value={form.data.level_id} onChange={(event) => form.setData('level_id', event.target.value)} className={inputClass}>
-                                                <option value="">Tanpa Level</option>
+                                    <option value="">Tanpa Level</option>
                                                 {levels.map((level) => <option key={level.id} value={level.id}>{level.level_name}</option>)}
                                             </select>
                                         </Field>
@@ -289,13 +304,25 @@ export default function ManajemenPresentasi({ decks = {}, filters = {}, levels =
                                                 {modules.map((module) => <option key={module.id} value={module.id}>Week {module.week_number ?? '-'} - {module.title}</option>)}
                                             </select>
                                         </Field>
-                                        <Field label="Day">
-                                            <select value={form.data.module_day_id} onChange={(event) => form.setData('module_day_id', event.target.value)} className={inputClass} required>
-                                                <option value="">Pilih Day</option>
-                                                {(modules.find((module) => String(module.id) === String(form.data.module_id))?.days || []).map((day) => (
-                                                    <option key={day.id} value={day.id}>Day {day.day_number} - {day.title}</option>
-                                                ))}
+                                        <Field label="Posisi Mingguan">
+                                            <select value={form.data.week_slot} onChange={(event) => form.setData((data) => ({ ...data, week_slot: event.target.value, module_day_id: event.target.value === 'after_day' ? data.module_day_id : '' }))} className={inputClass}>
+                                                <option value="opening">Presentasi Pembuka</option>
+                                                <option value="after_day">Setelah Day</option>
+                                                <option value="closing">Presentasi Penutup</option>
                                             </select>
+                                        </Field>
+                                        {form.data.week_slot === 'after_day' && (
+                                            <Field label="Day Patokan">
+                                                <select value={form.data.module_day_id} onChange={(event) => form.setData('module_day_id', event.target.value)} className={inputClass} required>
+                                                    <option value="">Pilih Day</option>
+                                                    {(modules.find((module) => String(module.id) === String(form.data.module_id))?.days || []).map((day) => (
+                                                        <option key={day.id} value={day.id}>Day {day.day_number} - {day.title}</option>
+                                                    ))}
+                                                </select>
+                                            </Field>
+                                        )}
+                                        <Field label="Urutan">
+                                            <input type="number" min="0" value={form.data.sort_order} onChange={(event) => form.setData('sort_order', event.target.value)} className={inputClass} />
                                         </Field>
                                         <Field label="Status">
                                             <select value={form.data.status} onChange={(event) => form.setData('status', event.target.value)} className={inputClass}>
@@ -322,10 +349,11 @@ export default function ManajemenPresentasi({ decks = {}, filters = {}, levels =
                 onClose={() => setShowCreateDialog(false)}
                 resourceType="presentation"
                 module={contextualModule}
-                day={contextualDay}
+                day={null}
                 modules={modules}
                 levels={levels}
-                lockContext={Boolean(contextualModule && contextualDay)}
+                weekSlot={filters.week_slot || null}
+                lockContext={Boolean(contextualModule)}
             />
             <ConfirmActionDialog {...confirmState} onCancel={closeConfirm} />
         </AuthenticatedLayout>

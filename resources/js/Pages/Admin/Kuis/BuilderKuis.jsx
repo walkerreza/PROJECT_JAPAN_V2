@@ -46,6 +46,9 @@ export default function QuizBuilder({ quiz, questions: initialQuestions = [] }) 
     const [importError, setImportError] = useState('');
     const [showAddMenu, setShowAddMenu] = useState(false);
     const [showVocabularyGenerate, setShowVocabularyGenerate] = useState(false);
+    const [vocabularyPreview, setVocabularyPreview] = useState(null);
+    const [vocabularyGeneratorError, setVocabularyGeneratorError] = useState('');
+    const [vocabularyGeneratorLoading, setVocabularyGeneratorLoading] = useState(false);
     const [showStudentPreview, setShowStudentPreview] = useState(false);
     const [previewIndex, setPreviewIndex] = useState(0);
     const [previewAnswers, setPreviewAnswers] = useState({});
@@ -262,22 +265,67 @@ export default function QuizBuilder({ quiz, questions: initialQuestions = [] }) 
         });
     };
 
-    const handleGenerateVocabularyQuestions = (event) => {
+    useEffect(() => {
+        setVocabularyPreview(null);
+        setVocabularyGeneratorError('');
+    }, [
+        vocabularyForm.data.content_type,
+        vocabularyForm.data.jlpt_level,
+        vocabularyForm.data.category,
+        vocabularyForm.data.count,
+        vocabularyForm.data.mode,
+        vocabularyForm.data.status,
+    ]);
+
+    const handleGenerateVocabularyQuestions = async (event) => {
         event.preventDefault();
+
+        setVocabularyGeneratorLoading(true);
+        setVocabularyGeneratorError('');
+
+        try {
+            const response = await window.axios.post(
+                route('admin.quizzes.questions.generate-vocabulary.preview', quiz.id),
+                vocabularyForm.data,
+            );
+            setVocabularyPreview(response.data);
+        } catch (error) {
+            setVocabularyGeneratorError(
+                error.response?.data?.errors?.generate?.[0]
+                || error.response?.data?.message
+                || 'Preview soal tidak dapat dibuat.',
+            );
+        } finally {
+            setVocabularyGeneratorLoading(false);
+        }
+    };
+
+    const confirmGenerateVocabularyQuestions = () => {
+        if (!vocabularyPreview?.vocabulary_ids?.length) return;
+
         requestUnsavedAction(() => {
-            vocabularyForm.post(route('admin.quizzes.questions.generate-vocabulary', quiz.id), {
+            router.post(route('admin.quizzes.questions.generate-vocabulary', quiz.id), {
+                ...vocabularyForm.data,
+                vocabulary_ids: vocabularyPreview.vocabulary_ids,
+            }, {
                 preserveScroll: true,
                 preserveState: false,
-                onSuccess: () => setShowVocabularyGenerate(false),
+                onSuccess: () => {
+                    setShowVocabularyGenerate(false);
+                    setVocabularyPreview(null);
+                },
             });
         }, {
             title: 'Generate Soal Kosakata?',
-            message: 'Soal hasil generate akan ditambahkan dari Kosakata Library. Simpan perubahan manual dulu jika masih diperlukan.',
-            confirmLabel: 'Generate',
+            message: `${vocabularyPreview.count} soal pada preview akan ditambahkan ke editor.`,
+            confirmLabel: 'Tambahkan Soal',
         });
     };
 
-    const totalPoints = data.questions.length * 10;
+    const totalPoints = data.questions.reduce(
+        (total, question) => total + Math.max(1, Number(question.points || 1)),
+        0,
+    );
 
     // ─── RENDER: QUESTION EDITOR (by type) ──────────────────
     const renderEditor = () => {
@@ -304,6 +352,17 @@ export default function QuizBuilder({ quiz, questions: initialQuestions = [] }) 
                         </select>
                     </div>
                     <div className="flex flex-wrap items-center gap-4">
+                        <label className="flex items-center gap-2">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">Bobot</span>
+                            <input
+                                type="number"
+                                min="1"
+                                max="1000"
+                                value={activeQ.points || 1}
+                                onChange={(event) => updateQuestion(activeIndex, 'points', Number(event.target.value))}
+                                className="h-8 w-20 rounded-lg border border-gray-200 bg-white px-2 text-sm font-black text-gray-800 outline-none focus:border-red-400 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+                            />
+                        </label>
                         <div className="flex items-center gap-2">
                             <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Scope Saat Ini</span>
                             <span className="text-xs font-black text-[#E64A19] bg-orange-50 px-2 py-0.5 rounded">N3</span>
@@ -496,7 +555,7 @@ export default function QuizBuilder({ quiz, questions: initialQuestions = [] }) 
 
                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                     <div>
-                        <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 flex items-center gap-1"><TimerOutlinedIcon sx={{ fontSize: 12 }} /> Batas Waktu (menit)</label>
+                        <label className="mb-2 flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500"><TimerOutlinedIcon sx={{ fontSize: 12 }} /> Batas Waktu (detik)</label>
                         <input
                             type="number"
                             min="0"
@@ -694,9 +753,9 @@ export default function QuizBuilder({ quiz, questions: initialQuestions = [] }) 
                     <p className="mt-4 text-center text-xs font-bold text-gray-400">Mode pratinjau tidak menyimpan jawaban, attempt, nilai, atau XP.</p>
                 </div>
                 <div className="h-10 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between px-4">
-                    <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Time: {data.time_limit ? `${data.time_limit} min` : '∞'}</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">Time: {data.time_limit ? `${data.time_limit} detik` : '∞'}</span>
                     <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Lulus: {data.passing_score || 70}%</span>
-                    <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Poin: 10</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">Poin: {totalPoints}</span>
                 </div>
             </div>
         );
@@ -987,10 +1046,30 @@ export default function QuizBuilder({ quiz, questions: initialQuestions = [] }) 
                                 </select>
                             </label>
                         </div>
-                        {vocabularyForm.errors.generate && <p className="mt-3 text-sm font-bold text-red-600">{vocabularyForm.errors.generate}</p>}
+                        {vocabularyPreview && (
+                            <div className="mt-4 max-h-52 space-y-2 overflow-y-auto rounded-2xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-950">
+                                {vocabularyPreview.questions.slice(0, 8).map((question, index) => (
+                                    <div key={`${question.question_text}-${index}`} className="rounded-xl bg-white p-3 dark:bg-gray-900">
+                                        <p className="text-xs font-black text-gray-900 dark:text-white">{index + 1}. {question.question_text}</p>
+                                        <p className="mt-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">Jawaban: {question.correct_answer}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        {(vocabularyForm.errors.generate || vocabularyGeneratorError) && (
+                            <p className="mt-3 text-sm font-bold text-red-600">{vocabularyForm.errors.generate || vocabularyGeneratorError}</p>
+                        )}
                         <div className="mt-6 flex justify-end gap-3">
                             <button type="button" onClick={() => setShowVocabularyGenerate(false)} className="rounded-xl border border-gray-200 px-5 py-3 text-sm font-black text-gray-600 dark:border-gray-700 dark:text-gray-300">Batal</button>
-                            <button disabled={vocabularyForm.processing} className="rounded-xl bg-[#E64A19] px-6 py-3 text-sm font-black text-white disabled:opacity-50">{vocabularyForm.processing ? 'Generate...' : 'Generate'}</button>
+                            {vocabularyPreview ? (
+                                <button type="button" onClick={confirmGenerateVocabularyQuestions} className="rounded-xl bg-[#E64A19] px-6 py-3 text-sm font-black text-white">
+                                    Tambahkan {vocabularyPreview.count} Soal
+                                </button>
+                            ) : (
+                                <button disabled={vocabularyGeneratorLoading} className="rounded-xl bg-[#E64A19] px-6 py-3 text-sm font-black text-white disabled:opacity-50">
+                                    {vocabularyGeneratorLoading ? 'Membuat Preview...' : 'Pratinjau'}
+                                </button>
+                            )}
                         </div>
                     </form>
                 </div>

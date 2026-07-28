@@ -18,23 +18,52 @@ const emptyCard = {
     front_text: '',
     reading: '',
     back_text: '',
+    meaning_en: '',
     hint: '',
+    content_type: 'kosakata',
+    jlpt_level: 'N3',
     example_sentence: '',
+    example_reading: '',
     example_meaning: '',
     audio_url: '',
+    onyomi: '',
+    kunyomi: '',
+    radicals: [],
+    stroke_count: '',
+    notes: '',
 };
 
-const fromVocabulary = (item) => ({
-    id: null,
-    vocabulary_id: item.id,
-    front_text: item.word || '',
-    reading: item.reading || '',
-    back_text: item.meaning_id || item.meaning_en || '',
-    hint: item.category || '',
-    example_sentence: item.example_sentence || '',
-    example_meaning: item.example_meaning || '',
-    audio_url: item.audio_url || '',
-});
+const normalizeCard = (item, keepCardId = true) => {
+    const source = item.vocabulary || item;
+    const metadata = source.metadata || {};
+    const radicals = Array.isArray(metadata.radicals)
+        ? metadata.radicals
+        : String(metadata.radicals || '').split('|').map((value) => value.trim()).filter(Boolean);
+
+    return {
+        ...emptyCard,
+        id: keepCardId ? (item.id || null) : null,
+        vocabulary_id: source.id || item.vocabulary_id || null,
+        front_text: source.word || item.front_text || '',
+        reading: source.reading || item.reading || '',
+        back_text: source.meaning_id || item.back_text || '',
+        meaning_en: source.meaning_en || '',
+        hint: source.category || item.hint || '',
+        content_type: source.content_type || metadata.content_type || 'kosakata',
+        jlpt_level: source.jlpt_level || 'N3',
+        example_sentence: source.example_sentence || item.example_sentence || '',
+        example_reading: source.example_reading || '',
+        example_meaning: source.example_meaning || item.example_meaning || '',
+        audio_url: source.audio_url || item.audio_url || '',
+        onyomi: metadata.onyomi || '',
+        kunyomi: metadata.kunyomi || '',
+        radicals,
+        stroke_count: metadata.stroke_count || '',
+        notes: metadata.notes || '',
+    };
+};
+
+const fromVocabulary = (item) => normalizeCard(item, false);
 
 export default function BuilderFlashcard({ set, vocabulary = {}, filters = {}, quizzes = [] }) {
     const builderReturnUrl = set.module?.program_pembelajaran_id
@@ -47,7 +76,7 @@ export default function BuilderFlashcard({ set, vocabulary = {}, filters = {}, q
         : route('admin.flashcards.index');
     const rows = vocabulary.data || [];
     const importInputRef = useRef(null);
-    const [cards, setCards] = useState(set.flashcards || []);
+    const [cards, setCards] = useState(() => (set.flashcards || []).map((card) => normalizeCard(card)));
     const [search, setSearch] = useState(filters.search || '');
     const [status, setStatus] = useState(filters.status || 'all');
     const [contentType, setContentType] = useState(filters.content_type || 'all');
@@ -123,10 +152,19 @@ export default function BuilderFlashcard({ set, vocabulary = {}, filters = {}, q
                 front_text: card.front_text || '',
                 reading: card.reading || '',
                 back_text: card.back_text || '',
+                meaning_en: card.meaning_en || '',
                 hint: card.hint || '',
+                content_type: card.content_type || 'kosakata',
+                jlpt_level: card.jlpt_level || 'N3',
                 example_sentence: card.example_sentence || '',
+                example_reading: card.example_reading || '',
                 example_meaning: card.example_meaning || '',
                 audio_url: card.audio_url || '',
+                onyomi: card.onyomi || '',
+                kunyomi: card.kunyomi || '',
+                radicals: Array.isArray(card.radicals) ? card.radicals : [],
+                stroke_count: card.stroke_count || null,
+                notes: card.notes || '',
             })),
         }, { preserveScroll: true });
     };
@@ -283,6 +321,18 @@ export default function BuilderFlashcard({ set, vocabulary = {}, filters = {}, q
 
                                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                                     <label className="space-y-1">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Jenis Materi</span>
+                                        <select value={card.content_type || 'kosakata'} onChange={(event) => updateCard(index, 'content_type', event.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white">
+                                            <option value="kosakata">Kosakata</option>
+                                            <option value="kanji">Kanji</option>
+                                            <option value="bunpo">Bunpo</option>
+                                        </select>
+                                    </label>
+                                    <label className="space-y-1">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Level JLPT</span>
+                                        <input value={card.jlpt_level || 'N3'} onChange={(event) => updateCard(index, 'jlpt_level', event.target.value)} placeholder="N3" className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
+                                    </label>
+                                    <label className="space-y-1">
                                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Depan Kartu</span>
                                         <input value={card.front_text || ''} onChange={(event) => updateCard(index, 'front_text', event.target.value)} placeholder="Kata Jepang" className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
                                     </label>
@@ -292,7 +342,11 @@ export default function BuilderFlashcard({ set, vocabulary = {}, filters = {}, q
                                     </label>
                                     <label className="space-y-1">
                                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Belakang Kartu</span>
-                                        <input value={card.back_text || ''} onChange={(event) => updateCard(index, 'back_text', event.target.value)} placeholder="Arti" className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
+                                        <input value={card.back_text || ''} onChange={(event) => updateCard(index, 'back_text', event.target.value)} placeholder="Arti bahasa Indonesia" className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
+                                    </label>
+                                    <label className="space-y-1">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Arti Inggris</span>
+                                        <input value={card.meaning_en || ''} onChange={(event) => updateCard(index, 'meaning_en', event.target.value)} placeholder="English meaning (opsional)" className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
                                     </label>
                                     <label className="space-y-1">
                                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Hint / Kategori</span>
@@ -306,7 +360,45 @@ export default function BuilderFlashcard({ set, vocabulary = {}, filters = {}, q
                                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Arti Contoh</span>
                                         <textarea value={card.example_meaning || ''} onChange={(event) => updateCard(index, 'example_meaning', event.target.value)} placeholder="Arti contoh kalimat" className="min-h-20 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
                                     </label>
+                                    <label className="space-y-1 md:col-span-2">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Reading Contoh</span>
+                                        <input value={card.example_reading || ''} onChange={(event) => updateCard(index, 'example_reading', event.target.value)} placeholder="Cara baca contoh kalimat" className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
+                                    </label>
                                     <input value={card.audio_url || ''} onChange={(event) => updateCard(index, 'audio_url', event.target.value)} placeholder="Audio URL opsional" className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white md:col-span-2" />
+                                </div>
+
+                                <div className="mt-4 border-t border-gray-100 pt-4 dark:border-gray-800">
+                                        <div className="mb-3">
+                                            <p className="text-xs font-black uppercase tracking-[0.2em] text-red-600">Detail Kanji (Opsional)</p>
+                                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Isi untuk kartu yang memuat kanji. Data yang sama akan tersimpan di Bank Konten N3.</p>
+                                        </div>
+                                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                            <label className="space-y-1">
+                                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Onyomi</span>
+                                                <input value={card.onyomi || ''} onChange={(event) => updateCard(index, 'onyomi', event.target.value)} placeholder="Contoh: カツ" className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
+                                            </label>
+                                            <label className="space-y-1">
+                                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Kunyomi</span>
+                                                <input value={card.kunyomi || ''} onChange={(event) => updateCard(index, 'kunyomi', event.target.value)} placeholder="Contoh: わ.る" className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
+                                            </label>
+                                            <label className="space-y-1">
+                                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Radikal</span>
+                                                <input
+                                                    value={(card.radicals || []).join(' | ')}
+                                                    onChange={(event) => updateCard(index, 'radicals', event.target.value.split('|').map((value) => value.trim()).filter(Boolean))}
+                                                    placeholder="Pisahkan dengan |"
+                                                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+                                                />
+                                            </label>
+                                            <label className="space-y-1">
+                                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Jumlah Guratan</span>
+                                                <input type="number" min="1" max="64" value={card.stroke_count || ''} onChange={(event) => updateCard(index, 'stroke_count', event.target.value)} placeholder="12" className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
+                                            </label>
+                                            <label className="space-y-1 md:col-span-2">
+                                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Catatan Kanji</span>
+                                                <textarea value={card.notes || ''} onChange={(event) => updateCard(index, 'notes', event.target.value)} placeholder="Catatan atau contoh kata turunan" className="min-h-20 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
+                                            </label>
+                                        </div>
                                 </div>
                             </Card>
                             );

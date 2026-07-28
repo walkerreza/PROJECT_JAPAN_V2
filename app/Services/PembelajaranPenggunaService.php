@@ -47,17 +47,29 @@ class PembelajaranPenggunaService
     public function quizPayload(Pengguna $user, Kuis $quiz): array
     {
         $module = $quiz->module;
-        $questionReviews = ReviewSoal::where('user_id', $user->id)
-            ->whereIn('question_id', $quiz->questions->pluck('id'))
-            ->get()
-            ->keyBy('question_id');
+        $isWeeklyExam = $quiz->isWeeklyExam();
+        $questionReviews = $isWeeklyExam
+            ? collect()
+            : ReviewSoal::where('user_id', $user->id)
+                ->whereIn('question_id', $quiz->questions->pluck('id'))
+                ->get()
+                ->keyBy('question_id');
 
         return [
             'quiz' => [
                 'id' => $quiz->id,
+                'title' => $isWeeklyExam
+                    ? 'Ujian '.($quiz->exam_order ?? 1).' - Minggu '.($module?->week_number ?? '')
+                    : $this->quizTitle($quiz),
+                'description' => $isWeeklyExam
+                    ? 'Evaluasi akhir untuk materi pada minggu ini.'
+                    : ($quiz->description ?? 'Kuis evaluasi modul mingguan.'),
                 'type' => $quiz->type,
                 'time_limit' => $quiz->time_limit,
                 'passing_score' => $quiz->passing_score ?? 70,
+                'available_at' => $quiz->available_at?->toISOString(),
+                'is_weekly_exam' => $isWeeklyExam,
+                'exam_order' => $quiz->exam_order,
                 'lesson' => [
                     'id' => $module?->id,
                     'title' => $module?->title ?? 'Modul Mingguan',
@@ -78,6 +90,7 @@ class PembelajaranPenggunaService
                     'type' => $question->type,
                     'options' => $question->options,
                     'audio_url' => $question->audio_url,
+                    'points' => max(1, (int) ($question->points ?? 1)),
                     'review_status' => $review?->status ?? 'new',
                     'mastery_level' => $review?->mastery_level ?? 0,
                     'correct_streak' => $review?->correct_streak ?? 0,
@@ -86,7 +99,10 @@ class PembelajaranPenggunaService
                     'review_due' => $review?->next_review_at ? $review->next_review_at->isPast() : false,
                 ];
             }),
-            'flashcards' => $this->quizFlashcards($quiz),
+            'total_points' => (int) $quiz->questions->sum(
+                fn ($question) => max(1, (int) ($question->points ?? 1))
+            ),
+            'flashcards' => $isWeeklyExam ? [] : $this->quizFlashcards($quiz),
         ];
     }
 

@@ -30,16 +30,25 @@ class FlashcardController extends Controller
 
         $cards = $flashcardSet->flashcards->values()->map(function ($card) {
             $review = $card->reviews->first();
+            $vocabulary = $card->vocabulary;
 
             return [
                 'id' => $card->id,
-                'front_text' => $card->front_text,
-                'reading' => $card->reading,
-                'back_text' => $card->back_text,
-                'hint' => $card->hint,
-                'example_sentence' => $card->example_sentence,
-                'example_meaning' => $card->example_meaning,
-                'audio_url' => $card->audio_url,
+                'front_text' => $vocabulary?->word ?? $card->front_text,
+                'reading' => $vocabulary?->reading ?? $card->reading,
+                'back_text' => $vocabulary?->meaning_id ?? $vocabulary?->meaning_en ?? $card->back_text,
+                'hint' => $vocabulary?->category ?? $card->hint,
+                'example_sentence' => $vocabulary?->example_sentence ?? $card->example_sentence,
+                'example_reading' => $vocabulary?->example_reading,
+                'example_meaning' => $vocabulary?->example_meaning ?? $card->example_meaning,
+                'audio_url' => $vocabulary?->audio_url ?? $card->audio_url,
+                'content_type' => $vocabulary?->content_type ?? 'kosakata',
+                'kanji_details' => [
+                    'onyomi' => $vocabulary?->metadata['onyomi'] ?? null,
+                    'kunyomi' => $vocabulary?->metadata['kunyomi'] ?? null,
+                    'radicals' => $vocabulary?->metadata['radicals'] ?? [],
+                    'stroke_count' => $vocabulary?->metadata['stroke_count'] ?? null,
+                ],
                 'status' => $review?->status ?? 'new',
                 'known_count' => $review?->known_count ?? 0,
                 'learning_count' => $review?->learning_count ?? 0,

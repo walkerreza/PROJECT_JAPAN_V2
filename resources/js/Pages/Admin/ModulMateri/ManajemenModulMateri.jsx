@@ -10,7 +10,6 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import QuizOutlinedIcon from '@mui/icons-material/QuizOutlined';
 import SlideshowIcon from '@mui/icons-material/Slideshow';
@@ -61,9 +60,10 @@ function ResourceRow({
     module,
     day,
     resources = [],
-    vocabularyCount = 0,
     focused = false,
     onCreate,
+    createOptions = {},
+    allowMultiple = false,
 }) {
     const routeNames = {
         flashcard: 'admin.flashcards.builder',
@@ -77,28 +77,6 @@ function ResourceRow({
         orange: 'bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-300',
     };
 
-    if (type === 'vocabulary') {
-        return (
-            <Link
-                href={route('admin.vocabulary.index', {
-                    program_id: module.program?.id,
-                    module_id: module.id,
-                    module_day_id: day.id,
-                })}
-                className={`flex min-h-16 items-center gap-3 rounded-xl border px-3 py-3 transition hover:border-blue-300 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 ${
-                    focused ? 'border-blue-400 ring-2 ring-blue-100 dark:ring-blue-900/30' : 'border-gray-200 dark:border-gray-800'
-                }`}
-            >
-                <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${toneClasses.blue}`}>{icon}</span>
-                <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-black text-gray-900 dark:text-white">{label}</span>
-                    <span className="block text-xs font-bold text-gray-400">{vocabularyCount} item digunakan</span>
-                </span>
-                <span className="shrink-0 text-xs font-black text-blue-700 dark:text-blue-300">Kelola</span>
-            </Link>
-        );
-    }
-
     return (
         <div className={`rounded-xl border transition ${
             focused ? 'border-orange-400 ring-2 ring-orange-100 dark:ring-orange-900/30' : 'border-gray-200 dark:border-gray-800'
@@ -109,8 +87,13 @@ function ResourceRow({
                     <span className="block text-sm font-black text-gray-900 dark:text-white">{label}</span>
                     <ResourceStatus resources={resources} />
                 </span>
-                {resources.length === 0 ? (
-                    <button type="button" onClick={() => onCreate(type, module, day)} className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg bg-gray-900 px-3 text-xs font-black text-white dark:bg-white dark:text-gray-900">
+                {allowMultiple ? (
+                    <button type="button" onClick={() => onCreate(type, module, day, createOptions)} className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg bg-gray-900 px-3 text-xs font-black text-white dark:bg-white dark:text-gray-900">
+                        <AddIcon sx={{ fontSize: 15 }} />
+                        Tambah
+                    </button>
+                ) : resources.length === 0 ? (
+                    <button type="button" onClick={() => onCreate(type, module, day, createOptions)} className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg bg-gray-900 px-3 text-xs font-black text-white dark:bg-white dark:text-gray-900">
                         <AddIcon sx={{ fontSize: 15 }} />
                         Buat
                     </button>
@@ -123,16 +106,67 @@ function ResourceRow({
                 )}
             </div>
 
-            {resources.length > 1 && (
+            {(resources.length > 1 || (allowMultiple && resources.length > 0)) && (
                 <div className="space-y-1 border-t border-gray-100 p-2 dark:border-gray-800">
                     {resources.map((resource) => (
                         <Link key={resource.id} href={route(routeNames[type], resource.id)} className="flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm transition hover:bg-gray-50 dark:hover:bg-gray-800">
-                            <span className="min-w-0 truncate font-bold text-gray-700 dark:text-gray-200">{resource.title}</span>
-                            <span className="shrink-0 text-xs font-black text-orange-600">Edit</span>
+                            <span className="min-w-0">
+                                <span className="block truncate font-bold text-gray-700 dark:text-gray-200">{resource.title}</span>
+                                {allowMultiple && (
+                                    <span className="mt-0.5 block text-[11px] font-semibold text-gray-400">
+                                        {resource.item_count || 0} soal / {resource.attempt_count || 0} attempt
+                                    </span>
+                                )}
+                            </span>
+                            <span className="shrink-0 text-xs font-black text-orange-600">Buka Editor</span>
                         </Link>
                     ))}
                 </div>
             )}
+        </div>
+    );
+}
+
+function WeeklyPresentationRow({ module }) {
+    const presentations = Array.isArray(module.weekly_presentations)
+        ? module.weekly_presentations
+        : Object.values(module.weekly_presentations || {}).filter(Boolean);
+    const slots = [
+        ['opening', 'Awal'],
+        ['after_day', 'Antar Day'],
+        ['closing', 'Akhir'],
+    ];
+
+    return (
+        <div className="rounded-xl border border-gray-200 dark:border-gray-800">
+            <div className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-300">
+                    <SlideshowIcon sx={{ fontSize: 19 }} />
+                </span>
+                <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-black text-gray-900 dark:text-white">Presentasi Mingguan</span>
+                    <span className="mt-1 flex flex-wrap gap-1.5">
+                        {slots.map(([slot, label]) => {
+                            const count = presentations.filter((deck) => deck.week_slot === slot).length;
+
+                            return (
+                                <span
+                                    key={slot}
+                                    className="rounded-md bg-orange-50 px-2 py-1 text-[11px] font-bold text-orange-700 dark:bg-orange-900/20 dark:text-orange-300"
+                                >
+                                    {label}: {count}
+                                </span>
+                            );
+                        })}
+                    </span>
+                </span>
+                <Link
+                    href={route('admin.modules.presentations.builder', module.id)}
+                    className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-gray-900 px-3 text-xs font-black text-white dark:bg-white dark:text-gray-900"
+                >
+                    Kelola Presentasi
+                </Link>
+            </div>
         </div>
     );
 }
@@ -303,8 +337,8 @@ export default function ModulesIndex({ modules, levels = [], programs = [], filt
         });
     };
 
-    const openResourceCreate = (type, module, day) => {
-        setResourceDialog({ type, module, day });
+    const openResourceCreate = (type, module, day, options = {}) => {
+        setResourceDialog({ type, module, day, ...options });
     };
 
     return (
@@ -418,14 +452,35 @@ export default function ModulesIndex({ modules, levels = [], programs = [], filt
                                                     </div>
                                                 </div>
 
+                                                <div className="mb-3 grid gap-2 lg:grid-cols-2">
+                                                    <WeeklyPresentationRow module={module} />
+                                                    <ResourceRow
+                                                        type="quiz"
+                                                        label="Ujian Mingguan"
+                                                        icon={<QuizOutlinedIcon sx={{ fontSize: 19 }} />}
+                                                        tone="red"
+                                                        module={module}
+                                                        day={null}
+                                                        resources={module.weekly_exams || []}
+                                                        onCreate={openResourceCreate}
+                                                        allowMultiple
+                                                    />
+                                                </div>
+
+                                                <Link
+                                                    href={route('admin.vocabulary.index', {
+                                                        program_id: module.program?.id,
+                                                        module_id: module.id,
+                                                    })}
+                                                    className="mb-3 flex min-h-11 items-center justify-between rounded-xl border border-blue-100 bg-blue-50 px-3 text-sm font-black text-blue-700 transition hover:border-blue-300 dark:border-blue-900/40 dark:bg-blue-950/20 dark:text-blue-300"
+                                                >
+                                                    <span>Bank Kosakata Minggu Ini</span>
+                                                    <span>Buka Bank</span>
+                                                </Link>
+
                                                 <div className="space-y-2">
                                                     {(module.days || []).map((day) => {
                                                         const dayOpen = openDayId === day.id;
-                                                        const resourceCount = Number(day.vocabulary_count || 0)
-                                                            + (day.flashcard_sets?.length || 0)
-                                                            + (day.quizzes?.length || 0)
-                                                            + (day.presentation_decks?.length || 0);
-
                                                         return (
                                                             <div key={day.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
                                                                 <div className="flex items-center gap-3 p-3">
@@ -441,7 +496,6 @@ export default function ModulesIndex({ modules, levels = [], programs = [], filt
                                                                                  </span>
                                                                              )}
                                                                          </span>
-                                                                         <span className="mt-0.5 block text-xs font-bold text-gray-400">{resourceCount} resource terkait</span>
                                                                      </span>
                                                                         <ExpandMoreIcon className={`shrink-0 text-gray-400 transition-transform ${dayOpen ? 'rotate-180' : ''}`} />
                                                                     </button>
@@ -465,27 +519,8 @@ export default function ModulesIndex({ modules, levels = [], programs = [], filt
                                                                             Hapus Hari
                                                                         </button>
                                                                         <ResourceRow
-                                                                            type="presentation"
-                                                                            label="1. Presentasi"
-                                                                            icon={<SlideshowIcon sx={{ fontSize: 19 }} />}
-                                                                            tone="orange"
-                                                                            module={module}
-                                                                            day={day}
-                                                                            resources={day.presentation_decks || []}
-                                                                            focused={focus === 'presentation'}
-                                                                            onCreate={openResourceCreate}
-                                                                        />
-                                                                        <ResourceRow
-                                                                            type="vocabulary"
-                                                                            label="2. Kosakata"
-                                                                            icon={<LibraryBooksIcon sx={{ fontSize: 19 }} />}
-                                                                            module={module}
-                                                                            day={day}
-                                                                            vocabularyCount={day.vocabulary_count || 0}
-                                                                        />
-                                                                        <ResourceRow
                                                                             type="flashcard"
-                                                                            label="3. Flashcard"
+                                                                            label="Flashcard"
                                                                             icon={<StyleIcon sx={{ fontSize: 19 }} />}
                                                                             tone="teal"
                                                                             module={module}
@@ -496,7 +531,7 @@ export default function ModulesIndex({ modules, levels = [], programs = [], filt
                                                                         />
                                                                         <ResourceRow
                                                                             type="quiz"
-                                                                            label="4. Kuis"
+                                                                            label="Kuis"
                                                                             icon={<QuizOutlinedIcon sx={{ fontSize: 19 }} />}
                                                                             tone="red"
                                                                             module={module}
@@ -612,6 +647,7 @@ export default function ModulesIndex({ modules, levels = [], programs = [], filt
                 resourceType={resourceDialog?.type}
                 module={resourceDialog?.module}
                 day={resourceDialog?.day}
+                weekSlot={resourceDialog?.weekSlot}
                 levels={levels}
                 lockContext
             />

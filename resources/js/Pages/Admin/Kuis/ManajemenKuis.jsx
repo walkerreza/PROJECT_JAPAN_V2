@@ -27,7 +27,15 @@ function StatusBadge({ status }) {
     );
 }
 
-function TypeBadge({ type }) {
+function TypeBadge({ type, types = [] }) {
+    if (types.length > 1) {
+        return (
+            <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-black uppercase tracking-wider text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
+                Campuran
+            </span>
+        );
+    }
+
     const config = TYPE_CONFIG[type] || { label: type || '-', color: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300' };
 
     return (
@@ -53,6 +61,7 @@ export default function QuizzesIndex({ quizzes, modules = [], filters = {} }) {
         type: 'multiple_choice',
         time_limit: '',
         passing_score: 70,
+        available_at: '',
         status: 'published',
     });
 
@@ -85,6 +94,7 @@ export default function QuizzesIndex({ quizzes, modules = [], filters = {} }) {
             type: quiz.type || 'multiple_choice',
             time_limit: quiz.time_limit || '',
             passing_score: quiz.passing_score ?? 70,
+            available_at: quiz.available_at ? quiz.available_at.slice(0, 16) : '',
             status: quiz.status || 'published',
         });
         editForm.clearErrors();
@@ -200,9 +210,11 @@ export default function QuizzesIndex({ quizzes, modules = [], filters = {} }) {
                                         <tr key={quiz.id} className="transition-colors hover:bg-gray-50/70 dark:hover:bg-gray-800/40">
                                             <td className="px-6 py-5">
                                                 <p className="font-black text-gray-900 dark:text-white">{quiz.module?.title || quiz.lesson?.title || 'Modul tidak ditemukan'}</p>
-                                                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Week {quiz.module?.week_number || '-'} - Day {quiz.day?.day_number || '-'} - Quiz #{quiz.id}</p>
+                                                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                                    Week {quiz.module?.week_number || '-'} - {quiz.day ? `Day ${quiz.day.day_number}` : `Ujian ${quiz.exam_order || 1}`} - #{quiz.id}
+                                                </p>
                                             </td>
-                                            <td className="px-6 py-5"><TypeBadge type={quiz.type} /></td>
+                                            <td className="px-6 py-5"><TypeBadge type={quiz.type} types={quiz.question_types || []} /></td>
                                             <td className="px-6 py-5 text-sm font-bold text-gray-600 dark:text-gray-300">{quiz.question_count} soal</td>
                                             <td className="px-6 py-5 text-sm font-bold text-gray-600 dark:text-gray-300">
                                                 <div>{quiz.time_limit ? `${Math.floor(quiz.time_limit / 60)} menit` : 'Tanpa batas'}</div>
@@ -237,12 +249,12 @@ export default function QuizzesIndex({ quizzes, modules = [], filters = {} }) {
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0">
                                             <h2 className="truncate text-base font-black text-gray-900 dark:text-white">{quiz.module?.title || quiz.lesson?.title || 'Modul tidak ditemukan'}</h2>
-                                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Day {quiz.day?.day_number || '-'} - {quiz.question_count} soal - {quiz.time_limit ? `${Math.floor(quiz.time_limit / 60)} menit` : 'Tanpa batas'} - Lulus {quiz.passing_score ?? 70}%</p>
+                                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{quiz.day ? `Day ${quiz.day.day_number}` : `Ujian ${quiz.exam_order || 1}`} - {quiz.question_count} soal - {quiz.time_limit ? `${Math.floor(quiz.time_limit / 60)} menit` : 'Tanpa batas'} - Lulus {quiz.passing_score ?? 70}%</p>
                                         </div>
                                         <StatusBadge status={quiz.status} />
                                     </div>
                                     <div className="mt-3 flex flex-wrap gap-2">
-                                        <TypeBadge type={quiz.type} />
+                                        <TypeBadge type={quiz.type} types={quiz.question_types || []} />
                                     </div>
                                     <div className="mt-4 flex flex-wrap justify-end gap-2">
                                         <Link href={route('admin.quizzes.builder', quiz.id)} className="rounded-lg bg-[#E64A19] px-3 py-2 text-xs font-black text-white">Builder</Link>
@@ -310,9 +322,9 @@ export default function QuizzesIndex({ quizzes, modules = [], filters = {} }) {
                                 {editForm.errors.module_id && <p className="mt-1 text-xs font-bold text-red-600">{editForm.errors.module_id}</p>}
                             </div>
                             <div>
-                                <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Day</label>
-                                <select value={editForm.data.module_day_id} onChange={(e) => editForm.setData('module_day_id', e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white" required>
-                                    <option value="">Pilih Day</option>
+                                <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Day (opsional)</label>
+                                <select value={editForm.data.module_day_id} onChange={(e) => editForm.setData('module_day_id', e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white">
+                                    <option value="">Ujian Mingguan (setelah semua Hari)</option>
                                     {(modules.find((module) => String(module.id) === String(editForm.data.module_id))?.days || []).map((day) => <option key={day.id} value={day.id}>Day {day.day_number} - {day.title}</option>)}
                                 </select>
                                 {editForm.errors.module_day_id && <p className="mt-1 text-xs font-bold text-red-600">{editForm.errors.module_day_id}</p>}
@@ -338,6 +350,13 @@ export default function QuizzesIndex({ quizzes, modules = [], filters = {} }) {
                                     {editForm.errors.passing_score && <p className="mt-1 text-xs font-bold text-red-600">{editForm.errors.passing_score}</p>}
                                 </div>
                             </div>
+                            {!editForm.data.module_day_id && (
+                                <div>
+                                    <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Dibuka Pada (opsional)</label>
+                                    <input type="datetime-local" value={editForm.data.available_at} onChange={(e) => editForm.setData('available_at', e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
+                                    {editForm.errors.available_at && <p className="mt-1 text-xs font-bold text-red-600">{editForm.errors.available_at}</p>}
+                                </div>
+                            )}
                             <div>
                                 <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Status Publish</label>
                                 <select value={editForm.data.status} onChange={(e) => editForm.setData('status', e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white">
@@ -360,11 +379,14 @@ export default function QuizzesIndex({ quizzes, modules = [], filters = {} }) {
                     show
                     variant="danger"
                     title="Hapus Kuis?"
-                    message="Kuis dan semua soalnya akan dihapus."
+                    message={deleteConfirm.attempt_count > 0
+                        ? 'Ujian, semua soal, attempt, jawaban, dan nilai siswa akan dihapus permanen.'
+                        : 'Kuis dan semua soalnya akan dihapus.'}
                     confirmLabel="Iya, Hapus"
                     details={[
                         { label: 'Modul', value: deleteConfirm.module?.title || deleteConfirm.lesson?.title || '-' },
                         { label: 'Soal', value: `${deleteConfirm.question_count || 0} soal` },
+                        { label: 'Nilai tersimpan', value: `${deleteConfirm.attempt_count || 0} attempt` },
                     ]}
                     onCancel={() => setDeleteConfirm(null)}
                     onConfirm={confirmDelete}

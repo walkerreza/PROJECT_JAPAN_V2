@@ -82,4 +82,12 @@ class PresentasiStorageService
 
         return $this->publicUrl($path);
     }
+
+    public function deleteManagedDeckFiles(int $deckId): void
+    {
+        Storage::disk('local')->deleteDirectory("presentations/{$deckId}");
+        Storage::disk('local')->deleteDirectory("presentations/imports/pptx/{$deckId}");
+        Storage::disk('public')->deleteDirectory("presentations/assets/{$deckId}");
+        Storage::disk('public')->deleteDirectory("presentations/slides/{$deckId}");
+    }
 }

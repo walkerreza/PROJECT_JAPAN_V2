@@ -7,6 +7,7 @@ use App\Models\HariModul;
 use App\Models\Kuis;
 use App\Models\Modul;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class AdminHariModulController extends Controller
@@ -16,14 +17,45 @@ class AdminHariModulController extends Controller
         $validated = $this->validateDay($request, $module);
         $validated['module_id'] = $module->id;
 
-        $module->days()->create($validated);
+        DB::transaction(function () use ($module, $validated) {
+            $day = $module->days()->create($validated);
 
-        return redirect()->back()->with('success', 'Day berhasil ditambahkan.');
+            $day->flashcardSets()->create([
+                'level_id' => $module->level_id,
+                'module_id' => $module->id,
+                'title' => $day->title,
+                'description' => $day->description,
+                'source_type' => 'day',
+                'status' => 'draft',
+            ]);
+
+            $checkpoint = $day->quizzes()->create([
+                'module_id' => $module->id,
+                'type' => 'multiple_choice',
+                'time_limit' => null,
+                'passing_score' => 70,
+                'status' => 'draft',
+            ]);
+
+            $day->update(['checkpoint_quiz_id' => $checkpoint->id]);
+        });
+
+        return redirect()->back()->with('success', 'Day, flashcard, dan kuis checkpoint berhasil disiapkan.');
     }
 
     public function update(Request $request, HariModul $moduleDay)
     {
-        $moduleDay->update($this->validateDay($request, $moduleDay->module, $moduleDay));
+        $validated = $this->validateDay($request, $moduleDay->module, $moduleDay);
+
+        DB::transaction(function () use ($moduleDay, $validated) {
+            $moduleDay->update($validated);
+            $moduleDay->flashcardSets()
+                ->where('source_type', 'day')
+                ->update([
+                    'title' => $moduleDay->title,
+                    'description' => $moduleDay->description,
+                ]);
+        });
 
         return redirect()->back()->with('success', 'Day berhasil diperbarui.');
     }

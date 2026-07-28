@@ -167,8 +167,9 @@ export default function LatihanFlashcard({ set, cards = [], back_url = null, nex
                                     {/* BACK (Meaning/Reading) */}
                                     <section className="absolute inset-0 flex flex-col rounded-[1.5rem] border-2 border-red-300 bg-gradient-to-br from-red-50 to-white p-4 text-center shadow-xl [backface-visibility:hidden] [transform:rotateY(180deg)] sm:rounded-[2rem] sm:p-8 dark:border-gray-700 dark:from-gray-800">
                                         <div className="flex-1 overflow-y-auto overscroll-contain px-1">
-                                            <p className="mb-2 break-words text-2xl font-bold text-gray-500 sm:text-3xl dark:text-gray-400">{card.reading || '-'}</p>
-                                            <h2 className="break-words text-2xl font-black leading-tight text-gray-900 sm:text-4xl dark:text-white" style={{fontFamily: "'Yuji Syuku', serif"}}>{card.back_text || 'Belum ada arti'}</h2>
+                                             <p className="mb-2 break-words text-2xl font-bold text-gray-500 sm:text-3xl dark:text-gray-400">{card.reading || '-'}</p>
+                                             <h2 className="break-words text-2xl font-black leading-tight text-gray-900 sm:text-4xl dark:text-white" style={{fontFamily: "'Yuji Syuku', serif"}}>{card.back_text || 'Belum ada arti'}</h2>
+                                             {card.hint && <p className="mt-2 text-xs font-bold text-red-600 dark:text-red-300">{card.hint}</p>}
                                             <div className="mt-4 flex items-center justify-center gap-3 sm:mt-5" onClick={(event) => event.stopPropagation()}>
                                                 <JapaneseSpeechButton
                                                     text={card.front_text || card.reading}
@@ -176,12 +177,23 @@ export default function LatihanFlashcard({ set, cards = [], back_url = null, nex
                                                     className="flex h-11 w-11 items-center justify-center rounded-full border border-red-200 text-red-600 transition hover:bg-red-100 dark:border-gray-700 dark:text-gray-300"
                                                 />
                                             </div>
-                                            {(card.example_sentence) && (
+                            {(card.example_sentence) && (
                                                 <div className="mt-5 w-full rounded-xl border border-red-100 bg-white/60 p-3 text-center sm:mt-6 sm:p-4">
                                                     <p className="break-words text-base font-bold text-gray-800 sm:text-lg">{card.example_sentence}</p>
+                                                    {card.example_reading && <p className="mt-1 break-words text-xs font-semibold text-gray-500 sm:text-sm">{card.example_reading}</p>}
                                                     <p className="mt-1 break-words text-xs italic text-gray-600 sm:text-sm">{card.example_meaning}</p>
                                                 </div>
-                                            )}
+                            )}
+                            {(card.kanji_details?.onyomi || card.kanji_details?.kunyomi || card.kanji_details?.stroke_count) && (
+                                <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-gray-50 p-3 text-left text-xs dark:bg-gray-800/70">
+                                    {card.kanji_details.onyomi && <p><span className="font-black">On:</span> {card.kanji_details.onyomi}</p>}
+                                    {card.kanji_details.kunyomi && <p><span className="font-black">Kun:</span> {card.kanji_details.kunyomi}</p>}
+                                    {card.kanji_details.stroke_count && <p><span className="font-black">Guratan:</span> {card.kanji_details.stroke_count}</p>}
+                                    {Array.isArray(card.kanji_details.radicals) && card.kanji_details.radicals.length > 0 && (
+                                        <p><span className="font-black">Radikal:</span> {card.kanji_details.radicals.join(', ')}</p>
+                                    )}
+                                </div>
+                            )}
                                             <div className="mt-4 flex flex-wrap justify-center gap-2 text-[10px] font-black uppercase tracking-wider sm:mt-5">
                                                 <span className="rounded-full bg-white/70 px-3 py-1 text-gray-600">Status: {card.status === 'new' ? 'Baru' : card.status}</span>
                                                 <span className="rounded-full bg-white/70 px-3 py-1 text-gray-600">Streak: {card.correct_streak ?? 0}</span>
