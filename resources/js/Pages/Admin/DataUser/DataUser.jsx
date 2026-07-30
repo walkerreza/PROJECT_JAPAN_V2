@@ -144,6 +144,21 @@ export default function Users({
                     </span>
                 </div>
 
+                <div className="flex w-full gap-2 border-b border-gray-200 dark:border-gray-800">
+                    <Link
+                        href={route('admin.users', filters.kloter ? { kloter: filters.kloter } : {})}
+                        className="border-b-2 border-red-600 px-3 py-3 text-sm font-black text-red-600 dark:text-red-400"
+                    >
+                        Siswa
+                    </Link>
+                    <Link
+                        href={route('admin.analytics', filters.kloter ? { kloter: filters.kloter } : {})}
+                        className="border-b-2 border-transparent px-3 py-3 text-sm font-black text-gray-500 transition hover:border-gray-300 hover:text-gray-900 dark:text-gray-400 dark:hover:border-gray-600 dark:hover:text-white"
+                    >
+                        Monitoring
+                    </Link>
+                </div>
+
                 <Card className="!p-4 sm:!p-5">
                     <form onSubmit={submitSearch} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(220px,320px)_auto]">
                         <input

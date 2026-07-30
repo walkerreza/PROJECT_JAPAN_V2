@@ -239,6 +239,31 @@ it('rejects student and cohort access outside a kloter admin assignment', functi
         ->assertForbidden();
 });
 
+it('renders a content workspace for global admin and an intervention workspace for kloter admin', function () {
+    $fixture = createAdminGlobalKloterFixture();
+
+    $this->actingAs($fixture['globalAdmin'])
+        ->get(route('admin.dashboard'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Admin/Beranda/Beranda')
+            ->where('workspace', 'content')
+            ->where('adminScope', Pengguna::ADMIN_SCOPE_GLOBAL)
+            ->has('stats', 4)
+            ->has('actionItems', 3));
+
+    $this->actingAs($fixture['kloterAdmin'])
+        ->get(route('admin.dashboard', ['kloter' => $fixture['kloterA']->id]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Admin/Beranda/Beranda')
+            ->where('workspace', 'kloter')
+            ->where('adminScope', Pengguna::ADMIN_SCOPE_KLOTER)
+            ->where('cohorts.0.id', $fixture['kloterA']->id)
+            ->has('stats', 4)
+            ->has('actionItems', 3));
+});
+
 it('returns an empty student scope when a kloter admin has no assignment', function () {
     createAdminGlobalKloterFixture();
     $unassigned = Pengguna::factory()->create([

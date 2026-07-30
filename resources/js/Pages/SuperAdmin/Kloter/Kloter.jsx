@@ -4,6 +4,9 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Card from '@/Components/UI/Card';
 import StatCard from '@/Components/Features/Dashboard/StatCard';
 import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
+import ChartCard from '@/Components/Features/Dashboard/ChartCard';
+import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis } from 'recharts';
+import { ChartContainer, ChartEmpty, ChartTooltip, ChartTooltipContent } from '@/Components/UI/Chart';
 
 const emptyKloter = {
     program_pembelajaran_id: '',
@@ -33,6 +36,8 @@ export default function Kloter({
     admins = [],
     users = [],
     filters = {},
+    kloterStatusDistribution = [],
+    enrollmentByKloter = [],
 }) {
     const [showKloterForm, setShowKloterForm] = useState(false);
     const [editingKloter, setEditingKloter] = useState(null);
@@ -168,6 +173,35 @@ export default function Kloter({
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     {stats.map((item) => <StatCard key={item.title} {...item} />)}
+                </div>
+
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+                    <ChartCard title="Status Kloter" subtitle="Distribusi seluruh kloter">
+                        {kloterStatusDistribution.some((item) => item.value > 0) ? (
+                            <ChartContainer config={{ active: { color: '#10b981' }, draft: { color: '#f59e0b' }, archived: { color: '#94a3b8' } }}>
+                                <PieChart>
+                                    <ChartTooltip content={<ChartTooltipContent />} />
+                                    <Pie data={kloterStatusDistribution} dataKey="value" nameKey="label" innerRadius={58} outerRadius={88} paddingAngle={3}>
+                                        {kloterStatusDistribution.map((item) => <Cell key={item.label} fill={item.fill} />)}
+                                    </Pie>
+                                </PieChart>
+                            </ChartContainer>
+                        ) : <ChartEmpty>Belum ada kloter.</ChartEmpty>}
+                    </ChartCard>
+
+                    <ChartCard title="Anggota per Kloter" subtitle="Delapan kloter dengan anggota aktif terbanyak">
+                        {enrollmentByKloter.length > 0 ? (
+                            <ChartContainer config={{ members: { label: 'Anggota aktif', color: '#dc2626' } }}>
+                                <BarChart data={enrollmentByKloter} layout="vertical" margin={{ top: 8, right: 12, left: 12, bottom: 0 }}>
+                                    <CartesianGrid horizontal={false} strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-800" />
+                                    <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} className="fill-gray-400 text-xs" />
+                                    <YAxis type="category" dataKey="label" width={150} tickLine={false} axisLine={false} className="fill-gray-500 text-xs" tick={{ fontSize: 11 }} />
+                                    <ChartTooltip content={<ChartTooltipContent />} />
+                                    <Bar dataKey="value" name="Anggota aktif" fill="var(--color-members)" radius={[0, 5, 5, 0]} />
+                                </BarChart>
+                            </ChartContainer>
+                        ) : <ChartEmpty>Belum ada anggota kloter aktif.</ChartEmpty>}
+                    </ChartCard>
                 </div>
 
                 <div className="grid grid-cols-1 gap-6 xl:grid-cols-[0.95fr_1.05fr]">

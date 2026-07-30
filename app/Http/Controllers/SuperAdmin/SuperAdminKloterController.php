@@ -65,6 +65,35 @@ class SuperAdminKloterController extends SuperAdminDasarController
                 $this->stat('Key Aktif', number_format(KodeAkses::whereNotNull('kloter_belajar_id')->where('status', 'active')->count()), 'A'),
                 $this->stat('Belum Kloter', number_format($this->userBelumKloterCount()), 'B', '0', 'down'),
             ],
+            'kloterStatusDistribution' => KloterBelajar::query()
+                ->selectRaw('status, COUNT(*) as total')
+                ->groupBy('status')
+                ->get()
+                ->map(fn (KloterBelajar $kloter) => [
+                    'label' => match ($kloter->status) {
+                        'active' => 'Aktif',
+                        'draft' => 'Draft',
+                        'archived' => 'Arsip',
+                        default => ucfirst($kloter->status),
+                    },
+                    'value' => (int) $kloter->total,
+                    'fill' => match ($kloter->status) {
+                        'active' => 'var(--color-active)',
+                        'draft' => 'var(--color-draft)',
+                        default => 'var(--color-archived)',
+                    },
+                ])
+                ->values(),
+            'enrollmentByKloter' => KloterBelajar::query()
+                ->withCount(['anggota as active_members_count' => fn ($query) => $query->where('status', 'active')])
+                ->orderByDesc('active_members_count')
+                ->take(8)
+                ->get(['id', 'nama'])
+                ->map(fn (KloterBelajar $kloter) => [
+                    'label' => $kloter->nama,
+                    'value' => (int) $kloter->active_members_count,
+                ])
+                ->values(),
             'kloters' => $kloters->through(fn (KloterBelajar $kloter) => $this->kloterPayload($kloter)),
             'selectedKloter' => $selectedKloter ? $this->selectedKloterPayload($selectedKloter) : null,
             'programs' => ProgramPembelajaran::where('status', 'published')

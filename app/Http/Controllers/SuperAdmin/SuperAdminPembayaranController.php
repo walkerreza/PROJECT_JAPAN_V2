@@ -11,6 +11,7 @@ use App\Models\Pengguna;
 use App\Models\ProgramPembelajaran;
 use App\Models\Transaksi;
 use App\Services\AksesLanggananService;
+use App\Services\ChartDataService;
 use App\Services\KloterBelajarService;
 use App\Services\NotifikasiPenggunaService;
 use Illuminate\Http\Request;
@@ -21,13 +22,23 @@ use Inertia\Inertia;
 
 class SuperAdminPembayaranController extends SuperAdminDasarController
 {
-    public function __invoke(Request $request)
+    public function __invoke(Request $request, ChartDataService $chartData)
     {
         $filters = [
             'search' => (string) $request->string('search'),
             'status' => $request->string('status')->value() ?: 'all',
             'payment_method' => $request->string('payment_method')->value() ?: 'all',
         ];
+        $period = $chartData->resolvePeriod($request);
+        $fromDate = $chartData->fromDate($period);
+
+        $revenueByDay = Transaksi::query()
+            ->where('status', 'success')
+            ->whereRaw('COALESCE(processed_at, created_at) >= ?', [$fromDate])
+            ->selectRaw('DATE(COALESCE(processed_at, created_at)) as day, SUM(amount) as revenue, COUNT(*) as transactions')
+            ->groupBy('day')
+            ->get()
+            ->keyBy('day');
 
         $transactions = Transaksi::with([
             'user:id,username,email',
@@ -57,6 +68,38 @@ class SuperAdminPembayaranController extends SuperAdminDasarController
                 $this->stat('Active Premium Users', number_format(Langganan::where('status', 'active')->distinct('user_id')->count('user_id')), 'U'),
                 $this->stat('Revenue', 'Rp '.number_format((int) Transaksi::where('status', 'success')->sum('amount')), '$'),
             ],
+            'revenueSeries' => $chartData->dailySeries($period, [
+                'revenue' => $revenueByDay->mapWithKeys(fn (Transaksi $transaction) => [$transaction->day => (int) $transaction->revenue]),
+                'transactions' => $revenueByDay->mapWithKeys(fn (Transaksi $transaction) => [$transaction->day => (int) $transaction->transactions]),
+            ]),
+            'transactionStatusDistribution' => Transaksi::query()
+                ->selectRaw('status, COUNT(*) as total')
+                ->groupBy('status')
+                ->get()
+                ->map(fn (Transaksi $transaction) => [
+                    'label' => ucfirst($transaction->status),
+                    'value' => (int) $transaction->total,
+                    'fill' => match ($transaction->status) {
+                        'success' => 'var(--color-success)',
+                        'pending' => 'var(--color-pending)',
+                        default => 'var(--color-failed)',
+                    },
+                ])
+                ->values(),
+            'paymentMethodDistribution' => Transaksi::query()
+                ->selectRaw("COALESCE(NULLIF(payment_method, ''), 'unknown') as method, COUNT(*) as total")
+                ->groupBy('method')
+                ->orderByDesc('total')
+                ->take(6)
+                ->get()
+                ->map(fn (Transaksi $transaction, int $index) => [
+                    'label' => str($transaction->method)->replace('_', ' ')->title()->toString(),
+                    'value' => (int) $transaction->total,
+                    'chart_key' => "method-{$index}",
+                    'color' => ['#dc2626', '#f97316', '#0ea5e9', '#10b981', '#8b5cf6', '#64748b'][$index % 6],
+                    'fill' => "var(--color-method-{$index})",
+                ])
+                ->values(),
             'transactions' => $transactions->through(fn (Transaksi $transaction) => [
                 'id' => $transaction->id,
                 'transaction_code' => $transaction->transaction_code,
@@ -142,7 +185,7 @@ class SuperAdminPembayaranController extends SuperAdminDasarController
                     'expires_at' => optional($key->expires_at)->format('d M Y H:i'),
                     'created_at' => optional($key->created_at)->format('d M Y H:i'),
                 ]),
-            'filters' => $filters,
+            'filters' => [...$filters, 'period' => $period],
         ]);
     }
 

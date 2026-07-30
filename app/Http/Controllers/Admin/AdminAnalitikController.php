@@ -7,6 +7,8 @@ use App\Models\Modul;
 use App\Models\PengerjaanKuis;
 use App\Models\Pengguna;
 use App\Models\Soal;
+use App\Models\UmpanBalikPembelajaran;
+use App\Services\ChartDataService;
 use App\Services\KloterBelajarService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -16,7 +18,11 @@ use Inertia\Response;
 
 class AdminAnalitikController extends Controller
 {
-    public function __invoke(Request $request, KloterBelajarService $kloterService): Response
+    public function __invoke(
+        Request $request,
+        KloterBelajarService $kloterService,
+        ChartDataService $chartData
+    ): Response
     {
         /** @var Pengguna $admin */
         $admin = $request->user();
@@ -32,6 +38,23 @@ class AdminAnalitikController extends Controller
             ->whereIn('user_id', clone $studentIds)
             ->when($programIds !== null, fn (Builder $query) => $query
                 ->whereHas('quiz.module', fn (Builder $query) => $query->whereIn('program_pembelajaran_id', $programIds)));
+        $period = $chartData->resolvePeriod($request);
+        $scoreBuckets = [
+            'Perlu pendampingan (<50)' => 0,
+            'Cukup (50-74)' => 0,
+            'Baik (75-89)' => 0,
+            'Sangat baik (90-100)' => 0,
+        ];
+        $scoreDistribution = (clone $attemptsQuery)
+            ->where('attempted_at', '>=', $chartData->fromDate($period))
+            ->selectRaw("CASE
+                WHEN score < 50 THEN 'Perlu pendampingan (<50)'
+                WHEN score < 75 THEN 'Cukup (50-74)'
+                WHEN score < 90 THEN 'Baik (75-89)'
+                ELSE 'Sangat baik (90-100)'
+            END as bucket, COUNT(*) as total")
+            ->groupBy('bucket')
+            ->pluck('total', 'bucket');
 
         $lowScoreQuizzes = (clone $attemptsQuery)
             ->select('quiz_id', DB::raw('AVG(score) as average_score'), DB::raw('COUNT(*) as attempts_count'))
@@ -136,6 +159,13 @@ class AdminAnalitikController extends Controller
             ->sortBy('correct_rate')
             ->take(12)
             ->values();
+        $feedbackCounts = UmpanBalikPembelajaran::query()
+            ->whereIn('user_id', clone $studentIds)
+            ->when($programIds !== null, fn (Builder $query) => $query->whereIn('program_pembelajaran_id', $programIds))
+            ->where('feedback_date', '>=', $chartData->fromDate($period)->toDateString())
+            ->selectRaw('rating, COUNT(*) as total')
+            ->groupBy('rating')
+            ->pluck('total', 'rating');
 
         return Inertia::render('Admin/Analitik/Analitik', [
             'adminScope' => $admin->admin_scope ?: Pengguna::ADMIN_SCOPE_GLOBAL,
@@ -146,12 +176,23 @@ class AdminAnalitikController extends Controller
                 'inactive_students' => $inactiveStudentsCount,
             ],
             'kloters' => $kloterService->pilihanKloterAdmin($admin),
-            'filters' => ['kloter' => $selectedKloter?->id],
+            'filters' => ['kloter' => $selectedKloter?->id, 'period' => $period],
+            'scoreDistribution' => collect($scoreBuckets)
+                ->map(fn (int $total, string $label) => [
+                    'label' => $label,
+                    'value' => (int) ($scoreDistribution->get($label) ?? $total),
+                ])
+                ->values(),
             'lowScoreQuizzes' => $lowScoreQuizzes,
             'popularModules' => $popularModules,
             'inactiveStudents' => $inactiveStudents->take(8)->values(),
             'recentAttempts' => $recentAttempts,
             'questionPerformance' => $questionPerformance,
+            'learningFeedback' => [
+                ['label' => 'Perlu diulang', 'value' => (int) ($feedbackCounts->get('repeat') ?? 0), 'tone' => 'red'],
+                ['label' => 'Pas', 'value' => (int) ($feedbackCounts->get('just_right') ?? 0), 'tone' => 'amber'],
+                ['label' => 'Terlalu mudah', 'value' => (int) ($feedbackCounts->get('easy') ?? 0), 'tone' => 'emerald'],
+            ],
         ]);
     }
 }

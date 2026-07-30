@@ -4,9 +4,12 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import Card from '@/Components/UI/Card';
 import StatCard from '@/Components/Features/Dashboard/StatCard';
+import ChartCard from '@/Components/Features/Dashboard/ChartCard';
 import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
 import NewsEditor from '@/Components/Features/Editor/NewsEditor';
 import ArticleBody from '@/Components/Features/News/ArticleBody';
+import { Bar, BarChart, CartesianGrid, Legend, XAxis, YAxis } from 'recharts';
+import { ChartContainer, ChartEmpty, ChartTooltip, ChartTooltipContent } from '@/Components/UI/Chart';
 
 const emptyNews = {
     title: '',
@@ -41,6 +44,7 @@ export default function Konten({
     categories = [],
     updates = [],
     filters = {},
+    contentStatusByType = [],
 }) {
     const [editingNews, setEditingNews] = useState(null);
     const [deleteTarget, setDeleteTarget] = useState(null);
@@ -210,6 +214,22 @@ export default function Konten({
                         <StatCard key={item.title} {...item} />
                     ))}
                 </div>
+
+                <ChartCard title="Kesiapan Konten" subtitle="Status publish dan draft per jenis konten">
+                    {contentStatusByType.some((item) => item.published || item.draft) ? (
+                        <ChartContainer config={{ published: { label: 'Published', theme: { light: '#10b981', dark: '#34d399' } }, draft: { label: 'Draft / belum publish', theme: { light: '#f59e0b', dark: '#fbbf24' } } }}>
+                            <BarChart data={contentStatusByType} margin={{ top: 8, right: 4, left: -20, bottom: 0 }}>
+                                <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-800" />
+                                <XAxis dataKey="label" tickLine={false} axisLine={false} className="fill-gray-400 text-xs" />
+                                <YAxis allowDecimals={false} tickLine={false} axisLine={false} className="fill-gray-400 text-xs" />
+                                <ChartTooltip content={<ChartTooltipContent />} />
+                                <Legend wrapperStyle={{ fontSize: '12px', fontWeight: 700 }} />
+                                <Bar dataKey="published" name="Published" stackId="content" fill="var(--color-published)" radius={[0, 0, 4, 4]} />
+                                <Bar dataKey="draft" name="Draft / belum publish" stackId="content" fill="var(--color-draft)" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                        </ChartContainer>
+                    ) : <ChartEmpty>Belum ada konten yang dapat diringkas.</ChartEmpty>}
+                </ChartCard>
 
                 <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_0.8fr]">
                     <Card>

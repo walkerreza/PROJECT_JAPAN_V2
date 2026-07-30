@@ -3,8 +3,19 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link } from '@inertiajs/react';
 import Card from '@/Components/UI/Card';
 import StatCard from '@/Components/Features/Dashboard/StatCard';
+import ChartCard from '@/Components/Features/Dashboard/ChartCard';
+import ChartPeriodSelect from '@/Components/Features/Dashboard/ChartPeriodSelect';
+import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis } from 'recharts';
+import { ChartContainer, ChartEmpty, ChartTooltip, ChartTooltipContent } from '@/Components/UI/Chart';
 
-export default function DetailUser({ student, filters = {}, levelProgress = [], recentProgress = [], recentAttempts = [], rewardHistory = [], certificates = [] }) {
+export default function DetailUser({ student, filters = {}, studentActivitySeries = [], levelProgress = [], recentProgress = [], recentAttempts = [], rewardHistory = [], certificates = [] }) {
+    const totalModules = levelProgress.reduce((total, level) => total + Number(level.total_lessons || 0), 0);
+    const completedModules = levelProgress.reduce((total, level) => total + Number(level.completed_lessons || 0), 0);
+    const progressDistribution = [
+        { label: 'Selesai', value: completedModules },
+        { label: 'Belum selesai', value: Math.max(0, totalModules - completedModules) },
+    ];
+
     return (
         <AuthenticatedLayout>
             <Head title={`${student.username} - Detail Murid`} />
@@ -26,6 +37,41 @@ export default function DetailUser({ student, filters = {}, levelProgress = [], 
                     <StatCard title="Streak" value={student.streak_count} icon="S" />
                     <StatCard title="Modul Selesai" value={student.lessons_done} icon="M" />
                     <StatCard title="Rata-rata Skor" value={student.average_score || 0} icon="Q" />
+                </div>
+
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+                    <ChartCard title="Progres Kelas" subtitle={`${completedModules} dari ${totalModules} modul selesai`}>
+                        {totalModules > 0 ? (
+                            <ChartContainer config={{ complete: { label: 'Selesai', color: '#dc2626' } }}>
+                                <PieChart>
+                                    <ChartTooltip content={<ChartTooltipContent />} />
+                                    <Pie data={progressDistribution} dataKey="value" nameKey="label" innerRadius={62} outerRadius={92} paddingAngle={3}>
+                                        <Cell fill="#dc2626" />
+                                        <Cell fill="#e5e7eb" />
+                                    </Pie>
+                                </PieChart>
+                            </ChartContainer>
+                        ) : <ChartEmpty>Belum ada modul dalam cakupan siswa ini.</ChartEmpty>}
+                    </ChartCard>
+
+                    <ChartCard
+                        title="Aktivitas Belajar"
+                        subtitle="Progres dan attempt kuis siswa"
+                        action={<ChartPeriodSelect routeName="admin.users.show" routeParams={student.id} filters={filters} />}
+                    >
+                        {studentActivitySeries.some((item) => item.progress || item.quiz_attempts) ? (
+                            <ChartContainer config={{ progress: { label: 'Progres', color: '#0ea5e9' }, quiz_attempts: { label: 'Kuis', color: '#dc2626' } }}>
+                                <BarChart data={studentActivitySeries} margin={{ top: 8, right: 4, left: -20, bottom: 0 }}>
+                                    <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-800" />
+                                    <XAxis dataKey="label" tickLine={false} axisLine={false} className="fill-gray-400 text-xs" />
+                                    <YAxis allowDecimals={false} tickLine={false} axisLine={false} className="fill-gray-400 text-xs" />
+                                    <ChartTooltip content={<ChartTooltipContent />} />
+                                    <Bar dataKey="progress" name="Progres" fill="var(--color-progress)" radius={[4, 4, 0, 0]} />
+                                    <Bar dataKey="quiz_attempts" name="Kuis" fill="var(--color-quiz_attempts)" radius={[4, 4, 0, 0]} />
+                                </BarChart>
+                            </ChartContainer>
+                        ) : <ChartEmpty>Belum ada aktivitas pada periode ini.</ChartEmpty>}
+                    </ChartCard>
                 </div>
 
                 <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_0.85fr]">

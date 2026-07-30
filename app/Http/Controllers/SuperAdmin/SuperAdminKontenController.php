@@ -42,6 +42,12 @@ class SuperAdminKontenController extends SuperAdminDasarController
                 $this->stat('Kuis Siap Pakai', number_format(Kuis::count()), 'Q'),
                 $this->stat('Berita Aktif', number_format(Berita::where('status', 'published')->count()), 'N'),
             ],
+            'contentStatusByType' => [
+                $this->contentStatus(LearningModule::class, 'Modul'),
+                $this->contentStatus(Kuis::class, 'Kuis'),
+                $this->contentStatus(DeckPresentasi::class, 'Presentasi'),
+                $this->contentStatus(Berita::class, 'Berita'),
+            ],
             'news' => $news,
             'categories' => $this->categories(),
             'filters' => $filters,
@@ -58,6 +64,24 @@ class SuperAdminKontenController extends SuperAdminDasarController
                     'created_at' => optional($log->created_at)->toIso8601String(),
                 ]),
         ]);
+    }
+
+    /**
+     * @param class-string<\Illuminate\Database\Eloquent\Model> $model
+     */
+    private function contentStatus(string $model, string $label): array
+    {
+        $counts = $model::query()
+            ->selectRaw("COALESCE(status, 'draft') as content_status, COUNT(*) as total")
+            ->groupBy('content_status')
+            ->pluck('total', 'content_status');
+        $published = (int) ($counts->get('published') ?? 0);
+
+        return [
+            'label' => $label,
+            'published' => $published,
+            'draft' => max(0, (int) $counts->sum() - $published),
+        ];
     }
 
     public function store(Request $request)

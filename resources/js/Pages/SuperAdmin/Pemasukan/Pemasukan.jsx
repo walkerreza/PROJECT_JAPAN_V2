@@ -3,7 +3,11 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import Card from '@/Components/UI/Card';
 import StatCard from '@/Components/Features/Dashboard/StatCard';
+import ChartCard from '@/Components/Features/Dashboard/ChartCard';
+import ChartPeriodSelect from '@/Components/Features/Dashboard/ChartPeriodSelect';
 import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
+import { Area, AreaChart, CartesianGrid, Cell, Legend, Pie, PieChart, XAxis, YAxis } from 'recharts';
+import { ChartContainer, ChartEmpty, ChartTooltip, ChartTooltipContent } from '@/Components/UI/Chart';
 
 const emptyPlan = {
     name: '',
@@ -56,6 +60,9 @@ export default function Pemasukan({
     kloters = [],
     accessKeys = [],
     filters = {},
+    revenueSeries = [],
+    transactionStatusDistribution = [],
+    paymentMethodDistribution = [],
 }) {
     const [showPlanForm, setShowPlanForm] = useState(false);
     const [showTransactionForm, setShowTransactionForm] = useState(false);
@@ -205,6 +212,56 @@ export default function Pemasukan({
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     {stats.map((item) => <StatCard key={item.title} {...item} />)}
                 </div>
+
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+                    <ChartCard title="Pendapatan Berhasil" subtitle="Hanya transaksi berstatus success" action={<ChartPeriodSelect routeName="superadmin.payments" filters={filters} />}>
+                        {revenueSeries.some((item) => item.revenue > 0) ? (
+                            <ChartContainer config={{ revenue: { label: 'Pendapatan', theme: { light: '#dc2626', dark: '#f87171' } }, transactions: { label: 'Transaksi', theme: { light: '#f97316', dark: '#fb923c' } } }}>
+                                <AreaChart data={revenueSeries} margin={{ top: 8, right: 4, left: 8, bottom: 0 }}>
+                                    <defs>
+                                        <linearGradient id="revenue-gradient" x1="0" x2="0" y1="0" y2="1">
+                                            <stop offset="5%" stopColor="var(--color-revenue)" stopOpacity={0.35} />
+                                            <stop offset="95%" stopColor="var(--color-revenue)" stopOpacity={0.02} />
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-800" />
+                                    <XAxis dataKey="label" tickLine={false} axisLine={false} className="fill-gray-400 text-xs" />
+                                    <YAxis tickLine={false} axisLine={false} tickFormatter={(value) => `Rp${Number(value).toLocaleString('id-ID')}`} width={78} className="fill-gray-400 text-xs" />
+                                    <ChartTooltip content={<ChartTooltipContent valueFormatter={(value, entry) => entry.dataKey === 'revenue' ? `Rp${Number(value).toLocaleString('id-ID')}` : Number(value).toLocaleString('id-ID')} />} />
+                                    <Area type="monotone" dataKey="revenue" name="Pendapatan" stroke="var(--color-revenue)" fill="url(#revenue-gradient)" strokeWidth={2.5} />
+                                </AreaChart>
+                            </ChartContainer>
+                        ) : <ChartEmpty>Belum ada pendapatan berhasil pada periode ini.</ChartEmpty>}
+                    </ChartCard>
+
+                    <ChartCard title="Status Transaksi" subtitle="Semua transaksi tercatat">
+                        {transactionStatusDistribution.some((item) => item.value > 0) ? (
+                            <ChartContainer config={{ success: { color: '#10b981' }, pending: { color: '#f59e0b' }, failed: { color: '#dc2626' } }}>
+                                <PieChart>
+                                    <ChartTooltip content={<ChartTooltipContent />} />
+                                    <Legend wrapperStyle={{ fontSize: '12px', fontWeight: 700 }} />
+                                    <Pie data={transactionStatusDistribution} dataKey="value" nameKey="label" innerRadius={55} outerRadius={84} paddingAngle={3}>
+                                        {transactionStatusDistribution.map((item) => <Cell key={item.label} fill={item.fill} />)}
+                                    </Pie>
+                                </PieChart>
+                            </ChartContainer>
+                        ) : <ChartEmpty>Belum ada transaksi.</ChartEmpty>}
+                    </ChartCard>
+                </div>
+
+                <ChartCard title="Metode Pembayaran" subtitle="Metode yang paling sering dipakai">
+                    {paymentMethodDistribution.some((item) => item.value > 0) ? (
+                        <ChartContainer config={Object.fromEntries(paymentMethodDistribution.map((item) => [item.chart_key, { color: item.color }]))}>
+                            <PieChart>
+                                <ChartTooltip content={<ChartTooltipContent />} />
+                                <Legend wrapperStyle={{ fontSize: '12px', fontWeight: 700 }} />
+                                <Pie data={paymentMethodDistribution} dataKey="value" nameKey="label" innerRadius={52} outerRadius={80} paddingAngle={3}>
+                                    {paymentMethodDistribution.map((item) => <Cell key={item.label} fill={item.fill} />)}
+                                </Pie>
+                            </PieChart>
+                        </ChartContainer>
+                    ) : <ChartEmpty>Belum ada metode pembayaran yang tercatat.</ChartEmpty>}
+                </ChartCard>
 
                 <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr]">
                     <Card>

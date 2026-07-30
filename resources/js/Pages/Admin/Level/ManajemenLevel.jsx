@@ -66,7 +66,7 @@ export default function ManajemenLevel({ levels = [] }) {
             <Head title="Manajemen Level - Japanlingo" />
 
             <div className="min-h-screen bg-[#F8F9FB] font-sans">
-                <header className="sticky top-0 z-40 flex flex-col gap-4 border-b border-gray-200 bg-white px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+                <header className="sticky top-16 z-40 flex flex-col gap-4 border-b border-gray-200 bg-white px-4 py-4 sm:px-6 lg:top-0 lg:flex-row lg:items-center lg:justify-between">
                     <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#E64A19] text-white">
                             <LayersOutlinedIcon sx={{ fontSize: 20 }} />

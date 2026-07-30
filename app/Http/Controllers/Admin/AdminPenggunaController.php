@@ -12,6 +12,7 @@ use App\Models\PengerjaanKuis;
 use App\Models\Pengguna;
 use App\Models\Progres;
 use App\Services\AksesLanggananService;
+use App\Services\ChartDataService;
 use App\Services\KloterBelajarService;
 use App\Services\NotifikasiPenggunaService;
 use Illuminate\Database\Eloquent\Builder;
@@ -76,7 +77,12 @@ class AdminPenggunaController extends Controller
         ]);
     }
 
-    public function show(Request $request, Pengguna $user, KloterBelajarService $kloterService): Response
+    public function show(
+        Request $request,
+        Pengguna $user,
+        KloterBelajarService $kloterService,
+        ChartDataService $chartData
+    ): Response
     {
         /** @var Pengguna $admin */
         $admin = $request->user();
@@ -93,19 +99,41 @@ class AdminPenggunaController extends Controller
         }
 
         $programIds = $kloterService->programIdsDikelola($admin, $selectedKloter);
+        $period = $chartData->resolvePeriod($request);
+        $fromDate = $chartData->fromDate($period);
 
         $user->load([
-            'progress' => fn (Builder $query) => $this->batasiProgressProgram($query, $programIds),
+            'progress' => fn ($relation) => $this->batasiProgressProgram($relation->getQuery(), $programIds),
             'progress.module.level',
-            'attempts' => fn (Builder $query) => $this->batasiAttemptProgram($query, $programIds),
+            'attempts' => fn ($relation) => $this->batasiAttemptProgram($relation->getQuery(), $programIds),
             'attempts.quiz.module.level',
             'certificates.level',
             'achievements',
         ]);
 
         $completedModuleIds = $user->progress->pluck('module_id')->all();
+        $studentProgressQuery = $this->batasiProgressProgram(
+            Progres::query()->where('user_id', $user->id),
+            $programIds
+        );
+        $studentAttemptsQuery = $this->batasiAttemptProgram(
+            PengerjaanKuis::query()->where('user_id', $user->id),
+            $programIds
+        );
+        $studentActivitySeries = $chartData->dailySeries($period, [
+            'progress' => (clone $studentProgressQuery)
+                ->where('updated_at', '>=', $fromDate)
+                ->selectRaw('DATE(updated_at) as day, COUNT(*) as total')
+                ->groupBy('day')
+                ->pluck('total', 'day'),
+            'quiz_attempts' => (clone $studentAttemptsQuery)
+                ->where('attempted_at', '>=', $fromDate)
+                ->selectRaw('DATE(attempted_at) as day, COUNT(*) as total')
+                ->groupBy('day')
+                ->pluck('total', 'day'),
+        ]);
         $levels = LevelPembelajaran::with([
-            'modules' => fn (Builder $query) => $this->batasiModuleProgram($query, $programIds),
+            'modules' => fn ($relation) => $this->batasiModuleProgram($relation->getQuery(), $programIds),
         ])->orderBy('stage')->get();
 
         $levelProgress = $levels->map(function (LevelPembelajaran $level) use ($completedModuleIds) {
@@ -123,7 +151,8 @@ class AdminPenggunaController extends Controller
         });
 
         return Inertia::render('Admin/DataUser/DetailUser', [
-            'filters' => ['kloter' => $selectedKloter?->id],
+            'filters' => ['kloter' => $selectedKloter?->id, 'period' => $period],
+            'studentActivitySeries' => $studentActivitySeries,
             'student' => [
                 'id' => $user->id,
                 'username' => $user->username,

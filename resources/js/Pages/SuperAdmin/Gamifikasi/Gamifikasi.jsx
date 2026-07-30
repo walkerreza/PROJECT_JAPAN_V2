@@ -1,10 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router, useForm } from '@inertiajs/react';
 import Card from '@/Components/UI/Card';
 import StatCard from '@/Components/Features/Dashboard/StatCard';
+import ChartCard from '@/Components/Features/Dashboard/ChartCard';
+import ChartPeriodSelect from '@/Components/Features/Dashboard/ChartPeriodSelect';
 import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
 import LeagueIcon, { LEAGUE_ICON_OPTIONS, resolveLeagueIconKey } from '@/Components/Gamification/LeagueIcon';
+import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis } from 'recharts';
+import { ChartContainer, ChartEmpty, ChartTooltip, ChartTooltipContent } from '@/Components/UI/Chart';
 
 import BoltIcon from '@mui/icons-material/Bolt';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
@@ -12,6 +16,10 @@ import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import SaveIcon from '@mui/icons-material/Save';
 import SettingsIcon from '@mui/icons-material/Settings';
+import AddIcon from '@mui/icons-material/Add';
+import CloseIcon from '@mui/icons-material/Close';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined';
+import EditIcon from '@mui/icons-material/Edit';
 
 const defaultSettings = {
     quiz_xp: {
@@ -37,6 +45,21 @@ const defaultSettings = {
     ],
 };
 
+const achievementConditions = {
+    lessons_completed: 'Modul selesai',
+    quiz_perfect: 'Kuis sempurna',
+    streak_days: 'Hari beruntun',
+};
+
+const emptyAchievementForm = {
+    name: '',
+    description: '',
+    icon: '',
+    xp_reward: 0,
+    condition_type: 'lessons_completed',
+    condition_value: 1,
+};
+
 function NumberField({ label, value, onChange, helper, min = 0, max = 100000 }) {
     return (
         <label className="block">
@@ -57,7 +80,11 @@ function NumberField({ label, value, onChange, helper, min = 0, max = 100000 }) 
 export default function Gamification({
     stats = [],
     leaderboard = [],
+    xpSeries = [],
+    leagueDistribution = [],
+    filters = {},
     settings = defaultSettings,
+    achievements = [],
 }) {
     const initialSettings = {
         quiz_xp: {
@@ -77,6 +104,8 @@ export default function Gamification({
 
     const { data, setData, put, processing, errors } = useForm(initialSettings);
     const { confirmState, openConfirm, closeConfirm, setConfirmProcessing } = useConfirmAction();
+    const [achievementForm, setAchievementForm] = useState(emptyAchievementForm);
+    const [editingAchievementId, setEditingAchievementId] = useState(null);
 
     const updateQuizXp = (key, value) => {
         setData('quiz_xp', {
@@ -163,6 +192,61 @@ export default function Gamification({
         });
     };
 
+    const resetAchievementForm = () => {
+        setAchievementForm(emptyAchievementForm);
+        setEditingAchievementId(null);
+    };
+
+    const saveAchievement = (event) => {
+        event.preventDefault();
+        const options = {
+            preserveScroll: true,
+            onSuccess: resetAchievementForm,
+        };
+
+        if (editingAchievementId) {
+            router.put(route('superadmin.gamification.achievements.update', editingAchievementId), achievementForm, options);
+            return;
+        }
+
+        router.post(route('superadmin.gamification.achievements.store'), achievementForm, options);
+    };
+
+    const editAchievement = (achievement) => {
+        setEditingAchievementId(achievement.id);
+        setAchievementForm({
+            name: achievement.name || '',
+            description: achievement.description || '',
+            icon: achievement.icon || '',
+            xp_reward: Number(achievement.xp_reward || 0),
+            condition_type: achievement.condition_type || 'lessons_completed',
+            condition_value: Number(achievement.condition_value || 1),
+        });
+    };
+
+    const confirmDeleteAchievement = (achievement) => {
+        openConfirm({
+            variant: 'danger',
+            title: 'Hapus lencana global?',
+            message: 'Lencana ini berhenti dievaluasi untuk seluruh siswa. Riwayat lencana yang sudah dibuka juga akan dihapus.',
+            details: [
+                { label: 'Lencana', value: achievement.name },
+                { label: 'Bonus XP', value: `${achievement.xp_reward || 0} XP` },
+            ],
+            confirmLabel: 'Hapus lencana',
+            onConfirm: () => {
+                setConfirmProcessing(true);
+                router.delete(route('superadmin.gamification.achievements.destroy', achievement.id), {
+                    preserveScroll: true,
+                    onFinish: () => {
+                        setConfirmProcessing(false);
+                        closeConfirm();
+                    },
+                });
+            },
+        });
+    };
+
     const ruleValues = [
         `100% = ${data.quiz_xp.perfect} XP`,
         `80%+ = ${data.quiz_xp.score_80} XP`,
@@ -210,6 +294,179 @@ export default function Gamification({
                         </Card>
                     )}
                 </div>
+
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+                    <ChartCard title="XP Terdistribusi" subtitle="Reward yang benar-benar dicatat per hari" action={<ChartPeriodSelect routeName="superadmin.gamification" filters={filters} />}>
+                        {xpSeries.some((item) => item.xp > 0) ? (
+                            <ChartContainer config={{ xp: { label: 'XP', theme: { light: '#dc2626', dark: '#f87171' } } }}>
+                                <BarChart data={xpSeries} margin={{ top: 8, right: 4, left: -20, bottom: 0 }}>
+                                    <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-800" />
+                                    <XAxis dataKey="label" tickLine={false} axisLine={false} className="fill-gray-400 text-xs" />
+                                    <YAxis allowDecimals={false} tickLine={false} axisLine={false} className="fill-gray-400 text-xs" />
+                                    <ChartTooltip content={<ChartTooltipContent valueFormatter={(value) => `${Number(value).toLocaleString('id-ID')} XP`} />} />
+                                    <Bar dataKey="xp" name="XP" fill="var(--color-xp)" radius={[5, 5, 0, 0]} />
+                                </BarChart>
+                            </ChartContainer>
+                        ) : <ChartEmpty>Belum ada reward XP pada periode ini.</ChartEmpty>}
+                    </ChartCard>
+
+                    <ChartCard title="Distribusi Liga" subtitle="Posisi siswa berdasarkan XP saat ini">
+                        {leagueDistribution.some((item) => item.value > 0) ? (
+                            <ChartContainer config={Object.fromEntries(leagueDistribution.map((item) => [item.chart_key, { color: item.color }]))}>
+                                <PieChart>
+                                    <ChartTooltip content={<ChartTooltipContent />} />
+                                    <Pie data={leagueDistribution} dataKey="value" nameKey="label" innerRadius={58} outerRadius={88} paddingAngle={3}>
+                                        {leagueDistribution.map((item) => <Cell key={item.label} fill={item.fill} />)}
+                                    </Pie>
+                                </PieChart>
+                            </ChartContainer>
+                        ) : <ChartEmpty>Belum ada siswa dalam liga.</ChartEmpty>}
+                    </ChartCard>
+                </div>
+
+                <section className="grid grid-cols-1 gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+                    <Card>
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <h2 className="flex items-center gap-2 text-lg font-black text-gray-900 dark:text-white">
+                                    <EmojiEventsIcon sx={{ fontSize: 20 }} />
+                                    {editingAchievementId ? 'Edit Lencana' : 'Lencana Global'}
+                                </h2>
+                                <p className="mt-1 text-sm font-medium text-gray-500 dark:text-gray-400">
+                                    Aturan lencana berlaku untuk seluruh siswa, bukan hanya satu kelas.
+                                </p>
+                            </div>
+                            {editingAchievementId && (
+                                <button
+                                    type="button"
+                                    onClick={resetAchievementForm}
+                                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 text-gray-500 transition hover:border-red-200 hover:text-red-600 dark:border-gray-700 dark:text-gray-300"
+                                    title="Batal edit"
+                                >
+                                    <CloseIcon sx={{ fontSize: 18 }} />
+                                </button>
+                            )}
+                        </div>
+
+                        <form onSubmit={saveAchievement} className="mt-5 space-y-4">
+                            <div className="grid grid-cols-[88px_1fr] gap-3">
+                                <label className="block">
+                                    <span className="text-[11px] font-black uppercase tracking-[0.16em] text-gray-400">Ikon</span>
+                                    <input
+                                        value={achievementForm.icon}
+                                        onChange={(event) => setAchievementForm({ ...achievementForm, icon: event.target.value })}
+                                        maxLength={10}
+                                        placeholder="Badge"
+                                        className="mt-2 h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-center text-sm font-black text-gray-900 outline-none transition focus:border-red-400 focus:ring-4 focus:ring-red-100 dark:border-gray-800 dark:bg-gray-950 dark:text-white dark:focus:ring-red-900/30"
+                                    />
+                                </label>
+                                <label className="block">
+                                    <span className="text-[11px] font-black uppercase tracking-[0.16em] text-gray-400">Nama lencana</span>
+                                    <input
+                                        required
+                                        value={achievementForm.name}
+                                        onChange={(event) => setAchievementForm({ ...achievementForm, name: event.target.value })}
+                                        className="mt-2 h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm font-black text-gray-900 outline-none transition focus:border-red-400 focus:ring-4 focus:ring-red-100 dark:border-gray-800 dark:bg-gray-950 dark:text-white dark:focus:ring-red-900/30"
+                                    />
+                                </label>
+                            </div>
+
+                            <label className="block">
+                                <span className="text-[11px] font-black uppercase tracking-[0.16em] text-gray-400">Deskripsi</span>
+                                <input
+                                    value={achievementForm.description}
+                                    onChange={(event) => setAchievementForm({ ...achievementForm, description: event.target.value })}
+                                    className="mt-2 h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900 outline-none transition focus:border-red-400 focus:ring-4 focus:ring-red-100 dark:border-gray-800 dark:bg-gray-950 dark:text-white dark:focus:ring-red-900/30"
+                                />
+                            </label>
+
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                <label className="block sm:col-span-2">
+                                    <span className="text-[11px] font-black uppercase tracking-[0.16em] text-gray-400">Kondisi</span>
+                                    <select
+                                        value={achievementForm.condition_type}
+                                        onChange={(event) => setAchievementForm({ ...achievementForm, condition_type: event.target.value })}
+                                        className="mt-2 h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm font-black text-gray-900 outline-none transition focus:border-red-400 focus:ring-4 focus:ring-red-100 dark:border-gray-800 dark:bg-gray-950 dark:text-white dark:focus:ring-red-900/30"
+                                    >
+                                        {Object.entries(achievementConditions).map(([value, label]) => (
+                                            <option key={value} value={value}>{label}</option>
+                                        ))}
+                                    </select>
+                                </label>
+                                <label className="block">
+                                    <span className="text-[11px] font-black uppercase tracking-[0.16em] text-gray-400">Target</span>
+                                    <input
+                                        required
+                                        type="number"
+                                        min="1"
+                                        value={achievementForm.condition_value}
+                                        onChange={(event) => setAchievementForm({ ...achievementForm, condition_value: Math.max(1, Number(event.target.value) || 1) })}
+                                        className="mt-2 h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm font-black text-gray-900 outline-none transition focus:border-red-400 focus:ring-4 focus:ring-red-100 dark:border-gray-800 dark:bg-gray-950 dark:text-white dark:focus:ring-red-900/30"
+                                    />
+                                </label>
+                            </div>
+
+                            <label className="block">
+                                <span className="text-[11px] font-black uppercase tracking-[0.16em] text-gray-400">Bonus XP</span>
+                                <input
+                                    required
+                                    type="number"
+                                    min="0"
+                                    value={achievementForm.xp_reward}
+                                    onChange={(event) => setAchievementForm({ ...achievementForm, xp_reward: Math.max(0, Number(event.target.value) || 0) })}
+                                    className="mt-2 h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm font-black text-gray-900 outline-none transition focus:border-red-400 focus:ring-4 focus:ring-red-100 dark:border-gray-800 dark:bg-gray-950 dark:text-white dark:focus:ring-red-900/30"
+                                />
+                            </label>
+
+                            <div className="flex justify-end gap-3">
+                                {editingAchievementId && (
+                                    <button type="button" onClick={resetAchievementForm} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-black text-gray-600 dark:border-gray-700 dark:text-gray-300">
+                                        Batal
+                                    </button>
+                                )}
+                                <button type="submit" className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-red-700">
+                                    {editingAchievementId ? <SaveIcon sx={{ fontSize: 17 }} /> : <AddIcon sx={{ fontSize: 17 }} />}
+                                    {editingAchievementId ? 'Simpan' : 'Tambah lencana'}
+                                </button>
+                            </div>
+                        </form>
+                    </Card>
+
+                    <Card className="!p-0 overflow-hidden">
+                        <div className="border-b border-gray-100 p-5 dark:border-gray-800">
+                            <h2 className="text-lg font-black text-gray-900 dark:text-white">Daftar Lencana Aktif</h2>
+                            <p className="mt-1 text-sm font-medium text-gray-500 dark:text-gray-400">Dievaluasi otomatis saat user memenuhi progres kuis, modul, atau streak.</p>
+                        </div>
+                        <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                            {achievements.length === 0 && <p className="p-8 text-center text-sm font-bold text-gray-400">Belum ada lencana.</p>}
+                            {achievements.map((achievement) => (
+                                <article key={achievement.id} className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
+                                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 text-sm font-black text-red-600 dark:bg-red-900/20 dark:text-red-300">
+                                        {achievement.icon || <EmojiEventsIcon sx={{ fontSize: 20 }} />}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="font-black text-gray-900 dark:text-white">{achievement.name}</p>
+                                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{achievement.description || 'Tanpa deskripsi.'}</p>
+                                        <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-black">
+                                            <span className="rounded-full bg-gray-100 px-2.5 py-1 text-gray-600 dark:bg-gray-800 dark:text-gray-300">{achievementConditions[achievement.condition_type] || achievement.condition_type}</span>
+                                            <span className="rounded-full bg-gray-100 px-2.5 py-1 text-gray-600 dark:bg-gray-800 dark:text-gray-300">Target {achievement.condition_value}</span>
+                                            <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">+{achievement.xp_reward} XP</span>
+                                            <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">{achievement.users_count || 0} unlock</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-end gap-2">
+                                        <button type="button" onClick={() => editAchievement(achievement)} className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 text-gray-500 transition hover:border-red-200 hover:text-red-600 dark:border-gray-700 dark:text-gray-300" title="Edit lencana">
+                                            <EditIcon sx={{ fontSize: 18 }} />
+                                        </button>
+                                        <button type="button" onClick={() => confirmDeleteAchievement(achievement)} className="flex h-10 w-10 items-center justify-center rounded-xl border border-red-100 text-red-600 transition hover:bg-red-50 dark:border-red-900/40" title="Hapus lencana">
+                                            <DeleteOutlineIcon sx={{ fontSize: 18 }} />
+                                        </button>
+                                    </div>
+                                </article>
+                            ))}
+                        </div>
+                    </Card>
+                </section>
 
                 <form onSubmit={saveSettings} className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr]">
                     <Card>
