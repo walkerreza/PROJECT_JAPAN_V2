@@ -49,6 +49,11 @@ class ProgramPembelajaran extends Model
         return $this->hasMany(Transaksi::class, 'program_pembelajaran_id');
     }
 
+    public function examTargets(): HasMany
+    {
+        return $this->hasMany(TargetUjianPengguna::class, 'program_pembelajaran_id');
+    }
+
     public function accessKeys(): HasMany
     {
         return $this->hasMany(KodeAkses::class, 'program_pembelajaran_id');

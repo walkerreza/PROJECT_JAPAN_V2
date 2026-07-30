@@ -9,6 +9,7 @@ use App\Models\LogReward;
 use App\Models\Modul;
 use App\Models\PengerjaanKuis;
 use App\Models\Progres;
+use App\Models\Soal;
 use App\Services\AksesKuisPenggunaService;
 use App\Services\AksesPremiumService;
 use App\Services\GamifikasiConfigService;
@@ -113,6 +114,13 @@ class ProgresController extends Controller
             'answers.*.question_id' => ['required', 'integer', 'exists:questions,id'],
             'answers.*.answer_text' => ['nullable', 'string', 'max:2000'],
             'answers.*.answer_payload' => ['nullable', 'array'],
+            'answers.*.answer_payload.completed_strokes' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'answers.*.answer_payload.total_strokes' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'answers.*.answer_payload.attempts_by_stroke' => ['nullable', 'array', 'max:100'],
+            'answers.*.answer_payload.mistakes' => ['nullable', 'integer', 'min:0', 'max:10000'],
+            'answers.*.answer_payload.hints_used' => ['nullable', 'integer', 'min:0', 'max:10000'],
+            'answers.*.answer_payload.duration_ms' => ['nullable', 'integer', 'min:0', 'max:86400000'],
+            'answers.*.answer_payload.revealed' => ['nullable', 'boolean'],
             'module_flow' => ['nullable', 'boolean'],
             'finished_by_timeout' => ['nullable', 'boolean'],
             'attempt_id' => ['nullable', 'integer', 'exists:attempts,id'],
@@ -130,6 +138,10 @@ class ProgresController extends Controller
 
         $module = $quiz->module;
         $isWeeklyExam = $quiz->isWeeklyExam();
+        $scoredQuestionIds = $quiz->questions
+            ->where('type', '!=', 'handwriting')
+            ->pluck('id');
+        $scoredQuestionCount = $scoredQuestionIds->count();
 
         $aksesKuis->abortJikaTerkunci($user, $quiz);
         abort_if($quiz->questions->isEmpty(), 422, 'Kuis belum memiliki soal.');
@@ -181,20 +193,24 @@ class ProgresController extends Controller
                 ->keyBy(fn ($answer) => (int) $answer['question_id'])
                 ->values();
             $questionMap = $quiz->questions->keyBy('id');
-            $answeredUniqueCount = $answers->count();
-            $correctCount = $this->scoreAnswers($answers, $questionMap);
-            $totalQuestions = $quiz->questions->count();
-            $totalPoints = max(1, (int) $quiz->questions->sum(
+            $scoredQuestionMap = $questionMap->reject(fn ($question) => $this->isPracticeQuestion($question));
+            $scoredAnswers = $answers->filter(
+                fn ($answer) => $scoredQuestionMap->has((int) $answer['question_id'])
+            );
+            $answeredUniqueCount = $scoredAnswers->count();
+            $correctCount = $this->scoreAnswers($scoredAnswers, $scoredQuestionMap);
+            $totalQuestions = $scoredQuestionMap->count();
+            $totalPoints = (int) $scoredQuestionMap->sum(
                 fn ($question) => max(1, (int) ($question->points ?? 1))
-            ));
-            $earnedPoints = (int) $answers->sum(function ($answer) use ($questionMap) {
-                $question = $questionMap->get((int) $answer['question_id']);
+            );
+            $earnedPoints = (int) $scoredAnswers->sum(function ($answer) use ($scoredQuestionMap) {
+                $question = $scoredQuestionMap->get((int) $answer['question_id']);
 
                 return $question && $this->isAnswerCorrect($answer['answer_text'] ?? '', $question->correct_answer)
                     ? max(1, (int) ($question->points ?? 1))
                     : 0;
             });
-            $score = (int) round(($earnedPoints / $totalPoints) * 100);
+            $score = $totalPoints > 0 ? (int) round(($earnedPoints / $totalPoints) * 100) : 0;
             $xpEarned = $isWeeklyExam
                 ? 0
                 : $gamifikasiConfig->quizXpForScore($correctCount, $totalQuestions);
@@ -202,7 +218,9 @@ class ProgresController extends Controller
                 ->filter(function ($answer) use ($questionMap) {
                     $question = $questionMap->get((int) $answer['question_id']);
 
-                    return $question && ! $this->isAnswerCorrect($answer['answer_text'] ?? '', $question->correct_answer);
+                    return $question
+                        && ! $this->isPracticeQuestion($question)
+                        && ! $this->isAnswerCorrect($answer['answer_text'] ?? '', $question->correct_answer);
                 })
                 ->count();
 
@@ -233,14 +251,17 @@ class ProgresController extends Controller
                 }
 
                 $answerText = $answer['answer_text'] ?? '';
-                $isCorrect = $this->isAnswerCorrect($answerText, $question->correct_answer);
+                $isPractice = $this->isPracticeQuestion($question);
+                $isCorrect = $isPractice
+                    ? $this->isHandwritingMastered($answer['answer_payload'] ?? [])
+                    : $this->isAnswerCorrect($answerText, $question->correct_answer);
 
                 $attempt->answers()->create([
                     'question_id' => $question->id,
                     'answer_text' => $answerText,
                     'answer_payload' => $answer['answer_payload'] ?? null,
                     'is_correct' => $isCorrect,
-                    'earned_points' => $isCorrect ? max(1, (int) ($question->points ?? 1)) : 0,
+                    'earned_points' => ! $isPractice && $isCorrect ? max(1, (int) ($question->points ?? 1)) : 0,
                 ]);
             });
 
@@ -255,7 +276,9 @@ class ProgresController extends Controller
                     $repetisi->catatJawabanSoal(
                         $user,
                         $question,
-                        $this->isAnswerCorrect($answer['answer_text'] ?? '', $question->correct_answer),
+                        $this->isPracticeQuestion($question)
+                            ? $this->isHandwritingMastered($answer['answer_payload'] ?? [])
+                            : $this->isAnswerCorrect($answer['answer_text'] ?? '', $question->correct_answer),
                         $quiz
                     );
                 });
@@ -266,7 +289,7 @@ class ProgresController extends Controller
 
         if ($attemptAlreadyCompleted) {
             $attempt->loadMissing('answers');
-            $passed = $attempt->score >= $passingScore;
+            $passed = $scoredQuestionCount > 0 && $attempt->score >= $passingScore;
             $finishUrl = $module?->programPembelajaran
                 ? route('user.modul.program', $module->programPembelajaran->slug)
                 : route('user.kelas.index');
@@ -281,8 +304,10 @@ class ProgresController extends Controller
                     ->where('module_id', $module?->id)
                     ->whereNotNull('completed_at')
                     ->exists(),
-                'answered_count' => $attempt->answers->count(),
-                'total_questions' => $quiz->questions->count(),
+                'answered_count' => $attempt->answers
+                    ->whereIn('question_id', $scoredQuestionIds)
+                    ->count(),
+                'total_questions' => $scoredQuestionCount,
                 'passing_score' => $passingScore,
                 'answer_review' => $this->attemptReview($attempt, $quiz),
                 'idempotent' => true,
@@ -293,11 +318,13 @@ class ProgresController extends Controller
 
         if ($module) {
             $passed = $isWeeklyExam
-                ? $attempt->score >= $passingScore
+                ? $scoredQuestionCount > 0 && $attempt->score >= $passingScore
                 : (
+                    $scoredQuestionCount > 0
+                    &&
                     $attempt->score >= $passingScore
                     && $wrongAttemptCount < $maxLives
-                    && $answeredUniqueCount >= $quiz->questions->count()
+                    && $answeredUniqueCount >= $scoredQuestionCount
                     && ! ($validated['finished_by_timeout'] ?? false)
                 );
 
@@ -329,7 +356,7 @@ class ProgresController extends Controller
             }
         }
 
-        if (! $isWeeklyExam) {
+        if (! $isWeeklyExam && $scoredQuestionCount > 0) {
             event(new KuisSelesai($user, $quiz->id, $attempt->score, $attempt->xp_earned));
         }
         $summary->forget($user);
@@ -348,7 +375,8 @@ class ProgresController extends Controller
                 'completed_module' => $completedModule,
                 'was_completed' => $wasCompleted,
                 'answered_count' => $answeredUniqueCount,
-                'total_questions' => $quiz->questions->count(),
+                'total_questions' => $scoredQuestionCount,
+                'practice_questions' => $quiz->questions->where('type', 'handwriting')->count(),
                 'wrong_attempt_count' => $wrongAttemptCount,
                 'passing_score' => $passingScore,
                 'finished_by_timeout' => (bool) ($validated['finished_by_timeout'] ?? false),
@@ -419,6 +447,22 @@ class ProgresController extends Controller
                 $questionMap->get((int) $answer['question_id'])->correct_answer
             ))
             ->count();
+    }
+
+    private function isPracticeQuestion(Soal $question): bool
+    {
+        return $question->type === 'handwriting'
+            || (bool) data_get($question->options, 'practice_only', false);
+    }
+
+    private function isHandwritingMastered(array $payload): bool
+    {
+        $completed = (int) ($payload['completed_strokes'] ?? 0);
+        $total = (int) ($payload['total_strokes'] ?? 0);
+
+        return $total > 0
+            && $completed >= $total
+            && ! (bool) ($payload['revealed'] ?? false);
     }
 
     private function attemptReview(PengerjaanKuis $attempt, Kuis $quiz): array

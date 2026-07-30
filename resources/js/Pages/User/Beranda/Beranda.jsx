@@ -2,7 +2,6 @@ import React, { useMemo, useState } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { HitodamaIcon, KabutoIcon, ScrollIcon } from '@/Components/JapaneseIcons';
-import { MascotGuide } from '@/Components/User/UserVisuals';
 import theme from '@/Components/theme/themes';
 import MountFujiBg from '../../../../Images/Mount-Fuji-New.jpg';
 
@@ -23,7 +22,7 @@ function StatBubble({ icon, label, value }) {
         <div className="flex min-h-11 items-center gap-2.5 rounded-2xl border border-white/70 bg-white/90 px-3 py-2 shadow-sm backdrop-blur-sm transition-colors duration-300 sm:gap-3 sm:px-5 sm:py-3 dark:border-gray-800 dark:bg-gray-900/90">
             {icon}
             <div className="text-left leading-tight">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">{label}</p>
+                <p className="text-[11px] font-bold uppercase tracking-widest text-gray-700 dark:text-gray-300">{label}</p>
                 <p className="text-base font-black text-gray-900 dark:text-white">{value}</p>
             </div>
         </div>
@@ -51,6 +50,43 @@ function SectionHeader({ eyebrow, title, actionHref, actionLabel }) {
     );
 }
 
+function DailyGoalCard({ goal = {} }) {
+    const xpTarget = Number(goal.xp_target || 30);
+    const xpEarned = Number(goal.xp_earned || 0);
+    const xpProgress = Math.min(100, Number(goal.xp_progress || 0));
+    const sessionsCompleted = Number(goal.sessions_completed || 0);
+
+    return (
+        <aside className="rounded-2xl border border-amber-100 bg-amber-50/80 p-4 dark:border-amber-900/40 dark:bg-amber-950/20 sm:p-5">
+            <div className="flex items-start justify-between gap-3">
+                <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Target Hari Ini</p>
+                    <h3 className="mt-1 text-lg font-black text-gray-900 dark:text-white">Satu sesi, 30 XP</h3>
+                </div>
+                <CheckCircleIcon className={goal.completed ? 'text-emerald-500' : 'text-amber-500'} />
+            </div>
+            <div className="mt-4 space-y-3">
+                <div>
+                    <div className="mb-1.5 flex items-center justify-between text-xs font-bold text-gray-700 dark:text-gray-200">
+                        <span>XP hari ini</span>
+                        <span>{xpEarned}/{xpTarget}</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-amber-100 dark:bg-amber-950/60">
+                        <div className="h-full rounded-full bg-amber-500 transition-all" style={{ width: `${xpProgress}%` }} />
+                    </div>
+                </div>
+                <div className="flex items-center justify-between rounded-xl border border-white/70 bg-white/80 px-3 py-2.5 text-xs font-black text-gray-700 dark:border-gray-800 dark:bg-gray-900/80 dark:text-gray-200">
+                    <span>Sesi selesai</span>
+                    <span className={goal.sessions_done ? 'text-emerald-700 dark:text-emerald-300' : 'text-gray-700 dark:text-gray-300'}>{sessionsCompleted >= 1 ? 'Selesai' : '0/1'}</span>
+                </div>
+            </div>
+            <p className="mt-3 text-xs font-semibold leading-5 text-gray-700 dark:text-gray-300">
+                {goal.completed ? 'Target hari ini sudah tercapai. Jaga ritmenya besok.' : 'Selesaikan satu sesi kuis dan kumpulkan 30 XP untuk menutup target hari ini.'}
+            </p>
+        </aside>
+    );
+}
+
 export default function BerandaUser({
     user = {},
     recentProgress = [],
@@ -60,6 +96,7 @@ export default function BerandaUser({
     activeSubscription = null,
     quickQuiz = null,
     lastCompletedQuiz = null,
+    dailyGoal = {},
 }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -71,6 +108,7 @@ export default function BerandaUser({
 
     const ownedPrograms = learningDashboard?.programs || [];
     const activeLearning = learningDashboard?.next_module || null;
+    const nextAction = learningDashboard?.next_action || null;
     const totalModules = ownedPrograms.reduce((total, program) => total + Number(program.total_modules || 0), 0);
     const recentActivities = recentProgress.length > 0 ? recentProgress.slice(0, 4) : rewardHistory.slice(0, 4);
     const quickQuizUrl = quickQuiz?.url || lastCompletedQuiz?.url || activeLearning?.roadmap_url || route('user.kelas.index');
@@ -188,7 +226,7 @@ export default function BerandaUser({
 
                         <form onSubmit={handleSearch} className="relative mb-4 w-full max-w-2xl">
                             <div className="relative rounded-full border border-white/70 bg-white/95 shadow-sm dark:border-gray-800 dark:bg-gray-900/95">
-                                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400 dark:text-gray-500">
+                                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-gray-600 dark:text-gray-300">
                                     <SearchIcon sx={{ fontSize: 21 }} />
                                 </div>
                                 <input
@@ -219,7 +257,7 @@ export default function BerandaUser({
                                             setActiveSuggestionIndex((index) => Math.max(index - 1, 0));
                                         }
                                     }}
-                                    className="h-12 w-full rounded-full border-0 bg-transparent py-3 pl-12 pr-20 text-sm text-gray-700 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-red-100 dark:text-gray-200 dark:placeholder:text-gray-500 dark:focus:ring-red-900/50"
+                                    className="h-12 w-full rounded-full border-0 bg-transparent py-3 pl-12 pr-20 text-sm font-medium text-gray-800 outline-none placeholder:text-gray-500 focus:ring-2 focus:ring-red-100 dark:text-gray-100 dark:placeholder:text-gray-400 dark:focus:ring-red-900/50"
                                     placeholder="Cari materi di kelas aktif..."
                                 />
                                 {searchQuery && (
@@ -229,12 +267,12 @@ export default function BerandaUser({
                                             setSearchQuery('');
                                             setActiveSuggestionIndex(0);
                                         }}
-                                        className="absolute inset-y-0 right-11 my-auto h-8 px-2 text-xs font-black text-gray-400 transition hover:text-gray-700 dark:hover:text-gray-200"
+                                        className="absolute inset-y-0 right-11 my-auto h-8 px-2 text-xs font-black text-gray-600 transition hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
                                     >
                                         Hapus
                                     </button>
                                 )}
-                                <button type="submit" aria-label="Buka hasil pencarian" className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-gray-400 transition hover:text-red-600 dark:text-gray-500 dark:hover:text-red-300">
+                                <button type="submit" aria-label="Buka hasil pencarian" className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-gray-600 transition hover:text-red-600 dark:text-gray-300 dark:hover:text-red-300">
                                     <ArrowRightAltIcon sx={{ fontSize: 22 }} />
                                 </button>
                             </div>
@@ -258,13 +296,13 @@ export default function BerandaUser({
                                                 <Icon sx={{ fontSize: 20 }} className="shrink-0 text-red-600 dark:text-red-300" />
                                                 <div className="min-w-0 flex-1">
                                                     <p className="truncate text-sm font-black text-gray-900 dark:text-white">{item.title}</p>
-                                                    <p className="truncate text-xs text-gray-500 dark:text-gray-400">{item.subtitle}</p>
+                                                    <p className="truncate text-xs font-medium text-gray-700 dark:text-gray-300">{item.subtitle}</p>
                                                 </div>
-                                                <span className="shrink-0 text-[10px] font-black uppercase tracking-wide text-gray-400">{item.type}</span>
+                                                <span className="shrink-0 text-[10px] font-black uppercase tracking-wide text-gray-600 dark:text-gray-300">{item.type}</span>
                                             </Link>
                                         );
                                     }) : (
-                                        <p className="px-3 py-4 text-sm font-medium text-gray-500 dark:text-gray-400">Tidak ada materi yang bisa dibuka dengan kata kunci ini.</p>
+                                        <p className="px-3 py-4 text-sm font-medium text-gray-700 dark:text-gray-300">Tidak ada materi yang bisa dibuka dengan kata kunci ini.</p>
                                     )}
                                 </div>
                             )}
@@ -322,66 +360,69 @@ export default function BerandaUser({
                 </div>
 
                 <div className="relative z-10 mx-auto -mt-10 max-w-7xl space-y-10 px-4 sm:px-6 lg:px-8">
-                    <MascotGuide
-                        tone="amber"
-                        title="Sensei Daruma"
-                        message="Fokus hari ini cukup satu langkah: pilih kelas aktif, review resource, lalu selesaikan kuis. Streak dan XP akan mengikuti."
-                    />
-
                     <section className="overflow-hidden rounded-[1.5rem] border border-red-100/80 bg-gradient-to-br from-red-600 via-rose-600 to-amber-500 p-1 shadow-2xl shadow-red-900/12 sm:rounded-[2rem] dark:border-red-900/50">
-                        <div className="grid gap-5 rounded-[1.4rem] bg-white/92 p-4 backdrop-blur sm:gap-6 sm:rounded-[1.8rem] sm:p-7 dark:bg-gray-950/88 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-center">
-                            <div className="flex items-start gap-4">
-                                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-red-600 text-white shadow-lg shadow-red-600/25">
-                                    <DashboardIcon sx={{ fontSize: 28 }} />
-                                </div>
-                                <div>
+                        <div className="grid gap-5 rounded-[1.4rem] bg-white p-4 sm:gap-6 sm:rounded-[1.8rem] sm:p-7 dark:bg-gray-950 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-center">
+                            <div className="grid gap-5">
+                                <div className="flex items-start gap-4">
+                                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-red-600 text-white shadow-lg shadow-red-600/25">
+                                        <DashboardIcon sx={{ fontSize: 28 }} />
+                                    </div>
+                                    <div>
                                     <p className="mb-1 text-xs font-black uppercase tracking-[0.18em] text-red-600 dark:text-red-400">
-                                        Lanjutkan Belajar
+                                        Belajar Hari Ini
                                     </p>
                                     <h2 className="text-xl font-black text-gray-900 sm:text-2xl dark:text-white">
                                         {activeLearning ? activeLearning.title : 'Belum ada kelas aktif'}
                                     </h2>
-                                    <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-600 dark:text-gray-300">
+                                    <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-gray-800 dark:text-gray-100">
                                         {activeLearning
-                                            ? `${activeLearning.program_title} - Week ${activeLearning.week_number}. Lanjutkan dari materi yang tersedia.`
+                                            ? `${activeLearning.program_title} - Week ${activeLearning.week_number}${activeLearning.current_day ? `, Hari ${activeLearning.current_day.number} - ${activeLearning.current_day.title}` : ''}. Pilih satu resource lalu lanjutkan progres.`
                                             : 'Pilih kelas untuk memulai roadmap belajar dan membuka materi mingguan.'}
                                     </p>
                                     <div className="mt-3 flex flex-wrap gap-2 text-xs font-black sm:mt-4">
                                         <span className="rounded-full bg-red-50 px-3 py-1.5 text-red-700 dark:bg-red-950/40 dark:text-red-300">
-                                            {totalModules} modul di kelas saya
+                                            {totalModules} modul tersedia
                                         </span>
                                         <span className="rounded-full bg-amber-50 px-3 py-1.5 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
                                             {ownedPrograms.length} kelas aktif
                                         </span>
-                                        <span className="rounded-full bg-gray-100 px-3 py-1.5 text-gray-600 dark:bg-gray-900 dark:text-gray-300">
+                                        <span className="rounded-full bg-sky-50 px-3 py-1.5 text-sky-800 dark:bg-sky-950/50 dark:text-sky-200">
                                             {isPremium ? 'Akses premium aktif' : 'Preview tersedia'}
                                         </span>
                                     </div>
+                                    </div>
                                 </div>
-                            </div>
 
-                            <div className="grid gap-2">
+                            <div className="grid gap-3">
                                 <Link
-                                    href={activeLearning?.roadmap_url || route('user.kelas.index')}
+                                    href={nextAction?.href || activeLearning?.roadmap_url || route('user.kelas.index')}
                                     className={`inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r ${theme.ctaBg} px-6 py-3 text-sm font-black text-white shadow-lg shadow-red-900/15 transition lg:hover:-translate-y-0.5 lg:hover:brightness-95`}
                                 >
-                                    {activeLearning ? 'Lanjutkan Belajar' : 'Jelajahi Kelas'}
+                                    {nextAction?.label || (activeLearning ? 'Buka Roadmap' : 'Jelajahi Kelas')}
                                     <ArrowRightAltIcon sx={{ fontSize: 22 }} />
                                 </Link>
-                                <Link
-                                    href={route('user.progress')}
-                                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-red-100 bg-white px-6 py-3 text-sm font-black text-red-700 transition lg:hover:bg-red-50 dark:border-red-900/40 dark:bg-gray-950 dark:text-red-300 lg:dark:hover:bg-red-950/30"
-                                >
-                                    Lihat Progress
-                                </Link>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {resourceCards.filter((item) => item.available && item.href).slice(0, 4).map((item) => {
+                                        const Icon = item.icon;
+
+                                        return (
+                                            <Link key={item.category} href={item.href} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-red-100 bg-white px-2 text-xs font-black text-gray-700 transition hover:border-red-300 hover:text-red-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200 dark:hover:text-red-300">
+                                                <Icon sx={{ fontSize: 16 }} />
+                                                {item.title}
+                                            </Link>
+                                        );
+                                    })}
+                                </div>
                             </div>
+                            </div>
+                            <DailyGoalCard goal={dailyGoal} />
                         </div>
                     </section>
 
                     <section className="rounded-[1.5rem] border border-white/70 bg-white/55 p-4 shadow-xl shadow-red-900/5 backdrop-blur-md sm:rounded-[2rem] sm:p-7 dark:border-gray-800 dark:bg-gray-900/55">
                         <SectionHeader
-                            eyebrow="Kelas Aktif"
-                            title="Lanjutkan roadmap belajarmu"
+                            eyebrow="Kelas Saya"
+                            title="Roadmap yang dapat kamu ikuti"
                             actionHref={route('user.kelas.index')}
                             actionLabel="Jelajahi kelas"
                         />
@@ -415,10 +456,10 @@ export default function BerandaUser({
                                                     : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'}`}>
                                                     {program.waiting_for_kloter ? 'Menunggu kloter' : 'Kelas aktif'}
                                                 </span>
-                                                {!program.waiting_for_kloter && <span className="text-xs font-bold text-slate-400">{program.total_modules || 0} modul</span>}
+                                                {!program.waiting_for_kloter && <span className="text-xs font-bold text-slate-600 dark:text-gray-300">{program.total_modules || 0} modul</span>}
                                             </div>
                                             <h3 className="truncate text-base font-black text-slate-950 sm:text-lg dark:text-white">{program.title}</h3>
-                                            <p className="mt-1 truncate text-sm text-slate-500 dark:text-gray-400">
+                                            <p className="mt-1 truncate text-sm font-medium text-slate-700 dark:text-gray-300">
                                                 {program.waiting_for_kloter
                                                     ? 'Roadmap tersedia setelah jadwal kloter dimulai.'
                                                     : (program.next_module ? `Berikutnya: Week ${program.next_module.week_number} - ${program.next_module.title}` : 'Semua modul yang tersedia telah selesai.')}
@@ -428,12 +469,12 @@ export default function BerandaUser({
                                                     <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-gray-800">
                                                         <div className="h-full rounded-full bg-red-600" style={{ width: `${program.progress}%` }} />
                                                     </div>
-                                                    <span className="shrink-0 text-xs font-black text-slate-500 dark:text-gray-400">{program.progress}%</span>
+                                                    <span className="shrink-0 text-xs font-black text-slate-700 dark:text-gray-300">{program.progress}%</span>
                                                 </div>
                                             )}
                                         </div>
                                         <span className={`relative z-10 col-span-2 inline-flex min-h-10 items-center justify-center gap-1 rounded-lg px-4 text-sm font-black sm:col-auto sm:min-h-11 ${program.waiting_for_kloter
-                                            ? 'bg-slate-100 text-slate-500 dark:bg-gray-800 dark:text-gray-400'
+                                            ? 'bg-slate-100 text-slate-700 dark:bg-gray-800 dark:text-gray-300'
                                             : 'bg-red-600 text-white lg:group-hover:bg-red-700'}`}>
                                             {program.waiting_for_kloter ? 'Menunggu jadwal' : 'Lanjutkan'}
                                             {!program.waiting_for_kloter && <ArrowRightAltIcon sx={{ fontSize: 20 }} />}
@@ -453,69 +494,13 @@ export default function BerandaUser({
                                 <div className="rounded-2xl border border-dashed border-gray-300 bg-white/70 px-5 py-8 text-center dark:border-gray-700 dark:bg-gray-950/70">
                                     <SchoolIcon sx={{ fontSize: 30 }} className="mb-2 text-red-500" />
                                     <p className="font-black text-gray-900 dark:text-white">Belum ada kelas aktif</p>
-                                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Pilih kelas untuk memulai roadmap belajar.</p>
+                                    <p className="mt-1 text-sm font-medium text-gray-700 dark:text-gray-300">Pilih kelas untuk memulai roadmap belajar.</p>
                                     <Link href={route('user.kelas.index')} className="mt-4 inline-flex min-h-11 items-center gap-1 text-sm font-black text-red-600 dark:text-red-400">
                                         Jelajahi kelas <ArrowRightAltIcon sx={{ fontSize: 20 }} />
                                     </Link>
                                 </div>
                             )}
                         </div>
-                    </section>
-
-                    <section className="rounded-[1.5rem] border border-white/70 bg-white/55 p-4 shadow-xl shadow-amber-900/5 backdrop-blur-md sm:rounded-[2rem] sm:p-7 dark:border-gray-800 dark:bg-gray-900/55">
-                        <SectionHeader
-                            eyebrow="Materi Minggu Ini"
-                            title={activeLearning ? `Week ${activeLearning.week_number} - ${activeLearning.program_title}` : 'Materi mengikuti kelas aktif'}
-                            actionHref={activeLearning?.roadmap_url}
-                            actionLabel="Lihat roadmap"
-                        />
-
-                        {activeLearning ? <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-                            {resourceCards.map((item) => {
-                                const Icon = item.icon;
-                                const cardClass = `group flex min-h-[132px] flex-col rounded-2xl border p-3 shadow-sm transition-all sm:min-h-0 sm:rounded-[1.5rem] sm:p-5 ${item.available
-                                    ? 'border-white/70 bg-white/85 lg:hover:-translate-y-0.5 lg:hover:shadow-lg dark:border-gray-800 dark:bg-gray-950/80'
-                                    : 'cursor-not-allowed border-gray-200 bg-gray-100/70 opacity-75 dark:border-gray-800 dark:bg-gray-950/50'}`;
-                                const content = (
-                                    <>
-                                        <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${item.tone} text-white shadow-lg sm:mb-4 sm:h-12 sm:w-12 sm:rounded-2xl`}>
-                                            <Icon sx={{ fontSize: 22 }} className="sm:hidden" />
-                                            <Icon sx={{ fontSize: 26 }} className="hidden sm:block" />
-                                        </div>
-                                        <h3 className="text-sm font-black text-gray-900 transition sm:text-base lg:group-hover:text-red-600 dark:text-white lg:dark:group-hover:text-red-300">{item.title}</h3>
-                                        <p className="mt-2 hidden text-sm font-medium leading-6 text-gray-500 sm:block dark:text-gray-400">{item.available ? item.description : item.message}</p>
-                                        <span className={`mt-auto pt-3 text-xs font-black ${item.available ? 'text-red-600 dark:text-red-300' : 'text-gray-400'}`}>
-                                            {item.available ? 'Buka materi' : 'Belum terbuka'}
-                                        </span>
-                                    </>
-                                );
-
-                                return item.available ? (
-                                    <Link
-                                        key={item.category}
-                                        href={item.href}
-                                        className={cardClass}
-                                    >
-                                        {content}
-                                    </Link>
-                                ) : (
-                                    <div key={item.category} className={cardClass} aria-disabled="true">
-                                        {content}
-                                    </div>
-                                );
-                            })}
-                            {resourceCards.length === 0 && (
-                                <div className="rounded-[1.5rem] border border-dashed border-gray-200 bg-white/70 p-6 text-sm font-bold text-gray-500 dark:border-gray-800 dark:bg-gray-950/70 dark:text-gray-400 sm:col-span-2 lg:col-span-4">
-                                    Materi belum tersedia untuk minggu ini.
-                                </div>
-                            )}
-                        </div> : (
-                            <div className="rounded-2xl border border-dashed border-gray-300 bg-white/70 px-5 py-8 text-center dark:border-gray-700 dark:bg-gray-950/70">
-                                <AutoStoriesIcon sx={{ fontSize: 30 }} className="mb-2 text-amber-500" />
-                                <p className="font-black text-gray-900 dark:text-white">Materi akan muncul setelah kelas aktif</p>
-                                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Pilih kelas untuk membuka materi mingguan sesuai roadmap.</p>
-                            </div>
-                        )}
                     </section>
 
                     <section className="overflow-hidden rounded-[1.5rem] border border-red-100/80 bg-white/72 p-4 shadow-xl shadow-red-900/5 backdrop-blur-md sm:rounded-[2rem] sm:p-7 dark:border-gray-800 dark:bg-gray-900/72">
@@ -581,24 +566,27 @@ export default function BerandaUser({
                                         <CheckCircleIcon />
                                     </div>
                                     <div>
-                                        <p className="text-xs font-black uppercase tracking-[0.18em] text-gray-400">Ringkasan</p>
+                                        <p className="text-xs font-black uppercase tracking-[0.18em] text-gray-600 dark:text-gray-300">Ringkasan</p>
                                         <p className="font-black text-gray-900 dark:text-white">Belajar minggu ini</p>
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-3 gap-2 text-center">
                                     <div className="rounded-xl bg-red-50 px-2 py-2.5 sm:rounded-2xl sm:px-3 sm:py-3 dark:bg-red-950/30">
                                         <p className="text-xl font-black text-red-600 dark:text-red-300">{user.xp || 0}</p>
-                                        <p className="text-[10px] font-bold uppercase text-gray-500 dark:text-gray-400">XP</p>
+                                        <p className="text-[11px] font-bold uppercase text-gray-700 dark:text-gray-300">XP</p>
                                     </div>
                                     <div className="rounded-xl bg-amber-50 px-2 py-2.5 sm:rounded-2xl sm:px-3 sm:py-3 dark:bg-amber-950/30">
                                         <p className="text-xl font-black text-amber-600 dark:text-amber-300">{user.streak_count || 0}</p>
-                                        <p className="text-[10px] font-bold uppercase text-gray-500 dark:text-gray-400">Streak</p>
+                                        <p className="text-[11px] font-bold uppercase text-gray-700 dark:text-gray-300">Streak</p>
                                     </div>
                                     <div className="rounded-xl bg-emerald-50 px-2 py-2.5 sm:rounded-2xl sm:px-3 sm:py-3 dark:bg-emerald-950/30">
                                         <p className="text-xl font-black text-emerald-600 dark:text-emerald-300">{rewardHistory.length}</p>
-                                        <p className="text-[10px] font-bold uppercase text-gray-500 dark:text-gray-400">Log</p>
+                                        <p className="text-[11px] font-bold uppercase text-gray-700 dark:text-gray-300">Log</p>
                                     </div>
                                 </div>
+                                <Link href={route('user.leaderboard')} className="mt-3 inline-flex w-full items-center justify-center gap-1 rounded-xl border border-gray-100 bg-white px-3 py-2 text-xs font-black text-gray-600 transition hover:border-red-200 hover:text-red-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300 dark:hover:text-red-300">
+                                    Lihat peringkat liga <ArrowRightAltIcon sx={{ fontSize: 17 }} />
+                                </Link>
                             </div>
 
                             <div className="overflow-hidden rounded-2xl border border-red-100/70 bg-white/85 sm:rounded-[1.5rem] dark:border-gray-800 dark:bg-gray-950/80">
@@ -612,7 +600,7 @@ export default function BerandaUser({
                                                     </div>
                                                     <div className="min-w-0">
                                                         <p className="truncate text-sm font-bold text-gray-900 dark:text-white">{activity.description || activity.title || activity.source_type || 'Aktivitas belajar'}</p>
-                                                        <p className="text-[11px] font-medium text-gray-400">
+                                                        <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-300">
                                                             {activity.created_at
                                                                 ? new Date(activity.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
                                                                 : 'Baru saja'}
@@ -628,7 +616,7 @@ export default function BerandaUser({
                                         ))}
                                     </div>
                                 ) : (
-                                    <div className="p-6 text-sm font-medium text-gray-500 dark:text-gray-400">
+                                    <div className="p-6 text-sm font-medium text-gray-700 dark:text-gray-300">
                                         Belum ada aktivitas terbaru. Mulai dari kelas aktif untuk mengisi progress.
                                     </div>
                                 )}
@@ -668,7 +656,7 @@ export default function BerandaUser({
                                                 </span>
                                             </div>
                                         )}
-                                        <div className="mb-3 flex items-center gap-1.5 text-xs font-medium text-gray-400">
+                                        <div className="mb-3 flex items-center gap-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300">
                                             <span className="rounded-full bg-red-50 px-2 py-0.5 font-bold text-red-700 dark:bg-red-900/20 dark:text-red-300">{item.category?.replaceAll('-', ' ') || 'platform'}</span>
                                             <AccessTimeIcon sx={{ fontSize: 14 }} />
                                             {item.published_at
@@ -678,7 +666,7 @@ export default function BerandaUser({
                                         <h3 className="mb-2 text-lg font-extrabold leading-snug text-gray-900 transition-colors sm:mb-3 lg:group-hover:text-red-600 dark:text-white lg:dark:group-hover:text-red-400">
                                             {item.title}
                                         </h3>
-                                        <p className="mb-4 line-clamp-2 flex-grow text-sm leading-relaxed text-gray-500 sm:mb-6 sm:line-clamp-3 dark:text-gray-400">
+                                        <p className="mb-4 line-clamp-2 flex-grow text-sm font-medium leading-relaxed text-gray-700 sm:mb-6 sm:line-clamp-3 dark:text-gray-300">
                                             {item.excerpt || (item.body ? `${item.body.replace(/<[^>]*>/g, '').substring(0, 100)}...` : 'Baca update terbaru dari Japanlingo.')}
                                         </p>
                                         <div className="mt-auto flex items-center gap-2 text-sm font-black text-red-600 dark:text-red-400">
@@ -688,7 +676,7 @@ export default function BerandaUser({
                                     </div>
                                 </Link>
                             )) : (
-                                <p className="w-full text-sm text-gray-500 md:col-span-2 lg:col-span-3 dark:text-gray-400">Belum ada berita terbaru.</p>
+                                <p className="w-full text-sm font-medium text-gray-700 md:col-span-2 lg:col-span-3 dark:text-gray-300">Belum ada berita terbaru.</p>
                             )}
                         </div>
                     </section>

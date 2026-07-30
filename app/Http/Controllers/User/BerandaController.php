@@ -15,6 +15,7 @@ use App\Models\ProgramPembelajaran;
 use App\Models\SetFlashcard;
 use App\Models\LogAktivitas;
 use App\Models\PengerjaanKuis;
+use App\Models\ProgresHariModul;
 use App\Services\AksesLanggananService;
 use App\Services\AksesKuisPenggunaService;
 use App\Services\AksesPremiumService;
@@ -83,6 +84,7 @@ class BerandaController extends Controller
                 ->first(),
             'quickQuiz' => $this->quickQuizPayload($user, $aksesKuis),
             'lastCompletedQuiz' => $this->lastCompletedQuizPayload($user->id),
+            'dailyGoal' => $this->dailyGoalPayload($user->id),
         ]);
     }
 
@@ -93,6 +95,9 @@ class BerandaController extends Controller
                 'level:id,level_name',
                 'modules' => fn ($query) => $query
                     ->where('status', 'published')
+                    ->with(['days' => fn ($dayQuery) => $dayQuery
+                        ->where('status', 'published')
+                        ->select(['id', 'module_id', 'day_number', 'title'])])
                     ->orderBy('week_number')
                     ->orderBy('id'),
             ])
@@ -111,8 +116,17 @@ class BerandaController extends Controller
                 ->whereNotNull('completed_at')
                 ->pluck('module_id')
                 ->unique();
+        $dayIds = $programs->flatMap(fn (ProgramPembelajaran $program) => $program->modules->flatMap->days->pluck('id'));
+        $completedDayIds = $dayIds->isEmpty()
+            ? collect()
+            : ProgresHariModul::query()
+                ->where('user_id', $user->id)
+                ->whereIn('module_day_id', $dayIds)
+                ->whereNotNull('completed_at')
+                ->pluck('module_day_id')
+                ->unique();
 
-        $activePrograms = $programs->map(function (ProgramPembelajaran $program) use ($user, $aksesPremium, $kloterBelajar, $completedModuleIds) {
+        $activePrograms = $programs->map(function (ProgramPembelajaran $program) use ($user, $aksesPremium, $kloterBelajar, $completedModuleIds, $completedDayIds) {
             $kloter = $kloterBelajar->kloterAktifUser($user, $program->id);
             $waitingForKloter = ! $kloter;
             $modules = $waitingForKloter
@@ -122,6 +136,8 @@ class BerandaController extends Controller
                     ->values();
             $nextModule = $modules->first(fn (Modul $module) => ! $completedModuleIds->contains($module->id))
                 ?? $modules->first();
+            $nextDay = $nextModule?->days->first(fn ($day) => ! $completedDayIds->contains($day->id))
+                ?? $nextModule?->days->first();
             $completedCount = $program->modules->filter(fn (Modul $module) => $completedModuleIds->contains($module->id))->count();
 
             return [
@@ -140,6 +156,11 @@ class BerandaController extends Controller
                     'id' => $nextModule->id,
                     'title' => $nextModule->title,
                     'week_number' => $nextModule->week_number,
+                    'current_day' => $nextDay ? [
+                        'id' => $nextDay->id,
+                        'number' => $nextDay->day_number,
+                        'title' => $nextDay->title,
+                    ] : null,
                 ] : null,
             ];
         });
@@ -149,6 +170,14 @@ class BerandaController extends Controller
 
         $primaryModule = $primaryProgram['next_module'] ?? null;
 
+        $resources = $primaryModule
+            ? $this->moduleResourcePayload($user, $primaryProgram, $primaryModule['id'], $aksesKuis)
+            : [];
+        $nextAction = collect(['flashcard', 'kuis', 'presentasi', 'kosakata'])
+            ->map(fn (string $category) => collect($resources)->first(fn (array $resource) => $resource['category'] === $category && $resource['available']))
+            ->filter()
+            ->first();
+
         return [
             'programs' => $activePrograms,
             'next_module' => $primaryModule ? [
@@ -156,9 +185,37 @@ class BerandaController extends Controller
                 'program_title' => $primaryProgram['title'],
                 'roadmap_url' => $primaryProgram['roadmap_url'],
             ] : null,
-            'resources' => $primaryModule
-                ? $this->moduleResourcePayload($user, $primaryProgram, $primaryModule['id'], $aksesKuis)
-                : [],
+            'resources' => $resources,
+            'next_action' => $nextAction ? [
+                'label' => 'Mulai '.$nextAction['title'],
+                'href' => $nextAction['href'],
+                'category' => $nextAction['category'],
+            ] : null,
+        ];
+    }
+
+    private function dailyGoalPayload(int $userId): array
+    {
+        $xpTarget = 30;
+        $today = today();
+        $xpEarned = (int) LogReward::query()
+            ->where('user_id', $userId)
+            ->whereBetween('created_at', [$today->copy()->startOfDay(), $today->copy()->endOfDay()])
+            ->sum('xp_amount');
+        $completedSessions = PengerjaanKuis::query()
+            ->where('user_id', $userId)
+            ->where('status', 'completed')
+            ->whereDate('completed_at', $today)
+            ->count();
+
+        return [
+            'xp_target' => $xpTarget,
+            'xp_earned' => $xpEarned,
+            'xp_progress' => min(100, (int) round(($xpEarned / $xpTarget) * 100)),
+            'sessions_target' => 1,
+            'sessions_completed' => $completedSessions,
+            'sessions_done' => $completedSessions >= 1,
+            'completed' => $xpEarned >= $xpTarget && $completedSessions >= 1,
         ];
     }
 

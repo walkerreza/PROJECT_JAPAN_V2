@@ -85,6 +85,16 @@ class Pengguna extends Authenticatable implements MustVerifyEmailContract
         return $this->hasMany(PengerjaanKuis::class, 'user_id');
     }
 
+    public function learningFeedback(): HasMany
+    {
+        return $this->hasMany(UmpanBalikPembelajaran::class, 'user_id');
+    }
+
+    public function examTargets(): HasMany
+    {
+        return $this->hasMany(TargetUjianPengguna::class, 'user_id');
+    }
+
     public function progress(): HasMany
     {
         return $this->hasMany(Progres::class, 'user_id');
