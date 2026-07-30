@@ -33,6 +33,7 @@ class KuisRequest extends FormRequest
             'passing_score' => 'nullable|integer|min:1|max:100',
             'available_at' => 'nullable|date',
             'status' => 'nullable|in:draft,published',
+            'stay_on_roadmap' => ['nullable', 'boolean'],
         ];
     }
 

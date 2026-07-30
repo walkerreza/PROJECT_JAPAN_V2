@@ -4,6 +4,7 @@ namespace App\Http\Controllers\User;
 
 use App\Http\Controllers\Controller;
 use App\Models\Kuis;
+use App\Models\UmpanBalikPembelajaran;
 use App\Services\AksesKuisPenggunaService;
 use App\Services\PembelajaranPenggunaService;
 use Illuminate\Support\Facades\Auth;
@@ -43,6 +44,11 @@ class PembelajaranController extends Controller
                 'module_flow' => $isWeeklyExam,
                 'back_url' => $roadmapUrl,
                 'finish_url' => $roadmapUrl,
+                'learning_feedback' => UmpanBalikPembelajaran::query()
+                    ->where('user_id', Auth::id())
+                    ->where('quiz_id', $quiz->id)
+                    ->whereDate('feedback_date', today())
+                    ->first(['rating', 'continue_learning']),
             ]
         );
     }

@@ -3,6 +3,8 @@ import { Head, Link, router, useForm } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Card from '@/Components/UI/Card';
 import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
+import StrokeCharacterPreview from '@/Components/Features/Handwriting/StrokeCharacterPreview';
+import { resolveAvailableCharacters, writingCharacters } from '@/Components/Features/Handwriting/strokeData';
 
 import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
@@ -10,6 +12,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import EditIcon from '@mui/icons-material/Edit';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import SearchIcon from '@mui/icons-material/Search';
+import DrawOutlinedIcon from '@mui/icons-material/DrawOutlined';
 
 const emptyForm = {
     content_type: 'kosakata',
@@ -98,9 +101,18 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
     const [moduleId, setModuleId] = useState(filters.module_id || 'all');
     const [moduleDayId, setModuleDayId] = useState(filters.module_day_id || 'all');
     const [showTemplateMenu, setShowTemplateMenu] = useState(false);
+    const [strokePreview, setStrokePreview] = useState(null);
     const form = useForm(emptyForm);
     const { confirmState, openConfirm, closeConfirm } = useConfirmAction();
     const contextualModule = modules.find((module) => String(module.id) === String(filters.module_id));
+
+    const openStrokePreview = async (item) => {
+        const available = await resolveAvailableCharacters(item.word, item.reading);
+        setStrokePreview({
+            character: available[0]?.character || writingCharacters(`${item.word || ''}${item.reading || ''}`)[0],
+            title: `${item.word} - ${item.meaning_id || item.meaning_en || ''}`,
+        });
+    };
 
     const openCreate = () => {
         setEditing(null);
@@ -315,7 +327,11 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
                                     <p className="mt-3 line-clamp-2 text-xs font-semibold text-gray-500 dark:text-gray-400">{item.example_sentence || item.source_title || 'Contoh/sumber belum diisi.'}</p>
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-2 border-t border-gray-100 p-4 dark:border-gray-800">
+                            <div className="grid grid-cols-3 gap-2 border-t border-gray-100 p-4 dark:border-gray-800">
+                                <button onClick={() => openStrokePreview(item)} className="flex items-center justify-center gap-1.5 rounded-2xl border border-orange-200 bg-orange-50 px-2 py-2 text-xs font-black text-orange-700 dark:border-orange-900/40 dark:bg-orange-950/20 dark:text-orange-300">
+                                    <DrawOutlinedIcon sx={{ fontSize: 16 }} />
+                                    Stroke
+                                </button>
                                 <button onClick={() => openEdit(item)} className="flex items-center justify-center gap-2 rounded-2xl border border-gray-200 px-4 py-2 text-xs font-black text-gray-700 dark:border-gray-700 dark:text-gray-200">
                                     <EditIcon sx={{ fontSize: 16 }} />
                                     Edit
@@ -481,6 +497,12 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
                     </div>
                 )}
             </div>
+            <StrokeCharacterPreview
+                character={strokePreview?.character}
+                title={strokePreview?.title}
+                open={Boolean(strokePreview)}
+                onClose={() => setStrokePreview(null)}
+            />
             <ConfirmActionDialog {...confirmState} onCancel={closeConfirm} />
         </AuthenticatedLayout>
     );

@@ -8,6 +8,7 @@ use App\Models\Kosakata;
 use App\Models\Modul;
 use App\Services\ImportSpreadsheetService;
 use App\Services\NotifikasiPenggunaService;
+use App\Services\SoalKuisService;
 use App\Services\TemplateExcelService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -16,6 +17,45 @@ use Inertia\Inertia;
 
 class AdminKosakataController extends Controller
 {
+    public function picker(Request $request, SoalKuisService $questions)
+    {
+        $validated = $request->validate([
+            'module_id' => ['required', 'integer', 'exists:modules,id'],
+            'module_day_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('module_days', 'id')
+                    ->where('module_id', $request->integer('module_id')),
+            ],
+            'search' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $items = Kosakata::query()
+            ->where(function ($query) use ($validated) {
+                $query->whereNull('module_id')->orWhere('module_id', $validated['module_id']);
+            })
+            ->when($validated['search'] ?? null, function ($query, $search) {
+                $query->where(function ($query) use ($search) {
+                    $query->where('word', 'like', "%{$search}%")
+                        ->orWhere('reading', 'like', "%{$search}%")
+                        ->orWhere('meaning_id', 'like', "%{$search}%")
+                        ->orWhere('meaning_en', 'like', "%{$search}%");
+                });
+            })
+            ->orderByRaw("case when status = 'published' then 0 else 1 end")
+            ->latest('id')
+            ->limit(30)
+            ->get(['id', 'content_type', 'word', 'reading', 'meaning_id', 'meaning_en'])
+            ->map(fn (Kosakata $item) => [
+                ...$item->toArray(),
+                'writing_characters' => $questions->writingCharacters($item->word, (string) $item->reading),
+            ])
+            ->filter(fn (array $item) => $item['writing_characters'] !== [])
+            ->values();
+
+        return response()->json(['data' => $items]);
+    }
+
     public function index(Request $request)
     {
         $query = Kosakata::with([

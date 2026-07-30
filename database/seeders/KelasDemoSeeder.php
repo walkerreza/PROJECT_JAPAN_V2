@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\DeckPresentasi;
 use App\Models\Flashcard;
 use App\Models\HariModul;
+use App\Models\Kosakata;
 use App\Models\Kuis;
 use App\Models\LevelPembelajaran;
 use App\Models\Modul;
@@ -12,18 +13,19 @@ use App\Models\ProgramPembelajaran;
 use App\Models\SetFlashcard;
 use App\Models\SlidePresentasi;
 use App\Models\Soal;
+use App\Services\SoalKuisService;
 use Illuminate\Database\Seeder;
 
 class KelasDemoSeeder extends Seeder
 {
-    public function run(): void
+    public function run(SoalKuisService $questions): void
     {
         $level = LevelPembelajaran::updateOrCreate(
             ['level_name' => 'JLPT N3'],
             ['stage' => 3, 'is_premium' => true]
         );
 
-        collect($this->kelas())->each(function (array $kelas, int $index) use ($level) {
+        collect($this->kelas())->each(function (array $kelas, int $index) use ($level, $questions) {
             $program = ProgramPembelajaran::updateOrCreate(
                 ['slug' => $kelas['slug']],
                 [
@@ -113,6 +115,46 @@ class KelasDemoSeeder extends Seeder
                         ]
                     );
                 }
+
+                $writing = $moduleData['handwriting'];
+                $vocabulary = Kosakata::updateOrCreate(
+                    ['module_id' => $module->id, 'word' => $writing['word']],
+                    [
+                        'content_type' => 'kanji',
+                        'reading' => $writing['reading'],
+                        'meaning_id' => $writing['meaning'],
+                        'jlpt_level' => 'N3',
+                        'category' => 'latihan-menulis',
+                        'status' => 'published',
+                    ]
+                );
+                $vocabulary->days()->syncWithoutDetaching([
+                    $dayTwo->id => ['sort_order' => 1],
+                ]);
+
+                $writingSet = SetFlashcard::updateOrCreate(
+                    [
+                        'module_id' => $module->id,
+                        'module_day_id' => $dayTwo->id,
+                        'source_type' => 'handwriting-demo',
+                    ],
+                    [
+                        'level_id' => $level->id,
+                        'title' => 'Latihan Kanji '.$moduleData['title'],
+                        'description' => 'Flashcard penguatan sebelum latihan urutan stroke.',
+                        'status' => 'published',
+                    ]
+                );
+                Flashcard::updateOrCreate(
+                    ['flashcard_set_id' => $writingSet->id, 'order' => 1],
+                    [
+                        'vocabulary_id' => $vocabulary->id,
+                        'front_text' => $writing['word'],
+                        'reading' => $writing['reading'],
+                        'back_text' => $writing['meaning'],
+                        'hint' => 'Perhatikan bentuk dan urutan stroke.',
+                    ]
+                );
 
                 $dayTwo->update(['checkpoint_quiz_id' => $quiz->id]);
 
@@ -218,8 +260,28 @@ class KelasDemoSeeder extends Seeder
                 ['text' => $question, 'answer' => $answer, 'options' => [$answer, 'membeli', 'berangkat', 'menulis'], 'explanation' => $word.' berarti '.$answer.'.'],
                 ['text' => 'Apa fokus modul ini?', 'answer' => $focus, 'options' => [$focus, 'Latihan N1', 'Percakapan bisnis lanjut', 'Menulis sakubun'], 'explanation' => 'Modul ini fokus pada '.$focus.'.'],
             ],
+            'handwriting' => $this->handwritingFor($word, $meaning),
             'presentation_title' => 'PPT '.$topic,
             'presentation_description' => 'Slide pembuka untuk '.$focus.'.',
         ];
+    }
+
+    private function handwritingFor(string $word, string $meaning): array
+    {
+        return match ($word) {
+            'waribiki' => ['character' => '割', 'word' => '割引', 'reading' => 'わりびき', 'meaning' => $meaning],
+            'hitsuyou' => ['character' => '必', 'word' => '必要', 'reading' => 'ひつよう', 'meaning' => $meaning],
+            'annai' => ['character' => '案', 'word' => '案内', 'reading' => 'あんない', 'meaning' => $meaning],
+            'tsuzukeru' => ['character' => '続', 'word' => '続ける', 'reading' => 'つづける', 'meaning' => $meaning],
+            'anzen' => ['character' => '安', 'word' => '安全', 'reading' => 'あんぜん', 'meaning' => $meaning],
+            'shinsei' => ['character' => '申', 'word' => '申請', 'reading' => 'しんせい', 'meaning' => $meaning],
+            'undou' => ['character' => '動', 'word' => '運動', 'reading' => 'うんどう', 'meaning' => $meaning],
+            'byouin' => ['character' => '院', 'word' => '病院', 'reading' => 'びょういん', 'meaning' => $meaning],
+            'yotei' => ['character' => '予', 'word' => '予定', 'reading' => 'よてい', 'meaning' => $meaning],
+            'seikai' => ['character' => '正', 'word' => '正解', 'reading' => 'せいかい', 'meaning' => $meaning],
+            'sentaku' => ['character' => '選', 'word' => '選択', 'reading' => 'せんたく', 'meaning' => $meaning],
+            'fukushuu' => ['character' => '復', 'word' => '復習', 'reading' => 'ふくしゅう', 'meaning' => $meaning],
+            default => ['character' => '新', 'word' => '新しい', 'reading' => 'あたらしい', 'meaning' => $meaning],
+        };
     }
 }

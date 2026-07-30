@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Kuis;
 use App\Models\Pengguna;
+use App\Models\ReviewFlashcard;
 use App\Models\ReviewSoal;
 use App\Models\SetFlashcard;
 use Illuminate\Support\Collection;
@@ -48,10 +49,13 @@ class PembelajaranPenggunaService
     {
         $module = $quiz->module;
         $isWeeklyExam = $quiz->isWeeklyExam();
+        $questions = $quiz->questions
+            ->where('type', '!=', 'handwriting')
+            ->values();
         $questionReviews = $isWeeklyExam
             ? collect()
             : ReviewSoal::where('user_id', $user->id)
-                ->whereIn('question_id', $quiz->questions->pluck('id'))
+                ->whereIn('question_id', $questions->pluck('id'))
                 ->get()
                 ->keyBy('question_id');
 
@@ -80,7 +84,7 @@ class PembelajaranPenggunaService
                     'week_number' => $module?->week_number,
                 ],
             ],
-            'questions' => $quiz->questions->map(function ($question) use ($questionReviews) {
+            'questions' => $questions->map(function ($question) use ($questionReviews) {
                 $review = $questionReviews->get($question->id);
 
                 return [
@@ -99,10 +103,10 @@ class PembelajaranPenggunaService
                     'review_due' => $review?->next_review_at ? $review->next_review_at->isPast() : false,
                 ];
             }),
-            'total_points' => (int) $quiz->questions->sum(
+            'total_points' => (int) $questions->sum(
                 fn ($question) => max(1, (int) ($question->points ?? 1))
             ),
-            'flashcards' => $isWeeklyExam ? [] : $this->quizFlashcards($quiz),
+            'flashcards' => $isWeeklyExam ? [] : $this->quizFlashcards($user, $quiz),
         ];
     }
 
@@ -143,13 +147,13 @@ class PembelajaranPenggunaService
         return max(1, (int) ceil($timeLimit / 60)).' Menit';
     }
 
-    private function quizFlashcards(Kuis $quiz): Collection
+    private function quizFlashcards(Pengguna $user, Kuis $quiz): Collection
     {
         $moduleId = $quiz->module_id;
         $moduleDayId = $quiz->module_day_id;
         $levelId = $quiz->module?->level_id;
 
-        $sets = SetFlashcard::with('flashcards')
+        $sets = SetFlashcard::with('flashcards.vocabulary')
             ->where('status', 'published')
             ->whereHas('flashcards')
             ->where(function ($query) use ($moduleId, $moduleDayId, $levelId) {
@@ -176,20 +180,59 @@ class PembelajaranPenggunaService
                 };
             });
 
-        return $sets
+        $cards = $sets
             ->flatMap(fn (SetFlashcard $set) => $set->flashcards)
             ->unique('id')
+            ->values();
+        $reviews = ReviewFlashcard::query()
+            ->where('user_id', $user->id)
+            ->whereIn('flashcard_id', $cards->pluck('id'))
+            ->get()
+            ->keyBy('flashcard_id');
+
+        return $cards
+            ->groupBy(function ($card) use ($reviews) {
+                $review = $reviews->get($card->id);
+
+                return match (true) {
+                    $review?->next_review_at?->isPast() => 0,
+                    $review?->status === 'learning' => 1,
+                    $review === null || $review->status === 'new' => 2,
+                    $review?->status === 'review' => 3,
+                    default => 4,
+                };
+            })
+            ->sortKeys()
+            ->flatMap(fn (Collection $group) => $group->shuffle())
             ->take(5)
-            ->values()
-            ->map(fn ($card) => [
-                'id' => $card->id,
-                'front_text' => $card->front_text,
-                'reading' => $card->reading,
-                'back_text' => $card->back_text,
-                'hint' => $card->hint,
-                'example_sentence' => $card->example_sentence,
-                'example_meaning' => $card->example_meaning,
-                'audio_url' => $card->audio_url,
-            ]);
+            ->map(function ($card) use ($reviews) {
+                $review = $reviews->get($card->id);
+                $vocabulary = $card->vocabulary;
+                $metadata = is_array($vocabulary?->metadata) ? $vocabulary->metadata : [];
+
+                return [
+                    'id' => $card->id,
+                    'front_text' => $card->front_text,
+                    'reading' => $card->reading,
+                    'back_text' => $card->back_text,
+                    'hint' => $card->hint,
+                    'example_sentence' => $card->example_sentence,
+                    'example_reading' => $vocabulary?->example_reading,
+                    'example_meaning' => $card->example_meaning,
+                    'audio_url' => $card->audio_url,
+                    'content_type' => $vocabulary?->content_type,
+                    'meaning_en' => $vocabulary?->meaning_en,
+                    'onyomi' => $metadata['onyomi'] ?? null,
+                    'kunyomi' => $metadata['kunyomi'] ?? null,
+                    'radicals' => array_values(array_filter((array) ($metadata['radicals'] ?? []))),
+                    'stroke_count' => isset($metadata['stroke_count']) ? (int) $metadata['stroke_count'] : null,
+                    'notes' => $metadata['notes'] ?? null,
+                    'review_status' => $review?->status ?? 'new',
+                    'mastery_level' => (int) ($review?->mastery_level ?? 0),
+                    'next_review_at' => $review?->next_review_at?->toISOString(),
+                    'review_due' => $review?->next_review_at?->isPast() ?? false,
+                ];
+            })
+            ->values();
     }
 }

@@ -2,13 +2,9 @@
 
 namespace App\Services;
 
-use App\Models\Flashcard;
 use App\Models\Kuis;
 use App\Models\Pengguna;
-use App\Models\ReviewFlashcard;
-use App\Models\SetFlashcard;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Collection;
 
 class AksesKuisPenggunaService
 {
@@ -23,18 +19,6 @@ class AksesKuisPenggunaService
         $status = $this->status($user, $quiz);
 
         if (! $status['allowed']) {
-            if ($status['reason'] === 'flashcard_required' && $status['flashcard_set']) {
-                return redirect()
-                    ->route('user.flashcards.show', $status['flashcard_set'])
-                    ->with('warning', $status['message']);
-            }
-
-            if ($status['reason'] === 'flashcard_required' && $status['module']) {
-                return redirect()
-                    ->route('user.modul.lesson', $status['module']->id)
-                    ->with('warning', $status['message']);
-            }
-
             abort(403, $status['message']);
         }
 
@@ -117,52 +101,13 @@ class AksesKuisPenggunaService
             ];
         }
 
-        $flashcardSets = $this->flashcardSetsFor($module->id, $quiz->module_day_id);
-        $flashcardSet = $flashcardSets->first();
-        $flashcardStats = $this->flashcardStats($user->id, $flashcardSets);
-
-        if ($flashcardStats['total'] > 0 && $flashcardStats['reviewed'] < $flashcardStats['total']) {
-            $scope = $quiz->module_day_id ? 'Hari ini' : 'minggu ini';
-
-            return $this->blocked('flashcard_required', "Review semua flashcard {$scope} untuk membuka kuis.", $module, $flashcardSet, $flashcardStats);
-        }
-
         return [
             'allowed' => true,
             'reason' => null,
             'message' => null,
             'module' => $module,
-            'flashcard_set' => $flashcardSet,
-            'flashcard_stats' => $flashcardStats,
-        ];
-    }
-
-    private function flashcardSetsFor(int $moduleId, ?int $moduleDayId = null): Collection
-    {
-        return SetFlashcard::where('module_id', $moduleId)
-            ->when($moduleDayId, fn ($query) => $query->where('module_day_id', $moduleDayId))
-            ->where('status', 'published')
-            ->whereHas('flashcards')
-            ->orderBy('id')
-            ->get();
-    }
-
-    private function flashcardStats(int $userId, Collection $flashcardSets): array
-    {
-        if ($flashcardSets->isEmpty()) {
-            return ['total' => 0, 'reviewed' => 0];
-        }
-
-        $cardIds = Flashcard::query()
-            ->whereIn('flashcard_set_id', $flashcardSets->pluck('id'))
-            ->pluck('id');
-
-        return [
-            'total' => $cardIds->count(),
-            'reviewed' => ReviewFlashcard::where('user_id', $userId)
-                ->whereIn('flashcard_id', $cardIds)
-                ->distinct()
-                ->count('flashcard_id'),
+            'flashcard_set' => null,
+            'flashcard_stats' => ['total' => 0, 'reviewed' => 0],
         ];
     }
 
@@ -170,7 +115,6 @@ class AksesKuisPenggunaService
         string $reason,
         string $message,
         $module,
-        ?SetFlashcard $flashcardSet = null,
         ?array $flashcardStats = null
     ): array {
         return [
@@ -178,7 +122,7 @@ class AksesKuisPenggunaService
             'reason' => $reason,
             'message' => $message,
             'module' => $module,
-            'flashcard_set' => $flashcardSet,
+            'flashcard_set' => null,
             'flashcard_stats' => $flashcardStats ?? ['total' => 0, 'reviewed' => 0],
         ];
     }

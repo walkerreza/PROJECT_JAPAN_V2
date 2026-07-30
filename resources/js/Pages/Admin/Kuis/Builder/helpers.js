@@ -26,7 +26,9 @@ export const emptyQuestion = (type = 'multiple_choice') => {
         type: normalizedType,
         question_text: '',
         correct_answer: '',
-        options: normalizedType === 'multiple_choice' ? ['', '', '', ''] : [],
+        options: normalizedType === 'multiple_choice'
+            ? ['', '', '', '']
+            : [],
         explanation: '',
         audio_url: '',
         order: 0,

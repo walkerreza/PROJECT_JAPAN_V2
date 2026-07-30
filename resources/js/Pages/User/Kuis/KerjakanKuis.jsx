@@ -1,11 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import Confetti from 'react-confetti';
 import theme from '@/Components/theme/themes';
-import { FloatingLearningDecor, MascotGuide, RewardSummary } from '@/Components/User/UserVisuals';
+import { FloatingLearningDecor, RewardSummary } from '@/Components/User/UserVisuals';
 import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
 import JapaneseSpeechButton from '@/Components/UI/JapaneseSpeechButton';
+import { playSoundEffect } from '@/Components/UI/SoundEffects';
+import KanjiHandwritingCanvas from '@/Components/Features/Handwriting/KanjiHandwritingCanvas';
+import StrokeCharacterPreview from '@/Components/Features/Handwriting/StrokeCharacterPreview';
+import { loadStrokeCharacter, resolveAvailableCharacters } from '@/Components/Features/Handwriting/strokeData';
 
 // MUI Icons
 import CloseIcon from '@mui/icons-material/Close';
@@ -13,6 +17,8 @@ import FavoriteIcon from '@mui/icons-material/Favorite';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import StarIcon from '@mui/icons-material/Star';
+import VolumeOffIcon from '@mui/icons-material/VolumeOff';
+import VolumeUpIcon from '@mui/icons-material/VolumeUp';
 
 const formatTime = (seconds) => {
     const safeSeconds = Math.max(0, Number(seconds) || 0);
@@ -50,7 +56,97 @@ const getJapaneseSpeechText = (question) => {
     return matches?.length ? matches.join('') : '';
 };
 
-export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = [], module_flow = false, back_url = null, finish_url = null }) {
+const SOUND_PREFERENCE_KEY = 'japanlingo.quizSoundEnabled';
+
+function SoundToggleButton({ enabled, onToggle }) {
+    return (
+        <button
+            type="button"
+            onClick={onToggle}
+            title={enabled ? 'Nonaktifkan narator otomatis' : 'Aktifkan narator otomatis'}
+            aria-label={enabled ? 'Nonaktifkan narator otomatis' : 'Aktifkan narator otomatis'}
+            aria-pressed={enabled}
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition ${
+                enabled
+                    ? 'border-orange-200 bg-orange-50 text-orange-600 hover:bg-orange-100 dark:border-orange-700 dark:bg-orange-950/60 dark:text-orange-300 dark:hover:bg-orange-900/70'
+                    : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800'
+            }`}
+        >
+            {enabled ? <VolumeUpIcon fontSize="small" /> : <VolumeOffIcon fontSize="small" />}
+        </button>
+    );
+}
+
+function StrokeGuideGallery({ text }) {
+    const [characters, setCharacters] = useState([]);
+    const [previewCharacter, setPreviewCharacter] = useState(null);
+
+    useEffect(() => {
+        let active = true;
+
+        resolveAvailableCharacters(text)
+            .then((availableCharacters) => Promise.all(
+                availableCharacters
+                    .filter(({ character }) => /\p{Script=Han}/u.test(character))
+                    .map(({ character }) => loadStrokeCharacter(character)),
+            ))
+            .then((items) => {
+                if (active) setCharacters(items);
+            })
+            .catch(() => {
+                if (active) setCharacters([]);
+            });
+
+        return () => {
+            active = false;
+        };
+    }, [text]);
+
+    if (characters.length === 0) return null;
+
+    return (
+        <section className="mx-auto mt-5 max-w-2xl text-left sm:mt-7">
+            <div className="mb-2">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-orange-600">Cara Menulis</p>
+                <p className="mt-0.5 text-xs font-semibold text-gray-700 dark:text-gray-300">Lihat bentuk dan urutan stroke setiap kanji.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                {characters.map((item) => (
+                    <article key={item.character} className="flex min-w-0 items-center gap-3 rounded-2xl border border-orange-100 bg-orange-50/60 p-2.5 dark:border-orange-900/60 dark:bg-orange-950/25 sm:p-3">
+                        <svg viewBox="0 0 109 109" className="h-16 w-16 shrink-0 rounded-xl border border-orange-100 bg-white dark:border-gray-700 dark:bg-gray-950" aria-label={`Panduan menulis ${item.character}`}>
+                            <path d="M 54.5 0 V 109 M 0 54.5 H 109 M 0 0 L 109 109 M 109 0 L 0 109" fill="none" stroke="#e5e7eb" strokeWidth="0.7" strokeDasharray="3 3" />
+                            {item.paths.map((pathData, index) => (
+                                <path key={`${item.character}-${index}`} d={pathData} fill="none" stroke="#94a3b8" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" opacity="0.5" />
+                            ))}
+                        </svg>
+                        <div className="min-w-0 flex-1">
+                            <p className="text-xl font-black text-gray-900 dark:text-white">{item.character}</p>
+                            <p className="text-[11px] font-bold text-gray-700 dark:text-gray-300">{item.stroke_count} stroke</p>
+                            <button type="button" onClick={() => setPreviewCharacter(item.character)} className="mt-1.5 rounded-lg px-2 py-1 text-xs font-black text-orange-600 transition hover:bg-orange-100 hover:text-orange-700 dark:text-orange-300 dark:hover:bg-orange-950/70">
+                                Lihat Urutan
+                            </button>
+                        </div>
+                    </article>
+                ))}
+            </div>
+            <StrokeCharacterPreview
+                character={previewCharacter}
+                title={`Urutan stroke ${previewCharacter || ''}`}
+                open={Boolean(previewCharacter)}
+                onClose={() => setPreviewCharacter(null)}
+            />
+        </section>
+    );
+}
+
+export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = [], module_flow = false, back_url = null, finish_url = null, learning_feedback = null }) {
+    const prefersReducedMotion = useReducedMotion();
+    const [soundEnabled, setSoundEnabled] = useState(() => {
+        if (typeof window === 'undefined') return true;
+
+        return window.localStorage.getItem(SOUND_PREFERENCE_KEY) !== 'false';
+    });
+    const [sessionFlashcards] = useState(() => flashcards);
     const [questions, setQuestions] = useState(() =>
         rawQuestions
             .map((q, index) => ({
@@ -75,8 +171,9 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
     const [completedOriginalQuestionIds, setCompletedOriginalQuestionIds] = useState(() => new Set());
     const [showResult, setShowResult] = useState(false);
     const [showFlashcard, setShowFlashcard] = useState(false);
+    const [handwritingPractice, setHandwritingPractice] = useState(null);
     const [flashcardIndex, setFlashcardIndex] = useState(0);
-    const [needsFlashcardReview, setNeedsFlashcardReview] = useState(false);
+    const [flashcardReviewing, setFlashcardReviewing] = useState(false);
     const hasTimeLimit = Number(quiz?.time_limit || 0) > 0;
     const [secondsLeft, setSecondsLeft] = useState(Number(quiz?.time_limit || 0));
     const [finishedByTimeout, setFinishedByTimeout] = useState(false);
@@ -85,12 +182,17 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
     const [isSubmittingAttempt, setIsSubmittingAttempt] = useState(false);
     const [attemptSession, setAttemptSession] = useState(null);
     const [attemptStarting, setAttemptStarting] = useState(Boolean(quiz?.is_weekly_exam));
+    const [learningFeedback, setLearningFeedback] = useState(learning_feedback);
+    const [feedbackRating, setFeedbackRating] = useState(learning_feedback?.rating || null);
+    const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+    const [feedbackError, setFeedbackError] = useState(null);
     
     const submitted = useRef(false);
     const answerPendingRef = useRef(false);
     const answerLogRef = useRef({});
     const answerEventsRef = useRef([]);
     const correctMapRef = useRef({});
+    const practiceResumeRef = useRef('next');
 
     // Animasi state
     const [shakeKey, setShakeKey] = useState(0); // Trigger shake animation
@@ -98,6 +200,13 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
 
     // Window size for Confetti
     const [windowSize, setWindowSize] = useState({ width: 0, height: 0 });
+
+    useEffect(() => {
+        window.localStorage.setItem(SOUND_PREFERENCE_KEY, soundEnabled ? 'true' : 'false');
+        if (!soundEnabled) {
+            window.speechSynthesis?.cancel?.();
+        }
+    }, [soundEnabled]);
 
     useEffect(() => {
         setWindowSize({ width: window.innerWidth, height: window.innerHeight });
@@ -143,6 +252,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
     const currentSpeechText = getJapaneseSpeechText(currentQ);
     const hasQuestionAudio = Boolean(currentQ?.audio_url || currentSpeechText);
     const totalQuestionCount = rawQuestions.length || questions.length;
+    const scoredQuestionCount = rawQuestions.length || questions.filter((question) => !question.isRepeat).length;
     const originalQuestionCount = rawQuestions.length || questions.filter((question) => !question.isRepeat).length || questions.length;
     const answeredCount = Object.keys(answerLogRef.current).length;
     const correctCount = Object.values(correctMapRef.current).filter(Boolean).length;
@@ -150,14 +260,24 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
     const progressPercentage = originalQuestionCount > 0
         ? Math.min(100, (completedOriginalQuestionIds.size / originalQuestionCount) * 100)
         : 0;
-    const timePercentage = hasTimeLimit ? (secondsLeft / Number(quiz.time_limit)) * 100 : 100;
-    const activeFlashcard = flashcards[flashcardIndex] || null;
-    const shouldShowFlashcardAfterQuestion = (lastQuestion, gameOver) => (
-        !lastQuestion
-        && !gameOver
-        && flashcards.length > 0
-        && flashcardIndex < flashcards.length
-        && needsFlashcardReview
+    const flashcardSchedule = useMemo(() => {
+        if (quiz?.is_weekly_exam || scoredQuestionCount <= 0) return [];
+
+        const cardCount = Math.min(sessionFlashcards.length, scoredQuestionCount);
+
+        return sessionFlashcards.slice(0, cardCount).map((card, index) => ({
+            ...card,
+            show_after_completed: Math.max(
+                1,
+                Math.ceil(((index + 1) * scoredQuestionCount) / (cardCount + 1)),
+            ),
+        }));
+    }, [quiz?.is_weekly_exam, scoredQuestionCount, sessionFlashcards]);
+    const activeFlashcard = flashcardSchedule[flashcardIndex] || null;
+    const shouldShowScheduledFlashcard = (gameOver) => (
+        !gameOver
+        && activeFlashcard
+        && completedOriginalQuestionIds.size >= activeFlashcard.show_after_completed
     );
 
     const repeatWrongQuestion = (question) => {
@@ -184,6 +304,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
         try {
             const response = await window.axios.post(route('user.questions.check', currentQ.id), {
                 answer: answerValue,
+                answer_payload: answerPayload,
             });
             const isCorrect = Boolean(response.data?.is_correct);
             const explanation = response.data?.explanation;
@@ -204,7 +325,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
             setSelectedAnswer(selectedIndex ?? answerValue);
 
             if (isCorrect) {
-                setNeedsFlashcardReview(false);
+                playSoundEffect('correct');
                 setScore(Object.values({ ...correctMapRef.current, [currentQ.id]: true }).filter(Boolean).length);
                 setCompletedOriginalQuestionIds((items) => {
                     const next = new Set(items);
@@ -217,7 +338,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                     message: currentQ.isRepeat ? 'Soal yang tadi sulit sudah berhasil kamu jawab.' : 'Jawaban ini masuk ke progres mastery.',
                 });
             } else {
-                setNeedsFlashcardReview(true);
+                playSoundEffect('incorrect');
                 setLives((value) => Math.max(0, value - 1));
                 setShakeKey((value) => value + 1);
                 repeatWrongQuestion(currentQ);
@@ -308,6 +429,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
             || questions.length === 0
             || showResult
             || showFlashcard
+            || handwritingPractice
             || (quiz?.is_weekly_exam && (attemptStarting || !attemptSession))
         ) return undefined;
 
@@ -326,19 +448,14 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
         }, 1000);
 
         return () => window.clearInterval(timer);
-    }, [attemptSession, attemptStarting, hasTimeLimit, questions.length, quiz?.is_weekly_exam, showResult, showFlashcard, score]);
+    }, [attemptSession, attemptStarting, handwritingPractice, hasTimeLimit, questions.length, quiz?.is_weekly_exam, showResult, showFlashcard, score]);
 
     const handleNext = () => {
         const gameOver = lives <= 0;
         const lastQuestion = currentIndex >= questions.length - 1;
 
-        if (gameOver || lastQuestion) {
-            submitAttempt({ timeout: false });
-            setShowResult(true);
-            return;
-        }
-
-        if (shouldShowFlashcardAfterQuestion(lastQuestion, gameOver)) {
+        if (shouldShowScheduledFlashcard(gameOver)) {
+            practiceResumeRef.current = lastQuestion ? 'finish' : 'next';
             setShowFlashcard(true);
             setSelectedAnswer(null);
             setTextAnswer('');
@@ -346,8 +463,14 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
             return;
         }
 
+        if (gameOver || lastQuestion) {
+            submitAttempt({ timeout: false });
+            playSoundEffect(gameOver ? 'incorrect' : 'complete');
+            setShowResult(true);
+            return;
+        }
+
         setCurrentIndex(prev => prev + 1);
-        setNeedsFlashcardReview(false);
         setSelectedAnswer(null);
         setTextAnswer('');
         setAnswerFeedback(null);
@@ -355,27 +478,85 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
 
     const continueAfterFlashcard = () => {
         setShowFlashcard(false);
-        setNeedsFlashcardReview(false);
+        setHandwritingPractice(null);
         setFlashcardIndex((prev) => prev + 1);
-        setCurrentIndex((prev) => Math.min(prev + 1, questions.length - 1));
         setSelectedAnswer(null);
         setTextAnswer('');
         setAnswerFeedback(null);
+
+        if (practiceResumeRef.current === 'finish') {
+            submitAttempt({ timeout: false });
+            playSoundEffect('complete');
+            setShowResult(true);
+            return;
+        }
+
+        setCurrentIndex((prev) => Math.min(prev + 1, questions.length - 1));
+    };
+
+    const continueWithHandwriting = async () => {
+        try {
+            const characters = await resolveAvailableCharacters(
+                activeFlashcard?.front_text,
+                activeFlashcard?.reading,
+            );
+            const kanjiCharacters = characters.filter(({ character }) => /\p{Script=Han}/u.test(character));
+            const targets = kanjiCharacters.length > 0 ? kanjiCharacters : characters;
+
+            if (targets.length > 0) {
+                setShowFlashcard(false);
+                setHandwritingPractice({
+                    characters: targets,
+                    character_index: 0,
+                    flashcard_id: activeFlashcard?.id,
+                    title: activeFlashcard?.front_text,
+                    reading: activeFlashcard?.reading,
+                    meaning: activeFlashcard?.back_text,
+                    audio_url: activeFlashcard?.audio_url,
+                });
+                return;
+            }
+        } catch {
+            // The normal quiz flow remains available when a stroke asset is missing.
+        }
+
+        continueAfterFlashcard();
+    };
+
+    const finishHandwritingRemediation = () => {
+        const nextIndex = (handwritingPractice?.character_index ?? 0) + 1;
+
+        if (nextIndex < (handwritingPractice?.characters?.length ?? 0)) {
+            playSoundEffect('correct');
+            setHandwritingPractice((current) => ({
+                ...current,
+                character_index: nextIndex,
+            }));
+            return;
+        }
+
+        continueAfterFlashcard();
     };
 
     const handleFlashcardReview = (action) => {
+        if (flashcardReviewing) return;
+
+        playSoundEffect(action === 'known' ? 'correct' : 'select');
+
         if (!activeFlashcard?.id) {
             continueAfterFlashcard();
             return;
         }
 
+        setFlashcardReviewing(true);
         router.post(route('user.flashcards.review', activeFlashcard.id), {
             action,
             completed: false,
         }, {
             preserveScroll: true,
             preserveState: true,
-            onFinish: continueAfterFlashcard,
+            onSuccess: continueWithHandwriting,
+            onFinish: () => setFlashcardReviewing(false),
         });
     };
 
@@ -395,6 +576,32 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
         });
     };
 
+    const continueAfterResult = async (continueLearning = true) => {
+        if (!learningFeedback && feedbackRating) {
+            setFeedbackSubmitting(true);
+            setFeedbackError(null);
+
+            try {
+                const response = await window.axios.post(route('user.quizzes.feedback.store', quiz.id), {
+                    rating: feedbackRating,
+                    continue_learning: continueLearning,
+                });
+
+                setLearningFeedback(response.data?.feedback || {
+                    rating: feedbackRating,
+                    continue_learning: continueLearning,
+                });
+            } catch (error) {
+                setFeedbackError(error.response?.data?.message || 'Feedback belum tersimpan. Coba lagi sebelum melanjutkan.');
+                return;
+            } finally {
+                setFeedbackSubmitting(false);
+            }
+        }
+
+        router.get(attemptResult?.next_url || finish_url || route('user.dashboard'));
+    };
+
     // Jika tidak ada soal dari DB
     if (questions.length === 0) {
         return (
@@ -402,10 +609,10 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                 <Head title="Quiz" />
                 <FloatingLearningDecor />
                 <div className="relative z-10 max-w-md text-center">
-                    <p className="text-2xl font-black text-gray-400 mb-4">😅 Belum Ada Soal</p>
-                    <p className="text-gray-500 mb-6">Admin belum menambahkan soal untuk kuis ini.</p>
-                    <Link href={route('user.dashboard')} className="inline-flex rounded-2xl bg-red-600 px-6 py-3 font-black text-white no-underline shadow-lg shadow-red-500/20">
-                        Kembali ke Dashboard
+                    <p className="mb-4 text-2xl font-black text-gray-700">Belum Ada Soal</p>
+                    <p className="mb-6 text-gray-700 dark:text-gray-300">Admin belum menambahkan soal untuk kuis ini.</p>
+                    <Link href={back_url || route('user.dashboard')} className="inline-flex rounded-2xl bg-red-600 px-6 py-3 font-black text-white no-underline shadow-lg shadow-red-500/20">
+                        Kembali
                     </Link>
                 </div>
             </div>
@@ -416,15 +623,13 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
     if (showResult) {
         const answeredCount = Object.keys(answerLogRef.current).length;
         const finalCorrectCount = Object.values(correctMapRef.current).filter(Boolean).length;
-        const fallbackScore = totalQuestionCount > 0 ? Math.round((finalCorrectCount / totalQuestionCount) * 100) : 0;
+        const fallbackScore = scoredQuestionCount > 0 ? Math.round((finalCorrectCount / scoredQuestionCount) * 100) : 0;
         const finalScore = Number(attemptResult?.score ?? fallbackScore);
         const hasAnsweredAll = answeredCount >= totalQuestionCount;
         const isSuccess = typeof attemptResult?.passed === 'boolean'
             ? attemptResult.passed
             : (!finishedByTimeout && lives > 0 && hasAnsweredAll && finalScore >= passingScore);
         const resultTotalQuestions = attemptResult?.total_questions ?? totalQuestionCount;
-        const resultAnsweredCount = attemptResult?.answered_count ?? answeredCount;
-        const resultXp = attemptResult?.xp_earned;
         const retryQuiz = () => {
             if (typeof window !== 'undefined') {
                 router.get(window.location.href);
@@ -437,12 +642,12 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                  style={{ backgroundColor: theme.sectionBg }}>
                 <Head title="Hasil Kuis" />
                 
-                {isSuccess && <Confetti width={windowSize.width} height={windowSize.height} recycle={false} numberOfPieces={500} />}
+                {isSuccess && !prefersReducedMotion && <Confetti width={windowSize.width} height={windowSize.height} recycle={false} numberOfPieces={180} />}
 
                 <motion.div 
-                    initial={{ scale: 0.8, opacity: 0 }}
+                    initial={prefersReducedMotion ? false : { scale: 0.92, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
-                    transition={{ type: "spring", bounce: 0.5, duration: 0.8 }}
+                    transition={prefersReducedMotion ? { duration: 0 } : { type: "spring", bounce: 0.25, duration: 0.5 }}
                     className="relative z-10 w-full max-w-xl"
                 >
                     <RewardSummary
@@ -456,10 +661,8 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                         }
                         stats={[
                             { label: 'Skor', value: `${finalScore}%` },
-                            { label: 'Terjawab', value: `${resultAnsweredCount}/${resultTotalQuestions}` },
-                            { label: 'Status', value: finishedByTimeout ? 'Timeout' : `${finalScore}%` },
+                            { label: 'Benar', value: `${finalCorrectCount}/${resultTotalQuestions}` },
                             { label: 'Target', value: `${passingScore}%` },
-                            { label: 'XP', value: isSubmittingAttempt ? 'Menyimpan...' : (resultXp !== undefined && resultXp !== null ? `+${resultXp}` : 'Belum tersimpan') },
                         ]}
                     />
                     {attemptError && (
@@ -467,16 +670,34 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                             {attemptError}
                         </div>
                     )}
-                    <div className="mt-4">
-                        <MascotGuide
-                            tone={isSuccess ? 'green' : 'amber'}
-                            title={isSuccess ? 'Mastery naik' : 'Review dulu'}
-                            message={isSubmittingAttempt
-                                ? 'Hasil sedang disimpan ke server. Tunggu sebentar sebelum kembali ke roadmap.'
-                                : (isSuccess ? 'Satu quest selesai. Week berikutnya terbuka jika akses dan jadwal kloter sudah memenuhi.' : 'Week berikutnya tetap terkunci sampai skor lulus. Polanya dibuat seperti Duolingo: salah berarti latihan ulang, bukan berhenti.')}
-                        />
-                    </div>
-
+                    {isSuccess && !attemptError && (
+                        <section className="mt-4 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-left dark:border-amber-900/50 dark:bg-amber-950/20">
+                            <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-700 dark:text-amber-300">Feedback sesi</p>
+                            <h2 className="mt-1 text-base font-black text-gray-900 dark:text-white">Bagaimana intensitas sesi ini?</h2>
+                            <p className="mt-1 text-xs font-semibold leading-5 text-gray-600 dark:text-gray-300">Jawabanmu membantu sensei melihat materi yang perlu diperkuat.</p>
+                            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                                {[
+                                    ['repeat', 'Perlu diulang'],
+                                    ['just_right', 'Pas'],
+                                    ['easy', 'Terlalu mudah'],
+                                ].map(([value, label]) => (
+                                    <button
+                                        key={value}
+                                        type="button"
+                                        disabled={Boolean(learningFeedback)}
+                                        onClick={() => setFeedbackRating(value)}
+                                        className={`min-h-10 rounded-xl border px-3 py-2 text-xs font-black transition ${feedbackRating === value
+                                            ? 'border-amber-500 bg-amber-500 text-white'
+                                            : 'border-amber-200 bg-white text-gray-700 hover:border-amber-400 dark:border-amber-900/50 dark:bg-gray-900 dark:text-gray-200'}`}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                            {learningFeedback && <p className="mt-3 text-xs font-bold text-emerald-700 dark:text-emerald-300">Feedback hari ini sudah tersimpan.</p>}
+                            {feedbackError && <p className="mt-3 text-xs font-bold text-red-700 dark:text-red-300">{feedbackError}</p>}
+                        </section>
+                    )}
                     <button 
                         onClick={() => {
                             if (attemptError) {
@@ -484,30 +705,93 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                                 return;
                             }
 
-                            isSuccess
-                                ? router.get(attemptResult?.next_url || finish_url || route('user.dashboard'))
-                                : retryQuiz();
+                            if (!isSuccess) {
+                                retryQuiz();
+                                return;
+                            }
+
+                            if (!learningFeedback && !feedbackRating) {
+                                setFeedbackError('Pilih feedback singkat sebelum melanjutkan.');
+                                return;
+                            }
+
+                            continueAfterResult(true);
                         }}
-                        disabled={isSubmittingAttempt}
+                        disabled={isSubmittingAttempt || feedbackSubmitting}
                         className="mt-4 w-full py-4 rounded-2xl font-black text-white text-lg tracking-wide uppercase shadow-lg hover:brightness-110 active:translate-y-1 active:shadow-none transition-all"
                         style={{ backgroundColor: theme.doneColor, boxShadow: `0 4px 0 0 ${theme.doneShadow}` }}
                     >
-                        {isSubmittingAttempt ? 'MENYIMPAN...' : (attemptError ? 'KIRIM ULANG HASIL' : (isSuccess ? 'LANJUTKAN' : 'ULANGI KUIS'))}
+                        {isSubmittingAttempt || feedbackSubmitting ? 'MENYIMPAN...' : (attemptError ? 'KIRIM ULANG HASIL' : (isSuccess ? 'SIMPAN & LANJUTKAN' : 'ULANGI KUIS'))}
                     </button>
+                    {isSuccess && !attemptError && !learningFeedback && feedbackRating && (
+                        <button
+                            type="button"
+                            onClick={() => continueAfterResult(false)}
+                            disabled={feedbackSubmitting}
+                            className="mt-3 w-full py-3 text-sm font-black text-gray-700 transition hover:text-gray-950 dark:text-gray-300 dark:hover:text-white"
+                        >
+                            Simpan untuk nanti
+                        </button>
+                    )}
                 </motion.div>
+            </div>
+        );
+    }
+
+    if (handwritingPractice) {
+        const activeWritingCharacter = handwritingPractice.characters?.[handwritingPractice.character_index];
+        const handwritingStep = (handwritingPractice.character_index ?? 0) + 1;
+        const handwritingTotal = handwritingPractice.characters?.length ?? 1;
+
+        return (
+            <div className="flex min-h-[100dvh] flex-col items-center bg-orange-50 px-4 py-6 font-sans dark:bg-gray-950 sm:py-10">
+                <Head title="Latihan Menulis" />
+                <header className="mb-5 flex w-full max-w-3xl items-center gap-3">
+                    <button onClick={confirmExit} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-600 transition hover:bg-white hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white">
+                        <CloseIcon />
+                    </button>
+                    <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-orange-600">Penguatan setelah flashcard</p>
+                        <h1 className="truncate text-lg font-black text-gray-900 dark:text-white">Tulis {activeWritingCharacter.character}</h1>
+                        {handwritingTotal > 1 && <p className="text-xs font-bold text-gray-700 dark:text-gray-300">Karakter {handwritingStep} dari {handwritingTotal}</p>}
+                    </div>
+                    <SoundToggleButton enabled={soundEnabled} onToggle={() => setSoundEnabled((value) => !value)} />
+                </header>
+                <main className="w-full max-w-xl rounded-3xl border border-orange-100 bg-white p-4 shadow-xl shadow-orange-200/40 dark:border-gray-800 dark:bg-gray-900 dark:shadow-black/30 sm:p-7">
+                    <div className="mb-4 text-center">
+                        <p className="text-3xl font-black text-gray-900 dark:text-white">{handwritingPractice.title}</p>
+                        {handwritingPractice.reading && <p className="mt-1 text-base font-bold text-gray-600 dark:text-gray-300">{handwritingPractice.reading}</p>}
+                        {handwritingPractice.meaning && <p className="mt-1 text-sm font-bold text-gray-700 dark:text-gray-300">{handwritingPractice.meaning}</p>}
+                        <JapaneseSpeechButton
+                            text={[handwritingPractice.title, handwritingPractice.reading].filter(Boolean).join('、')}
+                            audioUrl={handwritingPractice.audio_url}
+                            autoPlay
+                            autoPlayEnabled={soundEnabled}
+                            playbackKey={`handwriting-${handwritingPractice.flashcard_id}`}
+                            className="mx-auto mt-3 flex h-10 w-10 items-center justify-center rounded-full border border-orange-200 bg-orange-50 text-orange-600 transition hover:bg-orange-100 dark:border-orange-700 dark:bg-orange-950/60 dark:text-orange-300 dark:hover:bg-orange-900/70"
+                        />
+                        <p className="mt-3 text-xs font-semibold text-gray-600 dark:text-gray-300">Tulis seluruh karakter mengikuti panduan transparan, lalu periksa hasilnya.</p>
+                    </div>
+                    <KanjiHandwritingCanvas
+                        key={`${handwritingPractice.flashcard_id}-${activeWritingCharacter.character}`}
+                        character={activeWritingCharacter.character}
+                        mode="quiz"
+                        onComplete={finishHandwritingRemediation}
+                    />
+                </main>
             </div>
         );
     }
 
     if (showFlashcard && activeFlashcard) {
         return (
-            <div className="flex min-h-[100dvh] flex-col items-center overflow-x-hidden bg-gradient-to-br from-orange-50 via-white to-lime-50 px-4 pb-8 pt-6 font-sans sm:pb-10 sm:pt-8">
+            <div className="flex min-h-[100dvh] flex-col items-center overflow-x-hidden bg-gradient-to-br from-orange-50 via-white to-lime-50 px-4 pb-8 pt-6 font-sans dark:from-gray-950 dark:via-gray-950 dark:to-gray-900 sm:pb-10 sm:pt-8">
                 <Head title="Kosakata Baru" />
                 <header className="relative z-10 mb-4 flex w-full max-w-4xl items-center gap-3 px-2 sm:mb-6 md:mb-8 md:gap-5 md:px-4">
-                    <button onClick={confirmExit} className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600">
+                    <button onClick={confirmExit} className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-white">
                         <CloseIcon />
                     </button>
-                    <div className="h-3 min-w-0 flex-1 overflow-hidden rounded-full bg-gray-200">
+                    <div className="h-3 min-w-0 flex-1 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-800">
                         <motion.div
                             className="h-full rounded-full"
                             style={{ backgroundColor: theme.activeColor }}
@@ -516,7 +800,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                             transition={{ duration: 0.5, ease: "easeOut" }}
                         />
                     </div>
-                    <div className="flex h-10 min-w-[58px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-white px-3 text-base font-black text-red-500 shadow-sm ring-1 ring-red-100">
+                    <div className="flex h-10 min-w-[58px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-white px-3 text-base font-black text-red-500 shadow-sm ring-1 ring-red-100 dark:bg-gray-900 dark:ring-red-900/60">
                         <FavoriteIcon sx={{ fontSize: 22, color: lives > 0 ? '#EF4444' : '#D1D5DB' }} />
                         <span className="tabular-nums">{lives}</span>
                     </div>
@@ -525,11 +809,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                             {formatTime(secondsLeft)}
                         </div>
                     )}
-                    {flashcards.length > 0 && (
-                        <div className="hidden shrink-0 rounded-full bg-orange-100 px-3 py-1 text-xs font-black uppercase tracking-wider text-orange-700 md:block">
-                            {flashcards.length} Kosakata
-                        </div>
-                    )}
+                    <SoundToggleButton enabled={soundEnabled} onToggle={() => setSoundEnabled((value) => !value)} />
                 </header>
 
                 <main className="w-full max-w-3xl flex-1 flex flex-col items-center justify-center relative z-10">
@@ -539,62 +819,79 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -30 }}
                         transition={{ duration: 0.35 }}
-                        className="relative w-full overflow-hidden rounded-[1.25rem] border-2 border-orange-100 bg-white shadow-[0_30px_80px_-35px_rgba(234,88,12,0.65)] sm:rounded-[2.5rem]"
+                        className="relative w-full overflow-hidden rounded-[1.25rem] border-2 border-orange-100 bg-white shadow-[0_30px_80px_-35px_rgba(234,88,12,0.65)] dark:border-gray-800 dark:bg-gray-900 dark:shadow-black/50 sm:rounded-[2.5rem]"
                     >
-                        <div className="relative border-b border-orange-100 bg-gradient-to-r from-orange-50 to-lime-50 px-4 py-3 sm:px-8 sm:py-5">
+                        <div className="relative border-b border-orange-100 bg-gradient-to-r from-orange-50 to-lime-50 px-4 py-3 dark:border-gray-800 dark:from-orange-950/40 dark:to-lime-950/30 sm:px-8 sm:py-5">
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
                                     <p className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-600 sm:text-xs sm:tracking-[0.3em]">Mini Lesson</p>
-                                    <h1 className="mt-1 text-lg font-black text-gray-900 sm:mt-2 sm:text-2xl">Kosakata sebelum lanjut soal</h1>
+                                    <h1 className="mt-1 text-lg font-black text-gray-900 dark:text-white sm:mt-2 sm:text-2xl">Kosakata sebelum lanjut soal</h1>
                                 </div>
-                                <span className="w-fit rounded-full bg-white px-3 py-1.5 text-[11px] font-black uppercase tracking-wider text-orange-700 shadow-sm sm:px-4 sm:py-2 sm:text-xs">
-                                    {flashcardIndex + 1}/{flashcards.length}
+                                <span className="w-fit rounded-full bg-white px-3 py-1.5 text-[11px] font-black uppercase tracking-wider text-orange-700 shadow-sm dark:bg-gray-900 dark:text-orange-300 dark:ring-1 dark:ring-orange-900/60 sm:px-4 sm:py-2 sm:text-xs">
+                                    {flashcardIndex + 1}/{flashcardSchedule.length}
                                 </span>
                             </div>
                         </div>
 
                         <div className="relative max-h-[46dvh] overflow-y-auto overscroll-contain px-4 py-5 text-center sm:max-h-[58vh] sm:px-10 sm:py-12">
-                            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-2xl font-black text-orange-700 sm:mb-6 sm:h-16 sm:w-16 sm:rounded-3xl sm:text-3xl">
-                                あ
-                            </div>
-                            <p className="break-words text-3xl font-black tracking-tight text-gray-950 sm:text-7xl">{activeFlashcard.front_text}</p>
-                            <p className="mt-2 break-words text-lg font-bold text-gray-500 sm:mt-4 sm:text-2xl">{activeFlashcard.reading || '-'}</p>
+                            <p className="break-words text-3xl font-black tracking-tight text-gray-950 dark:text-white sm:text-7xl">{activeFlashcard.front_text}</p>
+                            <p className="mt-2 break-words text-lg font-bold text-gray-500 dark:text-gray-300 sm:mt-4 sm:text-2xl">{activeFlashcard.reading || '-'}</p>
                             <div className="mx-auto mt-3 h-px max-w-md bg-orange-200 sm:mt-5" />
 
                             <div className="mt-3 flex flex-wrap items-center justify-center gap-2 sm:mt-5 sm:gap-3">
                                 <JapaneseSpeechButton
                                     text={activeFlashcard.front_text || activeFlashcard.reading}
                                     audioUrl={activeFlashcard.audio_url}
-                                    className="flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 text-gray-600 transition hover:bg-gray-50"
+                                    autoPlay
+                                    autoPlayEnabled={soundEnabled}
+                                    playbackKey={`flashcard-${activeFlashcard.id}`}
+                                    className="flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-orange-700 dark:hover:bg-orange-950/60 dark:hover:text-orange-300"
                                 />
                                 {activeFlashcard.hint && (
-                                    <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-black text-gray-500">{activeFlashcard.hint}</span>
+                                    <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-black text-gray-500 dark:bg-gray-800 dark:text-gray-300">{activeFlashcard.hint}</span>
                                 )}
                             </div>
 
-                            <h2 className="mt-4 break-words text-xl font-black text-gray-900 sm:mt-6 sm:text-3xl">{activeFlashcard.back_text || 'Belum ada arti'}</h2>
-                            <p className="mt-2 text-xs font-bold text-gray-400 sm:mt-3 sm:text-sm">Yang belum paham akan masuk ke Review Kosakata.</p>
+                            <h2 className="mt-4 break-words text-xl font-black text-gray-900 dark:text-white sm:mt-6 sm:text-3xl">{activeFlashcard.back_text || 'Belum ada arti'}</h2>
+                            {activeFlashcard.meaning_en && activeFlashcard.meaning_en !== activeFlashcard.back_text && (
+                                <p className="mt-1 text-sm font-semibold text-gray-500">{activeFlashcard.meaning_en}</p>
+                            )}
+
+                            {activeFlashcard.content_type === 'kanji' && (
+                                <div className="mx-auto mt-4 grid max-w-xl grid-cols-2 gap-2 text-left sm:mt-6 sm:grid-cols-4">
+                                    {activeFlashcard.onyomi && <div className="rounded-xl bg-red-50 px-3 py-2"><span className="block text-[10px] font-black uppercase text-red-500">Onyomi</span><span className="text-sm font-bold text-gray-800">{activeFlashcard.onyomi}</span></div>}
+                                    {activeFlashcard.kunyomi && <div className="rounded-xl bg-orange-50 px-3 py-2"><span className="block text-[10px] font-black uppercase text-orange-500">Kunyomi</span><span className="text-sm font-bold text-gray-800">{activeFlashcard.kunyomi}</span></div>}
+                                    {activeFlashcard.radicals?.length > 0 && <div className="rounded-xl bg-lime-50 px-3 py-2"><span className="block text-[10px] font-black uppercase text-lime-700">Radical</span><span className="text-sm font-bold text-gray-800">{activeFlashcard.radicals.join(', ')}</span></div>}
+                                    {activeFlashcard.stroke_count && <div className="rounded-xl bg-sky-50 px-3 py-2"><span className="block text-[10px] font-black uppercase text-sky-600">Stroke</span><span className="text-sm font-bold text-gray-800">{activeFlashcard.stroke_count}</span></div>}
+                                </div>
+                            )}
+
+                            <StrokeGuideGallery text={activeFlashcard.front_text} />
 
                             {(activeFlashcard.example_sentence || activeFlashcard.example_meaning) && (
                                 <div className="mx-auto mt-5 max-w-2xl rounded-2xl bg-gray-50 p-3 text-left sm:mt-8 sm:p-5">
                                     <p className="break-words text-base font-bold text-gray-700">{activeFlashcard.example_sentence}</p>
+                                    {activeFlashcard.example_reading && <p className="mt-1 break-words text-sm font-semibold text-gray-500">{activeFlashcard.example_reading}</p>}
                                     <p className="mt-2 break-words text-sm italic text-gray-500">{activeFlashcard.example_meaning}</p>
                                 </div>
                             )}
+                            {activeFlashcard.notes && <p className="mx-auto mt-3 max-w-2xl text-left text-xs font-semibold text-gray-500">{activeFlashcard.notes}</p>}
                         </div>
                     </motion.div>
 
                     <div className="mt-4 grid w-full max-w-2xl grid-cols-2 gap-2 sm:mt-8 sm:gap-4">
                         <button
                             onClick={() => handleFlashcardReview('learning')}
-                            className="flex min-h-[56px] items-center justify-center gap-2 rounded-xl bg-orange-500 px-2 py-3 text-center text-sm font-black text-white shadow-[0_5px_0_#C2410C] transition hover:brightness-105 active:translate-y-1 active:shadow-[0_3px_0_#C2410C] sm:min-h-[72px] sm:rounded-2xl sm:px-5 sm:py-4 sm:text-base sm:shadow-[0_6px_0_#C2410C]"
+                            disabled={flashcardReviewing}
+                            className="flex min-h-[56px] items-center justify-center gap-2 rounded-xl bg-orange-500 px-2 py-3 text-center text-sm font-black text-white shadow-[0_5px_0_#C2410C] transition hover:bg-orange-400 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-300/60 active:translate-y-1 active:shadow-[0_3px_0_#C2410C] disabled:cursor-wait disabled:opacity-60 dark:bg-orange-600 dark:shadow-[0_5px_0_#9A3412] dark:hover:bg-orange-500 sm:min-h-[72px] sm:rounded-2xl sm:px-5 sm:py-4 sm:text-base sm:shadow-[0_6px_0_#C2410C]"
                         >
                             <span className="text-lg leading-none sm:text-xl">?</span>
                             <span>Belum Paham</span>
                         </button>
                         <button
                             onClick={() => handleFlashcardReview('known')}
-                            className="flex min-h-[56px] items-center justify-center gap-2 rounded-xl bg-lime-400 px-2 py-3 text-center text-sm font-black text-gray-900 shadow-[0_5px_0_#65A30D] transition hover:brightness-105 active:translate-y-1 active:shadow-[0_3px_0_#65A30D] sm:min-h-[72px] sm:rounded-2xl sm:px-5 sm:py-4 sm:text-base sm:shadow-[0_6px_0_#65A30D]"
+                            disabled={flashcardReviewing}
+                            className="flex min-h-[56px] items-center justify-center gap-2 rounded-xl bg-lime-400 px-2 py-3 text-center text-sm font-black text-gray-950 shadow-[0_5px_0_#65A30D] transition hover:bg-lime-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-lime-300/60 active:translate-y-1 active:shadow-[0_3px_0_#65A30D] disabled:cursor-wait disabled:opacity-60 dark:bg-lime-500 dark:shadow-[0_5px_0_#3F6212] dark:hover:bg-lime-400 sm:min-h-[72px] sm:rounded-2xl sm:px-5 sm:py-4 sm:text-base sm:shadow-[0_6px_0_#65A30D]"
                         >
                             <span className="text-sm leading-none sm:text-base">OK</span>
                             <span>Sudah Paham</span>
@@ -607,16 +904,16 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
 
     // === TAMPILAN KUIS AKTIF ===
     return (
-        <div className={`flex min-h-[100dvh] flex-col items-center overflow-x-hidden px-4 pt-6 font-sans sm:pt-8 md:pt-16 ${selectedAnswer !== null ? 'pb-56 sm:pb-40' : 'pb-10 sm:pb-12'}`}
+        <div className={`flex min-h-[100dvh] flex-col items-center overflow-x-hidden px-4 pt-6 font-sans dark:!bg-gray-950 sm:pt-8 md:pt-16 ${selectedAnswer !== null ? 'pb-56 sm:pb-40' : 'pb-10 sm:pb-12'}`}
              style={{ backgroundColor: theme.landingHeroBg }}>
             <Head title={`Quiz - Level 2`} />
 
             {/* Top Progress & Lives */}
             <header className="relative z-10 mb-6 flex w-full max-w-4xl items-center gap-3 px-2 md:mb-12 md:gap-5 md:px-4">
-                <button onClick={confirmExit} className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600">
+                <button onClick={confirmExit} className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-white">
                     <CloseIcon />
                 </button>
-                <div className="h-3 min-w-0 flex-1 overflow-hidden rounded-full bg-gray-200">
+                <div className="h-3 min-w-0 flex-1 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-800">
                     <motion.div 
                         className="h-full rounded-full" 
                         style={{ backgroundColor: theme.activeColor }}
@@ -625,37 +922,18 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                         transition={{ duration: 0.5, ease: "easeOut" }}
                     />
                 </div>
-                <div className="flex h-10 min-w-[58px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-white px-3 text-base font-black text-red-500 shadow-sm ring-1 ring-red-100">
-                    <FavoriteIcon sx={{ fontSize: 22, color: lives > 0 ? '#EF4444' : '#D1D5DB' }} />
-                    <span className="tabular-nums">{lives}</span>
-                </div>
-                {hasTimeLimit && (
-                    <div className={`hidden rounded-full px-3 py-1 text-xs font-black tabular-nums sm:block ${secondsLeft <= 10 ? 'bg-red-100 text-red-700' : 'bg-white text-gray-700'}`}>
+                {hasTimeLimit ? (
+                    <div className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-black tabular-nums ${secondsLeft <= 10 ? 'bg-red-100 text-red-700' : 'bg-white text-gray-700'}`}>
                         {formatTime(secondsLeft)}
                     </div>
-                )}
-                {flashcards.length > 0 && (
-                    <div className="hidden shrink-0 rounded-full bg-orange-100 px-3 py-1 text-xs font-black uppercase tracking-wider text-orange-700 md:block">
-                        {flashcards.length} Kosakata
+                ) : (
+                    <div className="flex h-10 min-w-[58px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-white px-3 text-base font-black text-red-500 shadow-sm ring-1 ring-red-100 dark:bg-gray-900 dark:ring-red-900/60">
+                        <FavoriteIcon sx={{ fontSize: 22, color: lives > 0 ? '#EF4444' : '#D1D5DB' }} />
+                        <span className="tabular-nums">{lives}</span>
                     </div>
                 )}
+                <SoundToggleButton enabled={soundEnabled} onToggle={() => setSoundEnabled((value) => !value)} />
             </header>
-
-            {hasTimeLimit && (
-                <div className="mb-6 w-full max-w-4xl px-2 md:px-4">
-                    <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-gray-400">
-                        <span>Waktu</span>
-                        <span>{formatTime(secondsLeft)}</span>
-                    </div>
-                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-200">
-                        <motion.div
-                            className={`h-full rounded-full ${secondsLeft <= 10 ? 'bg-red-500' : 'bg-orange-500'}`}
-                            animate={{ width: `${timePercentage}%` }}
-                            transition={{ duration: 0.25 }}
-                        />
-                    </div>
-                </div>
-            )}
 
             {/* Quiz Content Area */}
             <main className="w-full max-w-3xl flex-1 flex flex-col items-center relative z-10">
@@ -671,21 +949,21 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                     >
                         {/* Question Info */}
                         <div className="mb-6 w-full text-center md:mb-8">
-                            <h2 className="mb-2 break-words px-1 text-lg font-black text-gray-900 sm:text-xl md:text-3xl">{currentQ.question}</h2>
-                            <p className="text-sm font-bold text-gray-400 uppercase tracking-widest text-shadow">
-                                Soal {currentIndex + 1} dari {questions.length} - Terjawab {answeredCount}/{questions.length}
+                            <h2 className="mb-2 break-words px-1 text-lg font-black text-gray-900 dark:text-white sm:text-xl md:text-3xl">{currentQ.question}</h2>
+                            <p className="text-xs font-bold uppercase tracking-widest text-gray-600 dark:text-gray-300">
+                                {currentQ.isRepeat ? 'Penguatan' : `Soal ${Math.min(completedOriginalQuestionIds.size + 1, originalQuestionCount)} dari ${originalQuestionCount}`}
                             </p>
                         </div>
 
                         {/* Flashcard Canvas / Media */}
                         {(currentQ.kanji || currentQ.audio_url || currentSpeechText) && (
-                            <div className="relative mb-7 flex aspect-video w-full max-w-[500px] items-center justify-center overflow-hidden rounded-[1.5rem] border-2 border-gray-100 bg-white shadow-sm sm:rounded-[2rem] md:mb-10">
+                            <div className={`relative mb-6 flex w-full max-w-[500px] items-center justify-center overflow-hidden rounded-[1.5rem] border-2 border-gray-100 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:rounded-[2rem] ${currentQ.audio_url?.includes('youtu') ? 'aspect-video' : 'min-h-44 py-8 sm:min-h-56'}`}>
                                 {currentQ.kanji ? (
-                                    <span className="max-w-full break-words px-4 text-[64px] font-medium leading-none text-gray-900 select-none sm:text-[100px] md:text-[140px]">{currentQ.kanji}</span>
+                                    <span className="max-w-full break-words px-4 text-[64px] font-medium leading-none text-gray-900 select-none dark:text-white sm:text-[100px] md:text-[140px]">{currentQ.kanji}</span>
                                 ) : !currentQ.audio_url ? (
                                     <div className="max-h-[72%] overflow-y-auto overscroll-contain px-6 text-center sm:px-8">
-                                        <span className="text-xs font-black uppercase tracking-[0.25em] text-gray-300">Narator Jepang</span>
-                                        <p className="mt-3 break-words text-2xl font-black text-gray-700 sm:text-3xl md:text-5xl">{currentSpeechText}</p>
+                                        <span className="text-xs font-black uppercase tracking-[0.25em] text-gray-600 dark:text-gray-300">Narator Jepang</span>
+                                        <p className="mt-3 break-words text-2xl font-black text-gray-700 dark:text-gray-100 sm:text-3xl md:text-5xl">{currentSpeechText}</p>
                                     </div>
                                 ) : null}
                                 
@@ -699,10 +977,13 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                                         />
                                     ) : (
                                         <>
-                                            {!currentQ.kanji && <span className="text-gray-400 font-bold tracking-widest uppercase">Pesan Suara</span>}
+                                            {!currentQ.kanji && <span className="text-gray-600 dark:text-gray-300 font-bold tracking-widest uppercase">Pesan Suara</span>}
                                             <JapaneseSpeechButton
                                                 audioUrl={currentQ.audio_url}
                                                 text={currentSpeechText || currentQ.kanji || currentQ.question}
+                                                autoPlay={currentType === 'listening'}
+                                                autoPlayEnabled={soundEnabled}
+                                                playbackKey={`question-${currentQ.attemptKey}`}
                                                 className="absolute bottom-4 right-4 md:bottom-6 md:right-6 w-12 h-12 text-white rounded-2xl shadow-md border-b-4 flex items-center justify-center active:translate-y-1 active:border-b-0 transition-all hover:brightness-110"
                                                 style={{ backgroundColor: theme.activeColor, borderColor: theme.activeShadow }}
                                             />
@@ -712,6 +993,9 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                                 {!currentQ.audio_url && hasQuestionAudio && (
                                     <JapaneseSpeechButton
                                         text={currentSpeechText || currentQ.kanji || currentQ.question}
+                                        autoPlay={currentType === 'listening'}
+                                        autoPlayEnabled={soundEnabled}
+                                        playbackKey={`question-${currentQ.attemptKey}`}
                                         className="absolute bottom-4 right-4 md:bottom-6 md:right-6 w-12 h-12 text-white rounded-2xl shadow-md border-b-4 flex items-center justify-center active:translate-y-1 active:border-b-0 transition-all hover:brightness-110"
                                         style={{ backgroundColor: theme.activeColor, borderColor: theme.activeShadow }}
                                     />
@@ -764,7 +1048,9 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                                                 key={index}
                                                 disabled={selectedAnswer !== null}
                                                 onClick={() => handleAnswerClick(index)}
-                                                className="relative min-h-[56px] min-w-0 w-full break-words rounded-2xl border-2 px-4 py-4 text-center text-base font-bold leading-tight transition-all active:translate-y-1 active:shadow-none disabled:cursor-default sm:px-6 sm:py-5"
+                                                className={`relative min-h-[56px] min-w-0 w-full break-words rounded-2xl border-2 px-4 py-4 text-center text-base font-bold leading-tight transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-300/40 active:translate-y-1 active:shadow-none disabled:cursor-default sm:px-6 sm:py-5 ${
+                                                    !isSelected ? 'dark:!border-gray-700 dark:!bg-gray-900 dark:!text-gray-100 dark:!shadow-[0_4px_0_0_#374151] dark:hover:!border-orange-600' : ''
+                                                }`}
                                                 style={buttonStyle}
                                             >
                                                 {option}
@@ -785,7 +1071,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                                         onChange={(e) => setTextAnswer(e.target.value)}
                                         disabled={selectedAnswer !== null}
                                         placeholder={currentType === 'listening' ? 'Ketik jawaban dari audio...' : 'Ketik jawaban yang tepat...'}
-                                        className="w-full rounded-2xl border-2 border-gray-200 bg-white px-4 py-4 text-center text-lg font-black text-gray-800 shadow-sm outline-none transition-all focus:border-red-400 focus:ring-4 focus:ring-red-500/10 disabled:bg-gray-50 sm:px-5 sm:py-5"
+                                        className="w-full rounded-2xl border-2 border-gray-200 bg-white px-4 py-4 text-center text-lg font-black text-gray-800 shadow-sm outline-none transition-all focus:border-red-400 focus:ring-4 focus:ring-red-500/10 disabled:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500 dark:disabled:bg-gray-800 sm:px-5 sm:py-5"
                                     />
                                     <button
                                         type="submit"
@@ -815,27 +1101,29 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                         animate={{ y: 0 }}
                         exit={{ y: "100%" }}
                         transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                        className="fixed bottom-0 left-0 right-0 z-50 max-h-[72dvh] overflow-y-auto border-t-2"
+                        className="fixed bottom-0 left-0 right-0 z-50 max-h-[45dvh] overflow-y-auto border-t-2"
+                        role="status"
+                        aria-live="polite"
                         style={{ 
                             backgroundColor: answerFeedback?.status === 'wrong' ? '#fef2f2' : (theme.sectionBg || '#F0FDF4'),
                             borderColor: answerFeedback?.status === 'wrong' ? '#ef4444' : theme.activeColor
                         }}
                     >
-                        <div className="mx-auto flex max-w-4xl flex-col items-stretch justify-between gap-3 px-4 py-4 sm:flex-row sm:items-center sm:gap-4 sm:px-8 sm:py-8">
+                        <div className="mx-auto flex max-w-4xl flex-col items-stretch justify-between gap-3 px-4 py-3 sm:flex-row sm:items-center sm:gap-4 sm:px-8 sm:py-5">
                             
                             {/* Feedback Message */}
                             <div className="flex w-full items-center gap-3 sm:w-auto sm:gap-4">
                                 <motion.div 
                                     initial={{ scale: 0 }}
                                     animate={{ scale: 1 }}
-                                    transition={{ type: "spring", bounce: 0.6, delay: 0.1 }}
-                                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white shadow-sm sm:h-16 sm:w-16"
+                                    transition={prefersReducedMotion ? { duration: 0 } : { type: "spring", bounce: 0.25, delay: 0.05 }}
+                                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow-sm sm:h-12 sm:w-12"
                                     style={{ color: answerFeedback?.status === 'wrong' ? '#ef4444' : theme.activeColor }}
                                 >
                                     {answerFeedback?.status === 'wrong' ? <CloseIcon sx={{ fontSize: 30 }} /> : <CheckCircleIcon sx={{ fontSize: 30 }} />}
                                 </motion.div>
                                 <div>
-                                    <h3 className="mb-1 break-words text-xl font-black sm:text-2xl"
+                                    <h3 className="mb-0.5 break-words text-lg font-black sm:text-xl"
                                         style={{ color: answerFeedback?.status === 'wrong' ? '#991b1b' : theme.activeShadow }}>
                                         {answerFeedback?.title || 'Jawaban direkam'}
                                     </h3>
@@ -849,7 +1137,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                             {/* Action Button */}
                             <button 
                                 onClick={handleNext}
-                                className="w-full rounded-2xl px-8 py-3.5 text-base font-black uppercase tracking-wide text-white shadow-lg transition-all active:translate-y-1 active:shadow-none hover:brightness-110 disabled:cursor-wait disabled:opacity-70 sm:w-auto sm:px-12 sm:py-4 sm:text-lg"
+                                className="w-full rounded-xl px-8 py-3 text-base font-black uppercase tracking-wide text-white shadow-lg transition-all active:translate-y-1 active:shadow-none hover:brightness-110 disabled:cursor-wait disabled:opacity-70 sm:w-auto sm:px-10"
                                 style={{ 
                                     backgroundColor: theme.doneColor, 
                                     boxShadow: `0 4px 0 0 ${theme.doneShadow}` 

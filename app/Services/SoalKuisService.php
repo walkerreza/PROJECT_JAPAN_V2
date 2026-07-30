@@ -10,6 +10,8 @@ use Illuminate\Validation\ValidationException;
 
 class SoalKuisService
 {
+    private ?array $strokeManifest = null;
+
     public function importHeaders(): array
     {
         return ['module_week', 'day_number', 'type', 'question_text', 'correct_answer', 'options', 'explanation', 'audio_url', 'points'];
@@ -17,6 +19,12 @@ class SoalKuisService
 
     public function syncQuestions(Kuis $quiz, array $validated): void
     {
+        if (collect($validated['questions'])->contains('type', 'handwriting')) {
+            throw ValidationException::withMessages([
+                'questions' => 'Handwriting dikelola dari flashcard pada tab Handwriting, bukan sebagai soal kuis.',
+            ]);
+        }
+
         $questionIds = [];
 
         DB::transaction(function () use ($quiz, $validated, &$questionIds) {
@@ -50,7 +58,10 @@ class SoalKuisService
                 $questionIds[] = $question->id;
             }
 
-            $quiz->questions()->whereNotIn('id', $questionIds)->delete();
+            $quiz->questions()
+                ->where('type', '!=', 'handwriting')
+                ->whereNotIn('id', $questionIds)
+                ->delete();
         });
     }
 
@@ -143,7 +154,7 @@ class SoalKuisService
             foreach ($generated as $payload) {
                 Soal::create([
                     'quiz_id' => $quiz->id,
-                    'type' => 'multiple_choice',
+                    'type' => $payload['type'] ?? 'multiple_choice',
                     'question_text' => $payload['question_text'],
                     'correct_answer' => $payload['correct_answer'],
                     'options' => $payload['options'],
@@ -174,12 +185,29 @@ class SoalKuisService
             'count' => count($generated),
             'vocabulary_ids' => collect($generated)->pluck('vocabulary_id')->values()->all(),
             'questions' => collect($generated)->map(fn (array $payload) => [
+                'type' => $payload['type'] ?? 'multiple_choice',
                 'question_text' => $payload['question_text'],
                 'correct_answer' => $payload['correct_answer'],
                 'options' => $payload['options'],
                 'explanation' => $payload['explanation'],
             ])->values()->all(),
         ];
+    }
+
+    public function writingCharacters(string ...$values): array
+    {
+        $manifest = $this->strokeManifest();
+        $characters = collect($values)
+            ->flatMap(fn (string $value) => preg_split('//u', $value, -1, PREG_SPLIT_NO_EMPTY) ?: [])
+            ->unique()
+            ->filter(fn (string $character) => isset($manifest[$character]))
+            ->map(fn (string $character) => [
+                'character' => $character,
+                ...$manifest[$character],
+            ])
+            ->values();
+
+        return $characters->all();
     }
 
     private function vocabularyQuestionPayloads(Kuis $quiz, array $filters): array
@@ -252,6 +280,7 @@ class SoalKuisService
             ['multiple_choice', 'Apa arti dari kanji 火?', 'api', 'api|air|tanah|angin', '火 berarti api. Untuk multiple_choice, correct_answer harus sama persis dengan salah satu opsi.', ''],
             ['fill_blank', '彼は___に行きました。', '学校', 'がっこう', 'Gunakan ___ untuk bagian kosong. Kolom options dipakai sebagai hint opsional.', ''],
             ['listening', 'Ketik kata yang kamu dengar dari audio.', '天気予報', '', 'Untuk listening, audio_url wajib diisi.', 'https://example.com/audio.mp3'],
+            ['handwriting', 'Tulis karakter sesuai urutan stroke.', '環', '', 'Practice only: tidak memengaruhi nilai, XP, atau unlock Day.', ''],
         ];
 
         return array_map(fn (array $row) => [$week, $day, ...$row, 1], $rows);
@@ -264,6 +293,7 @@ class SoalKuisService
         return match ($type) {
             'fill_blank', 'fill-in-blank', 'fill in blank', 'typing' => 'fill_blank',
             'listening', 'listen' => 'listening',
+            'handwriting', 'writing', 'menulis' => 'handwriting',
             default => 'multiple_choice',
         };
     }
@@ -274,9 +304,10 @@ class SoalKuisService
         $questionText = trim((string) ($data['question_text'] ?? ''));
         $correctAnswer = trim((string) ($data['correct_answer'] ?? ''));
         $audioUrl = trim((string) ($data['audio_url'] ?? ''));
+        $rawOptions = is_array($data['options'] ?? null) ? $data['options'] : [];
         $options = array_values(array_unique(array_filter(array_map(
             fn ($option) => trim((string) $option),
-            $data['options'] ?? []
+            $rawOptions
         ), fn ($option) => $option !== '')));
 
         $number = $index + 1;
@@ -294,12 +325,20 @@ class SoalKuisService
             $error = "Soal {$number}: listening wajib memiliki Audio URL.";
         }
 
+        if ($type === 'handwriting') {
+            $error = "Soal {$number}: handwriting berasal dari flashcard dan tidak boleh disimpan sebagai soal kuis.";
+        }
+
         return [
             'error' => $error,
             'type' => $type,
             'question_text' => $questionText,
             'correct_answer' => $correctAnswer,
-            'options' => $type === 'multiple_choice' ? $options : ($type === 'fill_blank' ? array_slice($options, 0, 1) : null),
+            'options' => match ($type) {
+                'multiple_choice' => $options,
+                'fill_blank' => array_slice($options, 0, 1),
+                default => null,
+            },
             'explanation' => $data['explanation'] ?? null,
             'audio_url' => $audioUrl !== '' ? $audioUrl : null,
             'points' => min(1000, max(1, (int) ($data['points'] ?? 1))),
@@ -490,5 +529,24 @@ class SoalKuisService
         ]);
 
         return implode(' / ', $parts);
+    }
+
+    private function strokeManifest(): array
+    {
+        if ($this->strokeManifest !== null) {
+            return $this->strokeManifest;
+        }
+
+        $path = public_path('vendor/japanese-strokes/manifest.json');
+
+        if (! is_file($path)) {
+            return $this->strokeManifest = [];
+        }
+
+        $decoded = json_decode((string) file_get_contents($path), true);
+
+        return $this->strokeManifest = is_array($decoded['characters'] ?? null)
+            ? $decoded['characters']
+            : [];
     }
 }

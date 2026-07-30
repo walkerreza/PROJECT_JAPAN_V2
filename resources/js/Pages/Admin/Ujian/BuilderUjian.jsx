@@ -462,7 +462,7 @@ export default function BuilderUjian({ quiz, questions: initialQuestions = [] })
         <AuthenticatedLayout>
             <Head title={`Builder ${quiz.title || 'Ujian Mingguan'}`} />
             <div className="min-h-screen bg-[#eef1f4] pb-24 dark:bg-gray-950">
-                <header className="sticky top-0 z-30 border-b border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <header className="sticky top-16 z-30 border-b border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900 lg:top-0">
                     <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-3 py-3 sm:px-6">
                         <button
                             type="button"
@@ -479,7 +479,7 @@ export default function BuilderUjian({ quiz, questions: initialQuestions = [] })
                             <h1 className="truncate text-sm font-bold text-gray-900 dark:text-white sm:text-base">{quiz.title || 'Ujian Mingguan'}</h1>
                         </div>
                         <span className={`rounded-full px-3 py-1 text-xs font-bold ${quiz.status === 'published' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'}`}>
-                            {quiz.status === 'published' ? 'Published' : 'Draft'}
+                            {quiz.status === 'published' ? 'Terbit' : 'Draf'}
                         </span>
                         <button type="button" onClick={() => setShowPreview(true)} className="flex h-10 items-center gap-2 rounded-md border border-gray-300 px-3 text-xs font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">
                             <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />

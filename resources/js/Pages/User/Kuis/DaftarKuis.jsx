@@ -144,9 +144,7 @@ export default function DaftarKuis({ quizzes = [] }) {
                                     const meta = getQuizMeta(quiz.type);
                                     const isLocked = quiz.status === 'locked';
                                     const isPremiumLock = ['premium', 'subscription_required'].includes(quiz.lockReason);
-                                    const lockLabel = quiz.lockReason === 'flashcard_required'
-                                        ? 'Selesaikan flashcard dulu'
-                                        : quiz.lockReason === 'kloter_locked'
+                                    const lockLabel = quiz.lockReason === 'kloter_locked'
                                             ? 'Menunggu jadwal kloter'
                                             : 'Selesaikan materi dulu';
                                     const isHovered = hoveredId === quiz.id;

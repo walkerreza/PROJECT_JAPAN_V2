@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\KuisRequest;
 use App\Models\Kosakata;
 use App\Models\Kuis;
 use App\Models\Modul;
+use App\Models\SetFlashcard;
 use App\Models\Soal;
 use App\Services\ImportSpreadsheetService;
 use App\Services\NotifikasiPenggunaService;
@@ -14,6 +15,7 @@ use App\Services\SoalKuisService;
 use App\Services\TemplateExcelService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -80,9 +82,13 @@ class AdminKuisController extends Controller
         ]);
     }
 
-    public function store(KuisRequest $request, NotifikasiPenggunaService $notifikasi)
+    public function store(
+        KuisRequest $request,
+        NotifikasiPenggunaService $notifikasi
+    )
     {
         $validated = $request->validated();
+        $stayOnRoadmap = (bool) Arr::pull($validated, 'stay_on_roadmap', false);
         $validated['available_at'] = filled($validated['module_day_id'] ?? null)
             ? null
             : ($validated['available_at'] ?? null);
@@ -105,6 +111,10 @@ class AdminKuisController extends Controller
 
         if ($quiz->status === 'published') {
             $this->kirimNotifikasiKuisTerbit($quiz, $notifikasi);
+        }
+
+        if ($stayOnRoadmap) {
+            return redirect()->back()->with('success', 'Latihan menulis berhasil ditambahkan ke Day.');
         }
 
         return redirect()->route('admin.quizzes.builder', $quiz)->with('success', 'Kuis berhasil dibuat');
@@ -200,7 +210,7 @@ class AdminKuisController extends Controller
         abort(410, 'Soal dikelola lewat Builder Kuis.');
     }
 
-    public function builder(Kuis $quiz)
+    public function builder(Kuis $quiz, Request $request)
     {
         $quiz->load([
             'module:id,program_pembelajaran_id,title,week_number',
@@ -214,6 +224,50 @@ class AdminKuisController extends Controller
         ]);
 
         $isWeeklyExam = $quiz->isWeeklyExam();
+        $flashcardWorkspace = null;
+
+        if (! $isWeeklyExam && $quiz->module_day_id) {
+            $vocabularyQuery = Kosakata::query()
+                ->where(function ($query) use ($quiz) {
+                    $query->whereNull('module_id')
+                        ->orWhere('module_id', $quiz->module_id);
+                })
+                ->orderBy('word');
+
+            if ($request->filled('search')) {
+                $search = $request->string('search')->toString();
+                $vocabularyQuery->where(function ($query) use ($search) {
+                    $query->where('word', 'like', "%{$search}%")
+                        ->orWhere('reading', 'like', "%{$search}%")
+                        ->orWhere('meaning_id', 'like', "%{$search}%")
+                        ->orWhere('category', 'like', "%{$search}%");
+                });
+            }
+
+            if ($request->filled('status') && $request->status !== 'all') {
+                $vocabularyQuery->where('status', $request->status);
+            }
+
+            if ($request->filled('content_type') && $request->content_type !== 'all') {
+                $vocabularyQuery->where('content_type', $request->content_type);
+            }
+
+            $flashcardWorkspace = [
+                'sets' => SetFlashcard::query()
+                    ->with([
+                        'level:id,level_name',
+                        'module:id,program_pembelajaran_id,title,week_number',
+                        'day:id,module_id,day_number,title',
+                        'flashcards.vocabulary',
+                    ])
+                    ->where('module_id', $quiz->module_id)
+                    ->where('module_day_id', $quiz->module_day_id)
+                    ->orderBy('id')
+                    ->get(),
+                'vocabulary' => $vocabularyQuery->paginate(12)->withQueryString(),
+                'filters' => $request->only('search', 'status', 'content_type'),
+            ];
+        }
 
         return Inertia::render($isWeeklyExam ? 'Admin/Ujian/BuilderUjian' : 'Admin/Kuis/BuilderKuis', [
             'quiz' => [
@@ -233,7 +287,10 @@ class AdminKuisController extends Controller
                 'day' => $quiz->day,
                 'lesson' => null,
             ],
-            'questions' => $quiz->questions->map(fn ($question) => [
+            'questions' => $quiz->questions
+                ->where('type', '!=', 'handwriting')
+                ->values()
+                ->map(fn ($question) => [
                 'id' => $question->id,
                 'type' => $question->type ?: ($quiz->type ?: 'multiple_choice'),
                 'question_text' => $question->question_text,
@@ -249,6 +306,7 @@ class AdminKuisController extends Controller
                     ? round(($question->correct_count / $question->attempts_count) * 100, 1)
                     : null,
             ]),
+            'flashcardWorkspace' => $flashcardWorkspace,
         ]);
     }
 
@@ -263,7 +321,6 @@ class AdminKuisController extends Controller
             'questions.*.question_text' => 'required|string|max:5000',
             'questions.*.correct_answer' => 'required|string|max:1000',
             'questions.*.options' => 'nullable|array',
-            'questions.*.options.*' => 'nullable|string|max:1000',
             'questions.*.explanation' => 'nullable|string|max:5000',
             'questions.*.audio_url' => 'nullable|string|max:2048',
             'questions.*.points' => ['nullable', 'integer', 'min:1', 'max:1000'],

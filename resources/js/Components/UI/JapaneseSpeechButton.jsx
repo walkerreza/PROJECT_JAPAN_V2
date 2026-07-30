@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
 import VolumeOffIcon from '@mui/icons-material/VolumeOff';
 
@@ -21,11 +21,16 @@ export default function JapaneseSpeechButton({
     rate = 0.9,
     pitch = 1,
     volume = 1,
+    autoPlay = false,
+    autoPlayEnabled = true,
+    playbackKey = null,
     children = null,
     ...buttonProps
 }) {
     const [isPlaying, setIsPlaying] = useState(false);
     const [voiceReady, setVoiceReady] = useState(false);
+    const autoPlayedKeyRef = useRef(null);
+    const audioRef = useRef(null);
 
     const speakableText = useMemo(() => String(text || '').trim(), [text]);
     const supported = Boolean(audioUrl) || (canUseSpeech() && speakableText.length > 0);
@@ -40,22 +45,44 @@ export default function JapaneseSpeechButton({
         return () => {
             window.speechSynthesis.removeEventListener?.('voiceschanged', loadVoices);
             window.speechSynthesis.cancel();
+            audioRef.current?.pause?.();
+            audioRef.current = null;
         };
     }, []);
 
-    const play = async (event) => {
+    useEffect(() => {
+        if (autoPlayEnabled) return;
+
+        window.speechSynthesis?.cancel?.();
+        audioRef.current?.pause?.();
+        audioRef.current = null;
+        setIsPlaying(false);
+    }, [autoPlayEnabled]);
+
+    const play = useCallback(async (event) => {
         event?.stopPropagation?.();
 
         if (!supported) return;
 
         if (audioUrl) {
             window.speechSynthesis?.cancel?.();
+            audioRef.current?.pause?.();
             setIsPlaying(true);
 
             const audio = new Audio(audioUrl);
-            audio.onended = () => setIsPlaying(false);
-            audio.onerror = () => setIsPlaying(false);
-            await audio.play().catch(() => setIsPlaying(false));
+            audioRef.current = audio;
+            audio.onended = () => {
+                audioRef.current = null;
+                setIsPlaying(false);
+            };
+            audio.onerror = () => {
+                audioRef.current = null;
+                setIsPlaying(false);
+            };
+            await audio.play().catch(() => {
+                audioRef.current = null;
+                setIsPlaying(false);
+            });
             return;
         }
 
@@ -79,7 +106,19 @@ export default function JapaneseSpeechButton({
         utterance.onerror = () => setIsPlaying(false);
 
         window.speechSynthesis.speak(utterance);
-    };
+    }, [audioUrl, pitch, rate, speakableText, supported, volume]);
+
+    useEffect(() => {
+        if (!autoPlay || !autoPlayEnabled || !supported) return undefined;
+
+        const resolvedPlaybackKey = playbackKey || `${audioUrl || 'speech'}:${speakableText}`;
+        if (autoPlayedKeyRef.current === resolvedPlaybackKey) return undefined;
+
+        autoPlayedKeyRef.current = resolvedPlaybackKey;
+        const timer = window.setTimeout(() => play(), 180);
+
+        return () => window.clearTimeout(timer);
+    }, [audioUrl, autoPlay, autoPlayEnabled, play, playbackKey, speakableText, supported]);
 
     return (
         <button

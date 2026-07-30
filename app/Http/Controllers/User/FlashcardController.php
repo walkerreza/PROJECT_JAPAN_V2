@@ -4,15 +4,12 @@ namespace App\Http\Controllers\User;
 
 use App\Http\Controllers\Controller;
 use App\Models\Flashcard;
+use App\Models\Kuis;
 use App\Models\SetFlashcard;
 use App\Services\AksesFlashcardPenggunaService;
-use App\Services\ProgresRoadmapService;
 use App\Services\RepetisiPembelajaranService;
-use App\Services\RingkasanProgresPenggunaService;
-use App\Services\XpService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Inertia\Inertia;
 
 class FlashcardController extends Controller
 {
@@ -20,100 +17,52 @@ class FlashcardController extends Controller
     {
         $user = Auth::user();
         $aksesFlashcard->abortJikaTerkunci($user, $flashcardSet);
-        $flashcardSet->load([
+        $flashcardSet->loadMissing([
+            'module.programPembelajaran',
             'day.module.programPembelajaran',
-            'flashcards.vocabulary',
-            'flashcards.reviews' => fn ($query) => $query->where('user_id', $user->id),
         ]);
-        $program = $flashcardSet->day?->module?->programPembelajaran;
-        $roadmapUrl = $program ? route('user.modul.program', $program->slug) : null;
 
-        $cards = $flashcardSet->flashcards->values()->map(function ($card) {
-            $review = $card->reviews->first();
-            $vocabulary = $card->vocabulary;
+        $quiz = Kuis::query()
+            ->whereKey($flashcardSet->day?->checkpoint_quiz_id)
+            ->where('status', 'published')
+            ->first();
 
-            return [
-                'id' => $card->id,
-                'front_text' => $vocabulary?->word ?? $card->front_text,
-                'reading' => $vocabulary?->reading ?? $card->reading,
-                'back_text' => $vocabulary?->meaning_id ?? $vocabulary?->meaning_en ?? $card->back_text,
-                'hint' => $vocabulary?->category ?? $card->hint,
-                'example_sentence' => $vocabulary?->example_sentence ?? $card->example_sentence,
-                'example_reading' => $vocabulary?->example_reading,
-                'example_meaning' => $vocabulary?->example_meaning ?? $card->example_meaning,
-                'audio_url' => $vocabulary?->audio_url ?? $card->audio_url,
-                'content_type' => $vocabulary?->content_type ?? 'kosakata',
-                'kanji_details' => [
-                    'onyomi' => $vocabulary?->metadata['onyomi'] ?? null,
-                    'kunyomi' => $vocabulary?->metadata['kunyomi'] ?? null,
-                    'radicals' => $vocabulary?->metadata['radicals'] ?? [],
-                    'stroke_count' => $vocabulary?->metadata['stroke_count'] ?? null,
-                ],
-                'status' => $review?->status ?? 'new',
-                'known_count' => $review?->known_count ?? 0,
-                'learning_count' => $review?->learning_count ?? 0,
-                'mastery_level' => $review?->mastery_level ?? 0,
-                'correct_streak' => $review?->correct_streak ?? 0,
-                'review_count' => $review?->review_count ?? 0,
-                'next_review_at' => $review?->next_review_at?->toISOString(),
-            ];
-        });
+        if (! $quiz) {
+            $quiz = Kuis::query()
+                ->where('module_day_id', $flashcardSet->module_day_id)
+                ->where('status', 'published')
+                ->orderBy('id')
+                ->first();
+        }
 
-        return Inertia::render('User/Flashcard/LatihanFlashcard', [
-            'set' => [
-                'id' => $flashcardSet->id,
-                'title' => $flashcardSet->title,
-                'description' => $flashcardSet->description,
-            ],
-            'cards' => $cards,
-            'back_url' => $roadmapUrl,
-            'next_url' => $roadmapUrl,
-            'next_label' => $roadmapUrl ? 'Kembali ke Roadmap' : 'Kembali ke Kelas',
-        ]);
+        if ($quiz) {
+            return redirect()
+                ->route('user.quizzes.show', $quiz)
+                ->with('info', 'Flashcard sekarang dipelajari langsung di dalam kuis Day.');
+        }
+
+        $program = $flashcardSet->day?->module?->programPembelajaran
+            ?? $flashcardSet->module?->programPembelajaran;
+
+        return redirect()
+            ->to($program ? route('user.modul.program', $program->slug) : route('user.kelas.index'))
+            ->with('warning', 'Kuis Day untuk materi ini belum tersedia.');
     }
 
     public function review(
         Request $request,
         Flashcard $flashcard,
         RepetisiPembelajaranService $repetisi,
-        AksesFlashcardPenggunaService $aksesFlashcard,
-        XpService $xpService,
-        ProgresRoadmapService $roadmapProgress,
-        RingkasanProgresPenggunaService $summary
+        AksesFlashcardPenggunaService $aksesFlashcard
     ) {
         $validated = $request->validate([
             'action' => ['required', 'in:known,learning'],
-            'completed' => ['nullable', 'boolean'],
         ]);
 
         $user = Auth::user();
         $aksesFlashcard->abortJikaKartuTerkunci($user, $flashcard);
         $repetisi->catatReviewFlashcard($user, $flashcard, $validated['action'] === 'known');
 
-        $completion = null;
-        if ($request->boolean('completed')) {
-            $xpService->awardXP(
-                $user,
-                10,
-                'flashcard',
-                $flashcard->flashcard_set_id,
-                'Menyelesaikan sesi flashcard.'
-            );
-
-            $flashcard->loadMissing('set.day.module.programPembelajaran');
-            $completion = $roadmapProgress->selesaikanDariFlashcard($user, $flashcard->set);
-
-            if ($completion['day_completed']) {
-                $summary->forget($user);
-            }
-        }
-
-        $message = match (true) {
-            (bool) ($completion['module_completed'] ?? false) => 'Flashcard selesai. Minggu berikutnya sudah terbuka.',
-            (bool) ($completion['day_completed'] ?? false) => 'Flashcard selesai. Hari berikutnya sudah terbuka.',
-            default => 'Progres flashcard disimpan.',
-        };
-
-        return redirect()->back()->with('success', $message);
+        return redirect()->back()->with('success', 'Progres repetisi disimpan.');
     }
 }

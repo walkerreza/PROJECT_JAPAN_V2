@@ -34,7 +34,9 @@
         "@tiptap/starter-kit": "^3.27.4",
         "fabric": "^7.4.0",
         "framer-motion": "^12.40.0",
+        "kanji-recognizer": "0.2.0",
         "pdfjs-dist": "^6.1.200",
-        "react-confetti": "^6.4.0"
+        "react-confetti": "^6.4.0",
+        "recharts": "^3.10.1"
     }
 }

@@ -65,7 +65,14 @@ const normalizeCard = (item, keepCardId = true) => {
 
 const fromVocabulary = (item) => normalizeCard(item, false);
 
-export default function BuilderFlashcard({ set, vocabulary = {}, filters = {}, quizzes = [] }) {
+export function FlashcardEditorWorkspace({
+    set,
+    vocabulary = {},
+    filters = {},
+    quizzes = [],
+    embedded = false,
+    hostRoute = null,
+}) {
     const builderReturnUrl = set.module?.program_pembelajaran_id
         ? route('admin.modules.index', {
             program_id: set.module.program_pembelajaran_id,
@@ -140,7 +147,10 @@ export default function BuilderFlashcard({ set, vocabulary = {}, filters = {}, q
 
     const submitFilters = (event) => {
         event.preventDefault();
-        router.get(route('admin.flashcards.builder', set.id), { search, status, content_type: contentType }, { preserveState: true, replace: true });
+        const target = embedded && hostRoute
+            ? hostRoute
+            : route('admin.flashcards.builder', set.id);
+        router.get(target, { search, status, content_type: contentType }, { preserveState: true, replace: true });
     };
 
     const saveCards = () => {
@@ -191,16 +201,20 @@ export default function BuilderFlashcard({ set, vocabulary = {}, filters = {}, q
         });
     };
 
-    return (
-        <AuthenticatedLayout>
-            <Head title={`Builder Flashcard - ${set.title}`} />
-
-            <div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+    const workspace = (
+            <div className={`space-y-6 ${embedded ? 'py-5' : 'px-4 py-6 sm:px-6 lg:px-8'}`}>
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                     <div>
-                        <Link href={builderReturnUrl} className="text-xs font-black uppercase tracking-[0.25em] text-teal-600">
-                            Kembali ke Hari
-                        </Link>
+                        {!embedded && (
+                            <Link href={builderReturnUrl} className="text-xs font-black uppercase tracking-[0.25em] text-teal-600">
+                                Kembali ke Hari
+                            </Link>
+                        )}
+                        {embedded && (
+                            <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-600">
+                                Flashcard Day
+                            </p>
+                        )}
                         <h1 className="mt-2 text-2xl font-black text-gray-900 dark:text-white">{set.title}</h1>
                         <p className="mt-1 max-w-2xl text-sm text-gray-500 dark:text-gray-400">
                             Week {set.module?.week_number || '-'} → Day {set.day?.day_number || '-'} · Susun satu kartu untuk satu kosakata.
@@ -477,6 +491,20 @@ export default function BuilderFlashcard({ set, vocabulary = {}, filters = {}, q
                     </aside>
                 </div>
             </div>
+    );
+
+    if (embedded) {
+        return workspace;
+    }
+
+    return (
+        <AuthenticatedLayout>
+            <Head title={`Builder Flashcard - ${set.title}`} />
+            {workspace}
         </AuthenticatedLayout>
     );
+}
+
+export default function BuilderFlashcard(props) {
+    return <FlashcardEditorWorkspace {...props} />;
 }
