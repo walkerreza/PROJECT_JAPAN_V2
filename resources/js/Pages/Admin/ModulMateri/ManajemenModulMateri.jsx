@@ -13,12 +13,11 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import QuizOutlinedIcon from '@mui/icons-material/QuizOutlined';
 import SlideshowIcon from '@mui/icons-material/Slideshow';
-import StyleIcon from '@mui/icons-material/Style';
 
 const focusLabels = {
     roadmap: 'Roadmap',
-    flashcard: 'Flashcard',
-    presentation: 'Presentasi',
+    flashcard: 'Kuis & Repetisi',
+    presentation: 'Presentasi Mingguan',
 };
 
 const inputClass = 'w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 dark:border-gray-700 dark:bg-gray-950 dark:text-white dark:focus:ring-orange-900/30';
@@ -32,7 +31,7 @@ function StatusBadge({ status = 'draft' }) {
                 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'
                 : 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300'
         }`}>
-            {published ? 'Published' : 'Draft'}
+            {published ? 'Terbit' : 'Draf'}
         </span>
     );
 }
@@ -47,7 +46,7 @@ function ResourceStatus({ resources = [], emptyLabel = 'Belum dibuat' }) {
 
     return (
         <span className="text-xs font-bold text-gray-500 dark:text-gray-400">
-            {resources.length} resource / {totalItems} item / {published} published
+            {resources.length} materi / {totalItems} butir / {published} terbit
         </span>
     );
 }
@@ -114,7 +113,7 @@ function ResourceRow({
                                 <span className="block truncate font-bold text-gray-700 dark:text-gray-200">{resource.title}</span>
                                 {allowMultiple && (
                                     <span className="mt-0.5 block text-[11px] font-semibold text-gray-400">
-                                        {resource.item_count || 0} soal / {resource.attempt_count || 0} attempt
+                                        {resource.item_count || 0} soal / {resource.attempt_count || 0} pengerjaan
                                     </span>
                                 )}
                             </span>
@@ -127,7 +126,83 @@ function ResourceRow({
     );
 }
 
-function WeeklyPresentationRow({ module }) {
+function DailyPracticeRow({ module, day, onCreate, focused = false }) {
+    const flashcardSets = day.flashcard_sets || [];
+    const quizzes = day.quizzes || [];
+    const primaryQuiz = quizzes[0] || null;
+    const flashcardCount = flashcardSets.reduce(
+        (total, set) => total + Number(set.item_count || 0),
+        0,
+    );
+    const questionCount = quizzes.reduce(
+        (total, quiz) => total + Number(quiz.item_count || 0),
+        0,
+    );
+    const hasMaterial = flashcardSets.length > 0;
+    const hasQuiz = quizzes.length > 0;
+    const setupNextStep = () => {
+        if (!hasMaterial) {
+            onCreate('flashcard', module, day);
+            return;
+        }
+
+        onCreate('quiz', module, day);
+    };
+
+    return (
+        <div
+            data-content-focus={focused ? 'flashcard' : undefined}
+            className={`rounded-xl border p-3 transition ${
+                focused
+                    ? 'border-orange-400 ring-2 ring-orange-100 dark:ring-orange-900/30'
+                    : 'border-gray-200 dark:border-gray-800'
+            }`}
+        >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300">
+                    <QuizOutlinedIcon sx={{ fontSize: 19 }} />
+                </span>
+                <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-black text-gray-900 dark:text-white">Kuis & Repetisi</span>
+                    <span className="text-xs font-bold text-gray-500 dark:text-gray-400">
+                        {flashcardCount} kartu repetisi / {questionCount} soal
+                    </span>
+                </span>
+                <div className="flex flex-wrap gap-2">
+                    {(!hasMaterial || !hasQuiz) && (
+                        <button
+                            type="button"
+                            onClick={setupNextStep}
+                            className="inline-flex h-9 items-center gap-1 rounded-lg border border-teal-200 px-3 text-xs font-black text-teal-700 dark:border-teal-900/50 dark:text-teal-300"
+                        >
+                            <AddIcon sx={{ fontSize: 15 }} />
+                            {!hasMaterial ? 'Siapkan Materi' : 'Buat Kuis'}
+                        </button>
+                    )}
+                    {primaryQuiz && (
+                        <Link
+                            href={route('admin.quizzes.builder', primaryQuiz.id)}
+                            className="inline-flex h-9 items-center rounded-lg bg-gray-900 px-3 text-xs font-black text-white dark:bg-white dark:text-gray-900"
+                        >
+                            Buka Builder
+                        </Link>
+                    )}
+                </div>
+            </div>
+            {(!hasMaterial || !hasQuiz || quizzes.length > 1) && (
+                <p className="mt-2 border-t border-gray-100 pt-2 text-xs font-semibold text-gray-400 dark:border-gray-800">
+                    {!hasMaterial
+                        ? 'Langkah 1 dari 2: siapkan materi repetisi, lalu buat kuis untuk Hari ini.'
+                        : !hasQuiz
+                            ? 'Langkah 2 dari 2: buat kuis agar latihan Hari ini dapat digunakan siswa.'
+                            : `${quizzes.length} kuis tersedia; builder membuka kuis utama Hari ini.`}
+                </p>
+            )}
+        </div>
+    );
+}
+
+function WeeklyPresentationRow({ module, focused = false }) {
     const presentations = Array.isArray(module.weekly_presentations)
         ? module.weekly_presentations
         : Object.values(module.weekly_presentations || {}).filter(Boolean);
@@ -138,7 +213,14 @@ function WeeklyPresentationRow({ module }) {
     ];
 
     return (
-        <div className="rounded-xl border border-gray-200 dark:border-gray-800">
+        <div
+            data-content-focus={focused ? 'presentation' : undefined}
+            className={`rounded-xl border transition ${
+                focused
+                    ? 'border-sky-400 ring-2 ring-sky-100 dark:ring-sky-900/30'
+                    : 'border-gray-200 dark:border-gray-800'
+            }`}
+        >
             <div className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-300">
                     <SlideshowIcon sx={{ fontSize: 19 }} />
@@ -215,6 +297,20 @@ export default function ModulesIndex({ modules, levels = [], programs = [], filt
         setOpenDayId((current) => filters.day_id ? targetDay?.id || null : current || targetDay?.id || null);
     }, [filters.day_id, filters.week_id, moduleItems.length]);
 
+    useEffect(() => {
+        if (!selectedProgramId || focus === 'roadmap' || !openModuleId) {
+            return undefined;
+        }
+
+        const frame = window.requestAnimationFrame(() => {
+            document
+                .querySelector(`[data-content-focus="${focus}"]`)
+                ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+
+        return () => window.cancelAnimationFrame(frame);
+    }, [focus, openModuleId, selectedProgramId]);
+
     const currentModules = useMemo(
         () => selectedProgramId ? moduleItems : [],
         [moduleItems, selectedProgramId],
@@ -287,7 +383,7 @@ export default function ModulesIndex({ modules, levels = [], programs = [], filt
             openConfirm({
                 variant: 'warning',
                 title: 'Minggu Masih Berisi Materi',
-                message: 'Hapus atau pindahkan seluruh Hari dan resource sebelum menghapus Minggu.',
+                message: 'Hapus atau pindahkan seluruh Hari dan materi sebelum menghapus Minggu.',
                 confirmLabel: 'Mengerti',
                 cancelLabel: 'Tutup',
                 onConfirm: closeConfirm,
@@ -317,7 +413,7 @@ export default function ModulesIndex({ modules, levels = [], programs = [], filt
             openConfirm({
                 variant: 'warning',
                 title: `Hari ${day.day_number} Masih Berisi Materi`,
-                message: 'Hapus atau pindahkan seluruh resource sebelum menghapus Hari.',
+                message: 'Hapus atau pindahkan seluruh materi sebelum menghapus Hari.',
                 confirmLabel: 'Mengerti',
                 cancelLabel: 'Tutup',
                 onConfirm: closeConfirm,
@@ -355,13 +451,13 @@ export default function ModulesIndex({ modules, levels = [], programs = [], filt
                                 </Link>
                                 <div className="min-w-0">
                                     <p className="text-[11px] font-black uppercase tracking-[0.22em] text-orange-600">
-                                        Kelas / Roadmap / {focusLabels[focus]}
+                                        Kelas / {focusLabels[focus]}
                                     </p>
                                     <h1 className="mt-1 text-xl font-black text-gray-900 dark:text-white sm:text-2xl">
                                         {selectedProgram ? `Roadmap ${selectedProgram.title}` : 'Pilih Kelas'}
                                     </h1>
                                     <p className="mt-1 text-sm font-medium text-gray-500 dark:text-gray-400">
-                                        Susun Minggu, Hari, dan resource belajar tanpa berpindah konteks kelas.
+                                        Susun Minggu, Hari, dan materi belajar tanpa berpindah konteks kelas.
                                     </p>
                                 </div>
                             </div>
@@ -421,7 +517,7 @@ export default function ModulesIndex({ modules, levels = [], programs = [], filt
                                                         <StatusBadge status={module.status} />
                                                     </span>
                                                     <span className="mt-1 block text-xs font-bold text-gray-400">
-                                                        {module.days_count || 0} Hari / {module.flashcard_count || 0} Flashcard / {module.quiz_count || 0} Kuis / {module.presentation_count || 0} Presentasi
+                                                        {module.days_count || 0} Hari / {module.flashcard_count || 0} kartu / {module.quiz_count || 0} kuis / {module.presentation_count || 0} presentasi
                                                     </span>
                                                 </span>
                                                 <ExpandMoreIcon className={`shrink-0 text-gray-400 transition-transform ${moduleOpen ? 'rotate-180' : ''}`} />
@@ -453,7 +549,7 @@ export default function ModulesIndex({ modules, levels = [], programs = [], filt
                                                 </div>
 
                                                 <div className="mb-3 grid gap-2 lg:grid-cols-2">
-                                                    <WeeklyPresentationRow module={module} />
+                                                    <WeeklyPresentationRow module={module} focused={focus === 'presentation'} />
                                                     <ResourceRow
                                                         type="quiz"
                                                         label="Ujian Mingguan"
@@ -518,26 +614,11 @@ export default function ModulesIndex({ modules, levels = [], programs = [], filt
                                                                         <button type="button" onClick={() => deleteDay(module, day)} className="mb-1 h-9 w-full rounded-lg border border-red-100 text-xs font-black text-red-600 dark:border-red-900/40 sm:hidden">
                                                                             Hapus Hari
                                                                         </button>
-                                                                        <ResourceRow
-                                                                            type="flashcard"
-                                                                            label="Flashcard"
-                                                                            icon={<StyleIcon sx={{ fontSize: 19 }} />}
-                                                                            tone="teal"
+                                                                        <DailyPracticeRow
                                                                             module={module}
                                                                             day={day}
-                                                                            resources={day.flashcard_sets || []}
+                                                                            onCreate={openResourceCreate}
                                                                             focused={focus === 'flashcard'}
-                                                                            onCreate={openResourceCreate}
-                                                                        />
-                                                                        <ResourceRow
-                                                                            type="quiz"
-                                                                            label="Kuis"
-                                                                            icon={<QuizOutlinedIcon sx={{ fontSize: 19 }} />}
-                                                                            tone="red"
-                                                                            module={module}
-                                                                            day={day}
-                                                                            resources={day.quizzes || []}
-                                                                            onCreate={openResourceCreate}
                                                                         />
                                                                     </div>
                                                                 )}
@@ -616,8 +697,8 @@ export default function ModulesIndex({ modules, levels = [], programs = [], filt
                                 <label>
                                     <span className="mb-1.5 block text-xs font-black uppercase tracking-wider text-gray-400">Status</span>
                                     <select value={moduleForm.data.status} onChange={(event) => moduleForm.setData('status', event.target.value)} className={inputClass}>
-                                        <option value="draft">Draft</option>
-                                        <option value="published">Published</option>
+                                        <option value="draft">Draf</option>
+                                        <option value="published">Terbit</option>
                                     </select>
                                 </label>
                             </div>

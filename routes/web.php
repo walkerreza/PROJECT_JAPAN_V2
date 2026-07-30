@@ -3,13 +3,11 @@
 use App\Http\Controllers\Admin\AdminAnalitikController;
 use App\Http\Controllers\Admin\AdminBerandaController;
 use App\Http\Controllers\Admin\AdminFlashcardController;
-use App\Http\Controllers\Admin\AdminGamifikasiController;
 use App\Http\Controllers\Admin\AdminHariModulController;
 use App\Http\Controllers\Admin\AdminKosakataController;
 use App\Http\Controllers\Admin\AdminKuisController;
 use App\Http\Controllers\Admin\AdminLevelController;
 use App\Http\Controllers\Admin\AdminModulController;
-use App\Http\Controllers\Admin\AdminPencapaianController;
 use App\Http\Controllers\Admin\AdminPenggunaController;
 use App\Http\Controllers\Admin\AdminPresentasiController;
 use App\Http\Controllers\Admin\AdminUnggahController;
@@ -35,6 +33,8 @@ use App\Http\Controllers\User\PapanPeringkatController;
 use App\Http\Controllers\User\PembelajaranController;
 use App\Http\Controllers\User\ProgresController;
 use App\Http\Controllers\User\SertifikatController;
+use App\Http\Controllers\User\TargetUjianPenggunaController;
+use App\Http\Controllers\User\UmpanBalikPembelajaranController;
 use App\Services\AksesPremiumService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -99,6 +99,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/gamification', SuperAdminGamifikasiController::class)->name('gamification');
         Route::put('/gamification/settings', [SuperAdminGamifikasiController::class, 'updateSettings'])->name('gamification.settings.update');
         Route::post('/gamification/recalculate-achievements', [SuperAdminGamifikasiController::class, 'recalculateAchievements'])->name('gamification.achievements.recalculate');
+        Route::post('/gamification/achievements', [SuperAdminGamifikasiController::class, 'storeAchievement'])->name('gamification.achievements.store');
+        Route::put('/gamification/achievements/{achievement}', [SuperAdminGamifikasiController::class, 'updateAchievement'])->name('gamification.achievements.update');
+        Route::delete('/gamification/achievements/{achievement}', [SuperAdminGamifikasiController::class, 'destroyAchievement'])->name('gamification.achievements.destroy');
         Route::get('/kloters', SuperAdminKloterController::class)->name('kloters');
         Route::post('/kloters', [SuperAdminKloterController::class, 'store'])->name('kloters.store');
         Route::put('/kloters/{kloter}', [SuperAdminKloterController::class, 'update'])->name('kloters.update');
@@ -135,6 +138,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::patch('/kloters/{kloter}/enrollments/{membership}/reject', [AdminPenggunaController::class, 'rejectEnrollment'])->name('kloters.enrollments.reject');
         Route::get('/analytics', AdminAnalitikController::class)->name('analytics');
         Route::get('/vocabulary', [AdminKosakataController::class, 'index'])->name('vocabulary.index');
+        Route::get('/vocabulary/picker', [AdminKosakataController::class, 'picker'])->name('vocabulary.picker');
         Route::post('/vocabulary', [AdminKosakataController::class, 'store'])->name('vocabulary.store');
         Route::put('/vocabulary/{vocabulary}', [AdminKosakataController::class, 'update'])->name('vocabulary.update');
         Route::delete('/vocabulary/{vocabulary}', [AdminKosakataController::class, 'destroy'])->name('vocabulary.destroy');
@@ -164,13 +168,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/presentations/{presentationDeck}/slides/{presentationSlide}/jamboard', [AdminPresentasiController::class, 'saveSlideBoard'])->name('presentations.slides.jamboard.save');
         Route::get('/presentations/{presentationDeck}/presenter', [AdminPresentasiController::class, 'presenter'])->name('presentations.presenter');
         Route::redirect('/boards', '/admin/presentations')->name('boards.index');
-        Route::get('/gamification', [AdminGamifikasiController::class, 'index'])->name('gamification');
-        Route::redirect('/achievements', '/admin/gamification')->name('achievements.index');
+        Route::any('/gamification/{path?}', static fn () => abort(403))->where('path', '.*')->name('gamification.legacy');
+        Route::any('/achievements/{path?}', static fn () => abort(403))->where('path', '.*')->name('achievements.legacy');
         Route::redirect('/subscriptions', '/admin/dashboard')->name('subscriptions.index');
         Route::redirect('/vouchers', '/admin/dashboard')->name('vouchers.index');
-        Route::post('/achievements', [AdminPencapaianController::class, 'store'])->name('achievements.store');
-        Route::put('/achievements/{achievement}', [AdminPencapaianController::class, 'update'])->name('achievements.update');
-        Route::delete('/achievements/{achievement}', [AdminPencapaianController::class, 'destroy'])->name('achievements.destroy');
         Route::get('/quizzes/{quiz}/builder', [AdminKuisController::class, 'builder'])->name('quizzes.builder');
         Route::post('/quizzes/{quiz}/builder', [AdminKuisController::class, 'updateQuestions'])->name('quizzes.builder.update');
         Route::get('/quizzes/{quiz}/questions/template/{format}', [AdminKuisController::class, 'downloadImportTemplate'])->name('quizzes.questions.template');
@@ -229,6 +230,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Modul Mingguan
         Route::redirect('/modul', '/user/kelas')->name('modul.index');
         Route::get('/modul/program/{program:slug}', [ModulController::class, 'program'])->name('modul.program');
+        Route::put('/modul/program/{program:slug}/exam-target', [TargetUjianPenggunaController::class, 'update'])->name('modul.program.exam-target.update');
+        Route::delete('/modul/program/{program:slug}/exam-target', [TargetUjianPenggunaController::class, 'destroy'])->name('modul.program.exam-target.destroy');
         Route::get('/modul/program/{program:slug}/kosakata', [ModulController::class, 'kosakata'])->name('modul.program.kosakata');
         Route::get('/modul/program/{program:slug}/presentasi', [ModulController::class, 'presentasi'])->name('modul.program.presentasi');
         Route::get('/modul/{week}', [ModulController::class, 'lesson'])->name('modul.lesson');
@@ -240,6 +243,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::get('/quizzes', [PembelajaranController::class, 'quizLobby'])->name('quizzes.index');
         Route::get('/quizzes/{quiz}', [PembelajaranController::class, 'showQuiz'])->name('quizzes.show');
+        Route::post('/quizzes/{quiz}/feedback', [UmpanBalikPembelajaranController::class, 'store'])->middleware('throttle:learning-actions')->name('quizzes.feedback.store');
         Route::get('/flashcards/{flashcardSet}', [FlashcardController::class, 'show'])->name('flashcards.show');
         Route::post('/flashcards/review/{flashcard}', [FlashcardController::class, 'review'])->middleware('throttle:learning-actions')->name('flashcards.review');
 

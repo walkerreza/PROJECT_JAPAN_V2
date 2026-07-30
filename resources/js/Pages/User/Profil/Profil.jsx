@@ -20,6 +20,13 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import MilitaryTechIcon from '@mui/icons-material/MilitaryTech';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
+import VolumeOffIcon from '@mui/icons-material/VolumeOff';
+import VolumeUpIcon from '@mui/icons-material/VolumeUp';
+import {
+    areSoundEffectsEnabled,
+    playSoundEffect,
+    setSoundEffectsEnabled,
+} from '@/Components/UI/SoundEffects';
 
 const DEFAULT_LEAGUE_TIERS = [
     { name: 'Bronze', min_xp: 0, icon: 'bronze_kabuto' },
@@ -158,6 +165,7 @@ export default function Profile({ recentTransactions = [], achievements = [], ga
     const [saved, setSaved] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState(Boolean(deletionAuth.open_dialog));
     const [themeLabel, setThemeLabel] = useState(resolveThemeLabel);
+    const [soundEffectsEnabled, setSoundEffectsEnabledState] = useState(areSoundEffectsEnabled);
     const accessKeyForm = useForm({ code: '' });
     const deleteAccountForm = useForm({
         confirmation_username: '',
@@ -185,6 +193,28 @@ export default function Profile({ recentTransactions = [], achievements = [], ga
             window.removeEventListener('japanlingo:theme-changed', syncThemeLabel);
         };
     }, []);
+
+    useEffect(() => {
+        const syncSoundEffects = () => setSoundEffectsEnabledState(areSoundEffectsEnabled());
+
+        window.addEventListener('storage', syncSoundEffects);
+        window.addEventListener('japanlingo:sound-effects-changed', syncSoundEffects);
+
+        return () => {
+            window.removeEventListener('storage', syncSoundEffects);
+            window.removeEventListener('japanlingo:sound-effects-changed', syncSoundEffects);
+        };
+    }, []);
+
+    const toggleSoundEffects = () => {
+        const nextValue = !soundEffectsEnabled;
+        setSoundEffectsEnabled(nextValue);
+        setSoundEffectsEnabledState(nextValue);
+
+        if (nextValue) {
+            playSoundEffect('select');
+        }
+    };
 
     const handleSave = () => {
         setSaved(true);
@@ -514,6 +544,27 @@ export default function Profile({ recentTransactions = [], achievements = [], ga
                                                         <span className="shrink-0 rounded-xl bg-gray-900 px-4 py-2.5 text-xs font-black uppercase tracking-widest text-white shadow-sm dark:bg-white dark:text-gray-900">
                                                             {themeLabel}
                                                         </span>
+                                                    </div>
+                                                    <div className="mt-3 flex flex-col gap-4 rounded-2xl border border-gray-100 bg-gray-50/50 p-4 dark:border-gray-700 dark:bg-gray-800/50 sm:flex-row sm:items-center sm:justify-between">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-gray-500 shadow-sm dark:bg-gray-800 dark:text-gray-400">
+                                                                {soundEffectsEnabled ? <VolumeUpIcon sx={{ fontSize: 20 }} /> : <VolumeOffIcon sx={{ fontSize: 20 }} />}
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-sm font-bold text-gray-800 dark:text-gray-200">Efek Suara</p>
+                                                                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Feedback untuk kuis, flashcard, roadmap, dan pembayaran.</p>
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={toggleSoundEffects}
+                                                            aria-pressed={soundEffectsEnabled}
+                                                            className={`inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-wider transition ${soundEffectsEnabled
+                                                                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                                                : 'bg-gray-200 text-gray-600 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'}`}
+                                                        >
+                                                            {soundEffectsEnabled ? 'Aktif' : 'Nonaktif'}
+                                                        </button>
                                                     </div>
                                                 </div>
 

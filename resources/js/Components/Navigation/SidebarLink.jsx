@@ -1,33 +1,44 @@
 import { Link } from '@inertiajs/react';
 
-export default function SidebarLink({ href, icon, children, active = false, badge, isExpanded = false, className = '' }) {
+export default function SidebarLink({
+    href,
+    icon,
+    children,
+    active = false,
+    badge,
+    isExpanded = false,
+    className = '',
+    onNavigate,
+}) {
+    const label = typeof children === 'string' ? children : undefined;
+
     return (
         <Link
             href={href}
-            preserveState
-            className={`flex ${isExpanded ? 'flex-row items-center justify-start px-4' : 'flex-col items-center justify-center px-1'} py-3 mb-1.5 rounded-2xl transition-all relative group h-[52px] ${
+            aria-current={active ? 'page' : undefined}
+            aria-label={!isExpanded ? label : undefined}
+            title={!isExpanded ? label : undefined}
+            onClick={onNavigate}
+            className={`group relative mb-1.5 flex min-h-[52px] w-full items-center rounded-xl py-2.5 transition-all duration-200 ${
+                isExpanded ? 'flex-row justify-start px-3.5' : 'justify-center px-2'
+            } ${
                 active
-                    ? 'bg-red-50 text-red-700' 
-                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
-                } ${className}`}
+                    ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md shadow-red-500/20'
+                    : 'text-gray-500 hover:bg-white hover:text-red-700 hover:shadow-sm dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-red-300'
+            } ${className}`}
         >
-            {/* Ikon Utama */}
-            <span className={`flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 ${isExpanded ? 'mr-3' : 'mb-0.5'} ${active ? 'text-red-600' : ''}`}>
+            <span className={`flex shrink-0 items-center justify-center transition-transform duration-200 group-hover:scale-105 ${isExpanded ? 'mr-3' : ''}`}>
                 {icon}
             </span>
-            
-            {/* Teks Label */}
-            <span className={`font-bold tracking-tight transition-all duration-300 ${
-                isExpanded 
-                    ? 'text-[14px] text-left opacity-100 w-auto' 
-                    : 'text-[10px] text-center w-full truncate opacity-100'
-                } ${active ? 'text-red-700' : ''}`}>
-                {children}
-            </span>
-            
-            {/* Lencana Pin (Badge) */}
+
+            {isExpanded && (
+                <span className="min-w-0 flex-1 truncate text-left text-sm font-semibold">
+                    {children}
+                </span>
+            )}
+
             {badge && (
-                <span className={`absolute ${isExpanded ? 'right-4' : 'top-1 right-2'} bg-yellow-400 text-yellow-900 border border-white text-[9px] font-black px-1 py-0.5 rounded-md leading-none shadow-sm`}>
+                <span className={`absolute ${isExpanded ? 'right-3.5' : 'right-1.5 top-1.5'} rounded-md border border-white bg-yellow-400 px-1 py-0.5 text-[9px] font-black leading-none text-yellow-900 shadow-sm`}>
                     {badge}
                 </span>
             )}

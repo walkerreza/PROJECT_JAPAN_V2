@@ -15,6 +15,7 @@ use App\Models\ProgresHariModul;
 use App\Models\ReviewFlashcard;
 use App\Models\SetFlashcard;
 use App\Models\Soal;
+use App\Models\TargetUjianPengguna;
 use App\Services\AksesKuisPenggunaService;
 use App\Services\AksesPremiumService;
 use App\Services\KloterBelajarService;
@@ -146,9 +147,6 @@ class ModulController extends Controller
             } elseif ($quiz) {
                 $primaryUrl = route('user.modul.quiz', $modul->id);
                 $primaryLabel = 'Review Sesi';
-            } elseif ($flashcardSet) {
-                $primaryUrl = route('user.modul.lesson', $modul->id);
-                $primaryLabel = 'Review Flashcard';
             }
 
             $status = 'unavailable';
@@ -168,7 +166,6 @@ class ModulController extends Controller
                 ->whereNotNull('completed_at')
                 ->pluck('module_day_id');
             $days = $modul->days->values()->map(function (HariModul $day, int $dayIndex) use ($program, $modul, $weekCanOpen, $completedDayIds, $aksesKuis, $user) {
-                $flashcardSet = $day->flashcardSets->first(fn ($set) => $set->flashcards_count > 0);
                 $checkpointQuiz = $day->checkpointQuiz?->status === 'published' && $day->checkpointQuiz?->questions?->isNotEmpty()
                     ? $day->checkpointQuiz
                     : null;
@@ -186,7 +183,7 @@ class ModulController extends Controller
                     ->count();
                 $questionCount = $day->quizzes->sum('questions_count');
                 $hasContent = $presentationCount > 0 || $flashcardCount > 0 || $questionCount > 0 || $day->vocabulary->isNotEmpty();
-                $completionMethod = $checkpointQuiz ? 'checkpoint' : ($flashcardCount > 0 ? 'flashcard' : null);
+                $completionMethod = $checkpointQuiz ? 'checkpoint' : null;
                 $isReady = $hasContent && $completionMethod;
                 $presentationPreviews = $day->presentationDecks
                     ->take(3)
@@ -229,7 +226,7 @@ class ModulController extends Controller
                     'lock_reason' => ! $hasContent
                         ? 'Konten Hari ini belum tersedia.'
                         : (! $completionMethod
-                            ? 'Hari belum memiliki flashcard atau kuis checkpoint.'
+                            ? 'Kuis Day belum tersedia.'
                             : ($weekCanOpen ? 'Selesaikan Hari sebelumnya.' : 'Minggu ini belum terbuka.')),
                     'has_content' => $hasContent,
                     'completion_method' => $completionMethod,
@@ -240,19 +237,6 @@ class ModulController extends Controller
                     'vocabulary_preview' => $vocabularyPreview,
                     'flashcard_total' => $flashcardCount,
                     'flashcard_reviewed' => $flashcardReviewed,
-                    'flashcard_summary' => [
-                        'sets' => $day->flashcardSets->map(fn (SetFlashcard $set) => [
-                            'id' => $set->id,
-                            'title' => $set->title,
-                            'cards_count' => $set->flashcards_count,
-                            'reviewed_count' => $set->flashcards
-                                ->filter(fn ($card) => $card->reviews->isNotEmpty())
-                                ->count(),
-                            'url' => route('user.flashcards.show', $set->id),
-                        ])->values(),
-                        'total' => $flashcardCount,
-                        'reviewed' => $flashcardReviewed,
-                    ],
                     'questions_count' => $questionCount,
                     'checkpoint_summary' => $checkpointQuiz ? [
                         'id' => $checkpointQuiz->id,
@@ -272,12 +256,11 @@ class ModulController extends Controller
                     'vocabulary_url' => $day->vocabulary->isNotEmpty()
                         ? route('user.modul.program.kosakata', ['program' => $program->slug, 'module' => $modul->id, 'day' => $day->id])
                         : null,
-                    'flashcard_url' => $flashcardSet ? route('user.flashcards.show', $flashcardSet->id) : null,
                     'quiz_url' => $checkpointQuiz && $quizAccess['allowed'] ? route('user.quizzes.show', $checkpointQuiz->id) : null,
                     'quiz_locked_reason' => $checkpointQuiz && ! $quizAccess['allowed'] ? $quizAccess['message'] : null,
-                    'primary_url' => $flashcardSet
-                        ? route('user.flashcards.show', $flashcardSet->id)
-                        : ($checkpointQuiz && $quizAccess['allowed'] ? route('user.quizzes.show', $checkpointQuiz->id) : null),
+                    'primary_url' => $checkpointQuiz && $quizAccess['allowed']
+                        ? route('user.quizzes.show', $checkpointQuiz->id)
+                        : null,
                 ];
             });
             $allDaysCompleted = $days->isNotEmpty() && $days->every(fn (array $day) => $day['status'] === 'done');
@@ -363,7 +346,6 @@ class ModulController extends Controller
                 'vocabulary_count' => $vocabularyCount,
                 'presentation_url' => $hasPresentation ? route('user.modul.program.presentasi', ['program' => $program->slug, 'module' => $modul->id]) : null,
                 'vocabulary_url' => $hasVocabulary ? route('user.modul.program.kosakata', ['program' => $program->slug, 'module' => $modul->id]) : null,
-                'flashcard_url' => $flashcardSet ? route('user.modul.lesson', $modul->id) : null,
                 'quiz_url' => $quiz ? route('user.modul.quiz', $modul->id) : null,
                 'primary_url' => $primaryUrl,
                 'primary_label' => $primaryLabel,
@@ -383,6 +365,34 @@ class ModulController extends Controller
             ->filter(fn (Modul $modul) => $aksesPremium->bolehAksesModul($user, $modul))
             ->pluck('id');
         $resourceWeek = $weeks->first(fn ($week) => in_array($week['status'], ['active', 'done'], true) && $week['has_content']);
+        $examTarget = TargetUjianPengguna::query()
+            ->where('user_id', $user->id)
+            ->where('program_pembelajaran_id', $program->id)
+            ->first();
+        $completedWeekCount = $weeks->where('status', 'done')->count();
+        $remainingWeeks = max(0, $weeks->count() - $completedWeekCount);
+        $examTargetPayload = null;
+
+        if ($examTarget) {
+            $daysRemaining = (int) today()->diffInDays($examTarget->exam_date, false);
+            $paceMessage = match (true) {
+                $remainingWeeks === 0 => 'Roadmap selesai. Pertahankan kemampuan dengan review materi.',
+                $daysRemaining < 0 => 'Tanggal ujian telah lewat. Perbarui target untuk membuat rencana baru.',
+                $daysRemaining === 0 => 'Hari ujian telah tiba. Semoga berhasil!',
+                $daysRemaining < $remainingWeeks => 'Target sudah dekat. Prioritaskan Minggu aktif terlebih dahulu.',
+                default => sprintf(
+                    'Selesaikan sekitar 1 Minggu setiap %d hari.',
+                    max(1, (int) floor($daysRemaining / $remainingWeeks)),
+                ),
+            };
+
+            $examTargetPayload = [
+                'exam_date' => $examTarget->exam_date->toDateString(),
+                'days_remaining' => $daysRemaining,
+                'remaining_weeks' => $remainingWeeks,
+                'pace_message' => $paceMessage,
+            ];
+        }
 
         return Inertia::render('User/Modul/DaftarModul', [
             'weeks' => $weeks,
@@ -405,7 +415,6 @@ class ModulController extends Controller
                         ->count(),
                     'presentations_url' => route('user.modul.program.presentasi', $program->slug),
                     'vocabulary_url' => route('user.modul.program.kosakata', $program->slug),
-                    'flashcards_url' => $resourceWeek['flashcard_url'] ?? null,
                     'quizzes_url' => $resourceWeek['quiz_url'] ?? null,
                 ],
                 'kloter' => $kloterAktif ? [
@@ -416,6 +425,7 @@ class ModulController extends Controller
                     'tanggal_mulai' => optional($kloterAktif->tanggal_mulai)->format('d M Y'),
                     'minggu_aktif' => $mingguAktifKloter,
                 ] : null,
+                'exam_target' => $examTargetPayload,
             ],
             'back_url' => route('user.kelas.index'),
         ]);
@@ -616,51 +626,17 @@ class ModulController extends Controller
     public function lesson($weekId, AksesPremiumService $aksesPremium)
     {
         $user = Auth::user();
-
         $modul = Modul::where('status', 'published')->findOrFail($weekId);
 
         abort_unless($aksesPremium->bolehAksesModul($user, $modul), 403);
 
-        $flashcardSet = $this->firstFlashcardSetFor($modul);
+        $modul->loadMissing('programPembelajaran');
 
-        if (! $flashcardSet) {
-            return redirect()->route('user.modul.quiz', $modul->id);
-        }
-
-        $cards = $flashcardSet
-            ? $flashcardSet->flashcards()
-                ->with(['reviews' => fn ($query) => $query->where('user_id', $user->id)])
-                ->orderBy('order')
-                ->get()
-                ->map(fn ($card) => [
-                    'id' => $card->id,
-                    'front_text' => $card->front_text,
-                    'back_text' => $card->back_text,
-                    'reading' => $card->reading,
-                    'audio_url' => $card->audio_url,
-                    'example_sentence' => $card->example_sentence,
-                    'example_meaning' => $card->example_meaning,
-                    'status' => $card->reviews->first()?->status ?? 'new',
-                    'mastery_level' => $card->reviews->first()?->mastery_level ?? 0,
-                    'correct_streak' => $card->reviews->first()?->correct_streak ?? 0,
-                    'review_count' => $card->reviews->first()?->review_count ?? 0,
-                    'next_review_at' => $card->reviews->first()?->next_review_at?->toISOString(),
-                ])
-            : collect();
-
-        return Inertia::render('User/Flashcard/LatihanFlashcard', [
-            'set' => [
-                'id' => $flashcardSet->id,
-                'title' => $flashcardSet->title,
-                'description' => $flashcardSet->description,
-            ],
-            'cards' => $cards,
-            'back_url' => $modul->programPembelajaran
+        return redirect()
+            ->to($modul->programPembelajaran
                 ? route('user.modul.program', $modul->programPembelajaran->slug)
-                : route('user.kelas.index'),
-            'next_url' => route('user.modul.quiz', $modul->id),
-            'next_label' => 'Lanjut ke Kuis',
-        ]);
+                : route('user.kelas.index'))
+            ->with('info', 'Latihan flashcard mandiri sudah dipindahkan ke dalam kuis Day.');
     }
 
     public function quiz(
@@ -699,17 +675,47 @@ class ModulController extends Controller
 
     public function checkQuestion(Request $request, Soal $question, AksesKuisPenggunaService $aksesKuis)
     {
-        $validated = $request->validate([
-            'answer' => ['required', 'string', 'max:2000'],
-        ]);
-
         $question->load('quiz.module');
 
         abort_unless($question->quiz?->status === 'published', 404);
         $aksesKuis->abortJikaTerkunci($request->user(), $question->quiz);
 
+        if ($question->type === 'handwriting') {
+            $validated = $request->validate([
+                'answer' => ['nullable', 'string', 'max:4'],
+                'answer_payload' => ['required', 'array'],
+                'answer_payload.completed_strokes' => ['required', 'integer', 'min:0', 'max:100'],
+                'answer_payload.total_strokes' => ['required', 'integer', 'min:1', 'max:100'],
+                'answer_payload.attempts_by_stroke' => ['nullable', 'array', 'max:100'],
+                'answer_payload.mistakes' => ['required', 'integer', 'min:0', 'max:10000'],
+                'answer_payload.hints_used' => ['required', 'integer', 'min:0', 'max:10000'],
+                'answer_payload.duration_ms' => ['required', 'integer', 'min:0', 'max:86400000'],
+                'answer_payload.revealed' => ['required', 'boolean'],
+            ]);
+            $payload = $validated['answer_payload'];
+            $expectedStrokes = (int) data_get($question->options, 'stroke_count', $payload['total_strokes']);
+            $completed = (int) $payload['completed_strokes'] >= $expectedStrokes;
+            $mastered = $completed && ! $payload['revealed'];
+
+            return response()->json([
+                'is_correct' => $mastered,
+                'practice_only' => true,
+                'mastery_status' => $mastered ? 'review' : 'learning',
+                'message' => $mastered
+                    ? 'Urutan stroke selesai. Latihan masuk progres repetisi.'
+                    : 'Panduan membantu menyelesaikan karakter. Latihan dicatat untuk diulang.',
+                'explanation' => $question->explanation,
+            ]);
+        }
+
+        $validated = $request->validate([
+            'answer' => ['required', 'string', 'max:2000'],
+            'answer_payload' => ['nullable', 'array'],
+        ]);
+
         return response()->json([
             'is_correct' => $this->isAnswerCorrect($validated['answer'], (string) $question->correct_answer),
+            'practice_only' => false,
             'explanation' => $question->explanation,
         ]);
     }

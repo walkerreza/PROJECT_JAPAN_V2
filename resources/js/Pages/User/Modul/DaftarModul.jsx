@@ -1,27 +1,335 @@
 import React, { useEffect, useState } from 'react';
-import { Head, Link } from '@inertiajs/react';
+import { createPortal } from 'react-dom';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import theme from '@/Components/theme/themes';
+import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
+import { playSoundEffect } from '@/Components/UI/SoundEffects';
 
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AutoStoriesIcon from '@mui/icons-material/AutoStories';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import CloseIcon from '@mui/icons-material/Close';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined';
+import EditCalendarIcon from '@mui/icons-material/EditCalendar';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import LockIcon from '@mui/icons-material/Lock';
 import QuizIcon from '@mui/icons-material/Quiz';
 import SlideshowIcon from '@mui/icons-material/Slideshow';
-import StyleIcon from '@mui/icons-material/Style';
 
 const RESOURCE_COLORS = {
     presentation: { color: '#0284c7', shadow: '#075985' },
     day: { color: '#dc2626', shadow: '#991b1b' },
-    flashcard: { color: '#f97316', shadow: '#c2410c' },
     quiz: { color: '#e11d48', shadow: '#9f1239' },
     exam: { color: '#16a34a', shadow: '#166534' },
 };
+
+const todayInputValue = () => {
+    const now = new Date();
+    return new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 10);
+};
+
+const formatExamDate = (value) => {
+    if (!value) return '-';
+
+    return new Intl.DateTimeFormat('id-ID', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+    }).format(new Date(`${value}T00:00:00`));
+};
+
+const dateInputValue = (date) => {
+    const offset = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+};
+
+function ExamDatePicker({ value, onChange }) {
+    const initialDate = value ? new Date(`${value}T00:00:00`) : new Date();
+    const [visibleMonth, setVisibleMonth] = useState(new Date(initialDate.getFullYear(), initialDate.getMonth(), 1));
+    const today = new Date();
+    const todayValue = todayInputValue();
+    const firstWeekday = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), 1).getDay();
+    const dayCount = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 0).getDate();
+    const calendarCells = [
+        ...Array.from({ length: firstWeekday }, () => null),
+        ...Array.from({ length: dayCount }, (_, index) => index + 1),
+    ];
+    const canGoPrevious = (
+        visibleMonth.getFullYear() > today.getFullYear()
+        || (
+            visibleMonth.getFullYear() === today.getFullYear()
+            && visibleMonth.getMonth() > today.getMonth()
+        )
+    );
+    const monthLabel = new Intl.DateTimeFormat('id-ID', {
+        month: 'long',
+        year: 'numeric',
+    }).format(visibleMonth);
+
+    const moveMonth = (offset) => {
+        setVisibleMonth((current) => new Date(current.getFullYear(), current.getMonth() + offset, 1));
+    };
+
+    return (
+        <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50/80 p-2.5 dark:border-gray-700 dark:bg-gray-950/70 min-[360px]:p-3 sm:mt-5 sm:p-4">
+            <div className="flex items-center justify-between gap-3">
+                <button
+                    type="button"
+                    onClick={() => moveMonth(-1)}
+                    disabled={!canGoPrevious}
+                    className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition hover:bg-white hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-25 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-red-300"
+                    aria-label="Bulan sebelumnya"
+                >
+                    <ChevronLeftIcon />
+                </button>
+                <p className="text-sm font-black capitalize text-gray-900 dark:text-white">{monthLabel}</p>
+                <button
+                    type="button"
+                    onClick={() => moveMonth(1)}
+                    className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition hover:bg-white hover:text-red-600 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-red-300"
+                    aria-label="Bulan berikutnya"
+                >
+                    <ChevronRightIcon />
+                </button>
+            </div>
+
+            <div className="mt-2 grid grid-cols-7 text-center text-[8px] font-black uppercase text-gray-400 min-[360px]:text-[9px] sm:mt-3">
+                {['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'].map((day) => (
+                    <span key={day} className="py-1">{day}</span>
+                ))}
+            </div>
+            <div className="mt-1 grid grid-cols-7 gap-0.5 min-[360px]:gap-1">
+                {calendarCells.map((day, index) => {
+                    if (!day) return <span key={`empty-${index}`} className="aspect-square" />;
+
+                    const candidate = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), day);
+                    const candidateValue = dateInputValue(candidate);
+                    const isPast = candidateValue < todayValue;
+                    const isSelected = candidateValue === value;
+                    const isToday = candidateValue === todayValue;
+
+                    return (
+                        <button
+                            key={candidateValue}
+                            type="button"
+                            disabled={isPast}
+                            onClick={() => onChange(candidateValue)}
+                            className={`aspect-square min-h-8 rounded-lg text-[11px] font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 min-[360px]:text-xs ${
+                                isSelected
+                                    ? 'bg-red-600 text-white shadow-[0_3px_0_#991b1b]'
+                                    : isToday
+                                        ? 'border border-red-200 bg-white text-red-600 dark:border-red-900 dark:bg-gray-900 dark:text-red-300'
+                                        : 'text-gray-700 hover:bg-white hover:text-red-600 disabled:cursor-not-allowed disabled:text-gray-300 dark:text-gray-200 dark:hover:bg-gray-800 dark:hover:text-red-300 dark:disabled:text-gray-700'
+                            }`}
+                        >
+                            {day}
+                        </button>
+                    );
+                })}
+            </div>
+
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-1 border-t border-gray-200 pt-2 text-[11px] dark:border-gray-800 min-[360px]:mt-3 min-[360px]:pt-3 min-[360px]:text-xs">
+                <span className="font-semibold text-gray-500 dark:text-gray-400">Tanggal dipilih</span>
+                <span className="font-black text-gray-900 dark:text-white">
+                    {value ? formatExamDate(value) : 'Belum dipilih'}
+                </span>
+            </div>
+        </div>
+    );
+}
+
+function ExamTargetCard({ program, completedWeekCount, totalWeeks }) {
+    const target = program?.exam_target;
+    const [showForm, setShowForm] = useState(false);
+    const { confirmState, openConfirm, closeConfirm, setConfirmProcessing } = useConfirmAction();
+    const { data, setData, put, processing, errors, clearErrors } = useForm({
+        exam_date: target?.exam_date || '',
+    });
+
+    const openForm = () => {
+        setData('exam_date', target?.exam_date || '');
+        clearErrors();
+        setShowForm(true);
+    };
+
+    const submit = (event) => {
+        event.preventDefault();
+        put(route('user.modul.program.exam-target.update', program.slug), {
+            preserveScroll: true,
+            onSuccess: () => setShowForm(false),
+        });
+    };
+
+    const requestDelete = () => {
+        openConfirm({
+            variant: 'danger',
+            title: 'Hapus target ujian?',
+            message: 'Tanggal target akan dihapus, tetapi progres roadmap tetap tersimpan.',
+            confirmLabel: 'Hapus Target',
+            onConfirm: () => {
+                setConfirmProcessing(true);
+                router.delete(route('user.modul.program.exam-target.destroy', program.slug), {
+                    preserveScroll: true,
+                    onFinish: () => {
+                        setConfirmProcessing(false);
+                        closeConfirm();
+                    },
+                });
+            },
+        });
+    };
+
+    const countdownLabel = target
+        ? target.days_remaining < 0
+            ? 'Tanggal telah lewat'
+            : target.days_remaining === 0
+                ? 'Hari ujian'
+                : `${target.days_remaining} hari lagi`
+        : null;
+
+    return (
+        <>
+            <section className="mt-3 rounded-xl border border-white/80 bg-white/70 p-2.5 shadow-sm backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/70">
+                {target ? (
+                    <div className="flex min-w-0 items-center gap-2.5">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-100 text-red-600 dark:bg-red-950/50 dark:text-red-300">
+                            <CalendarMonthIcon sx={{ fontSize: 19 }} />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-baseline gap-x-1.5">
+                                <p className="text-sm font-black text-gray-900 dark:text-white">{countdownLabel}</p>
+                                <span className="text-[10px] font-bold text-gray-400">{formatExamDate(target.exam_date)}</span>
+                            </div>
+                            <p className="mt-0.5 line-clamp-2 text-[10px] font-semibold leading-4 text-gray-500 dark:text-gray-400">
+                                {target.pace_message}
+                            </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                            <button
+                                type="button"
+                                onClick={openForm}
+                                title="Ubah target ujian"
+                                aria-label="Ubah target ujian"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition hover:bg-gray-100 hover:text-red-600 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-red-300"
+                            >
+                                <EditCalendarIcon sx={{ fontSize: 17 }} />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={requestDelete}
+                                title="Hapus target ujian"
+                                aria-label="Hapus target ujian"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-300"
+                            >
+                                <DeleteOutlineIcon sx={{ fontSize: 17 }} />
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    <button
+                        type="button"
+                        onClick={openForm}
+                        className="flex w-full items-center gap-2.5 text-left focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-300/40"
+                    >
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-100 text-red-600 dark:bg-red-950/50 dark:text-red-300">
+                            <CalendarMonthIcon sx={{ fontSize: 19 }} />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                            <span className="block text-xs font-black text-gray-800 dark:text-gray-100">Atur target ujian</span>
+                            <span className="block truncate text-[10px] font-semibold text-gray-500 dark:text-gray-400">
+                                Dapatkan hitung mundur dan ritme belajar.
+                            </span>
+                        </span>
+                        <EditCalendarIcon className="shrink-0 text-red-500" sx={{ fontSize: 18 }} />
+                    </button>
+                )}
+            </section>
+
+            {typeof document !== 'undefined' && createPortal(
+                <>
+                    <AnimatePresence>
+                        {showForm && (
+                            <motion.div
+                        className="fixed inset-0 z-[200] flex items-end justify-center bg-gray-950/60 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onMouseDown={(event) => {
+                            if (event.target === event.currentTarget) setShowForm(false);
+                        }}
+                            >
+                                <motion.form
+                            onSubmit={submit}
+                            className="max-h-[94dvh] w-full overflow-y-auto rounded-t-3xl bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl dark:bg-gray-900 min-[360px]:p-5 sm:max-h-[90dvh] sm:max-w-md sm:rounded-3xl"
+                            initial={{ y: 40, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            exit={{ y: 40, opacity: 0 }}
+                                >
+                            <div className="flex items-start justify-between gap-4">
+                                <div>
+                                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-red-600 dark:text-red-400">
+                                        {program?.level || 'Target Ujian'}
+                                    </p>
+                                    <h2 className="mt-1 text-xl font-black text-gray-900 dark:text-white">Atur Target Ujian</h2>
+                                    <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-gray-400">
+                                        Target ini bersifat pribadi dan tidak mengubah jadwal kelas.
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowForm(false)}
+                                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-white"
+                                    aria-label="Tutup"
+                                >
+                                    <CloseIcon />
+                                </button>
+                            </div>
+
+                            <ExamDatePicker
+                                value={data.exam_date}
+                                onChange={(value) => {
+                                    setData('exam_date', value);
+                                    clearErrors('exam_date');
+                                }}
+                            />
+                            {errors.exam_date && <span className="mt-1.5 block text-xs font-bold text-red-600">{errors.exam_date}</span>}
+
+                            <div className="mt-3 rounded-xl bg-gray-50 px-3 py-2.5 text-xs font-semibold text-gray-600 dark:bg-gray-950 dark:text-gray-300">
+                                Progress saat ini: <strong>{completedWeekCount} dari {totalWeeks} Minggu selesai</strong>
+                            </div>
+
+                            <div className="sticky -bottom-4 z-10 mt-4 grid grid-cols-2 gap-2 border-t border-gray-100 bg-white/95 pt-3 backdrop-blur dark:border-gray-800 dark:bg-gray-900/95 min-[360px]:-bottom-5 sm:mt-5">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowForm(false)}
+                                    className="h-11 rounded-xl border border-gray-200 text-sm font-black text-gray-600 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={processing || !data.exam_date}
+                                    className="h-11 rounded-xl bg-red-600 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-wait disabled:opacity-60"
+                                >
+                                    {processing ? 'Menyimpan...' : 'Simpan Target'}
+                                </button>
+                            </div>
+                                </motion.form>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                    <ConfirmActionDialog {...confirmState} onCancel={closeConfirm} />
+                </>,
+                document.body,
+            )}
+        </>
+    );
+}
 
 function itemStatusLabel(item) {
     if (item.status === 'done') return 'Selesai';
@@ -61,10 +369,6 @@ function iconFor(item, size) {
         return <SlideshowIcon sx={{ fontSize: size - 3, color: '#fff' }} />;
     }
 
-    if (item.kind === 'flashcard') {
-        return <StyleIcon sx={{ fontSize: size - 3, color: '#fff' }} />;
-    }
-
     if (item.kind === 'quiz' || item.kind === 'exam') {
         return <QuizIcon sx={{ fontSize: size - 3, color: '#fff' }} />;
     }
@@ -75,41 +379,6 @@ function iconFor(item, size) {
             <span className="block text-xl font-black leading-none">{item.dayNumber}</span>
         </span>
     );
-}
-
-function flashcardItems(day, available) {
-    const sets = day.flashcard_summary?.sets || [];
-
-    if (sets.length === 0) {
-        return [{
-            key: `flashcard-empty-${day.id}`,
-            kind: 'flashcard',
-            level: 'child',
-            parentDayId: day.id,
-            eyebrow: `Materi Hari ${day.day_number}`,
-            title: 'Flashcard belum tersedia',
-            detail: 'Admin belum menambahkan flashcard.',
-            status: 'unavailable',
-            href: null,
-        }];
-    }
-
-    return sets.map((set) => {
-        const done = set.cards_count > 0 && set.reviewed_count >= set.cards_count;
-
-        return {
-            key: `flashcard-${set.id}`,
-            kind: 'flashcard',
-            level: 'child',
-            parentDayId: day.id,
-            eyebrow: `Flashcard Hari ${day.day_number}`,
-            title: 'Flashcard',
-            detail: null,
-            status: !available ? 'locked' : done ? 'done' : 'active',
-            lockReason: day.lock_reason,
-            href: available ? set.url : null,
-        };
-    });
 }
 
 function quizItem(day, available) {
@@ -142,7 +411,7 @@ function quizItem(day, available) {
             : day.status === 'done'
                 ? 'done'
                 : 'active',
-        lockReason: checkpoint.lock_reason || day.quiz_locked_reason || 'Review semua flashcard Hari ini.',
+        lockReason: checkpoint.lock_reason || day.quiz_locked_reason || day.lock_reason,
         href: day.quiz_url,
     };
 }
@@ -208,10 +477,10 @@ function weeklyMainItems(week) {
     if (exams.length > 0) {
         exams.forEach((exam, examIndex) => {
             const scoreDetail = exam.best_score === null
-                ? `Belum dikerjakan - nilai lulus ${exam.passing_score}%`
+                ? `Belum dikerjakan · Target ${exam.passing_score}`
                 : exam.done
-                    ? `Lulus - nilai terbaik ${exam.best_score}`
-                    : `Belum lulus - nilai terbaik ${exam.best_score} - minimal ${exam.passing_score}%`;
+                    ? `Nilai ${exam.best_score} · Lulus`
+                    : `Nilai ${exam.best_score} · Target ${exam.passing_score}`;
 
             items.push({
                 key: `exam-${exam.id}`,
@@ -253,10 +522,7 @@ function weeklyMainItems(week) {
 function dayChildItems(day) {
     const available = ['active', 'done'].includes(day.status);
 
-    return [
-        ...flashcardItems(day, available),
-        quizItem(day, available),
-    ];
+    return [quizItem(day, available)];
 }
 
 function PathNodeCircle({ item, selected = false, size = 68 }) {
@@ -265,7 +531,7 @@ function PathNodeCircle({ item, selected = false, size = 68 }) {
 
     return (
         <span
-            className="relative z-10 flex shrink-0 items-center justify-center rounded-full border-[3px] border-white transition-transform duration-200 group-hover:scale-105 dark:border-gray-950"
+            className="relative z-10 flex shrink-0 items-center justify-center rounded-full border-[3px] border-white transition-transform duration-200 group-hover:scale-105 group-active:translate-y-1 dark:border-gray-950"
             style={{
                 width: `${size}px`,
                 height: `${size}px`,
@@ -279,8 +545,11 @@ function PathNodeCircle({ item, selected = false, size = 68 }) {
             }}
         >
             {active && (
-                <span
-                    className="absolute inset-1 animate-pulse rounded-full border-2 border-white/45"
+                <motion.span
+                    className="absolute -inset-2 rounded-full border-2"
+                    style={{ borderColor: `${colors.color}55` }}
+                    animate={{ scale: [0.92, 1.12], opacity: [0.75, 0] }}
+                    transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
                     aria-hidden="true"
                 />
             )}
@@ -289,9 +558,9 @@ function PathNodeCircle({ item, selected = false, size = 68 }) {
     );
 }
 
-function StatusBadge({ item }) {
+function StatusBadge({ item, className = '' }) {
     return (
-        <span className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[9px] font-black ${
+        <span className={`${className} inline-flex rounded-full px-2 py-0.5 text-[9px] font-black ${
             item.status === 'done'
                 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
                 : item.status === 'active'
@@ -317,6 +586,7 @@ function PathNode({ item, selected, onDayToggle }) {
                 disabled={locked}
                 aria-expanded={selected}
                 aria-controls={`day-materials-${item.dayId}`}
+                aria-current={item.status === 'active' ? 'step' : undefined}
                 className={className}
             >
                 <PathNodeCircle item={item} selected={selected} />
@@ -331,7 +601,7 @@ function PathNode({ item, selected, onDayToggle }) {
 
     if (!locked && item.href) {
         return (
-            <Link href={item.href} className={className}>
+            <Link href={item.href} aria-current={item.status === 'active' ? 'step' : undefined} className={className}>
                 <PathNodeCircle item={item} />
             </Link>
         );
@@ -345,35 +615,74 @@ function PathNode({ item, selected, onDayToggle }) {
 }
 
 function PathNodeLabel({ item }) {
+    const showStatus = item.status !== 'done';
+    const hasExtraInfo = showStatus || (item.kind !== 'day' && item.detail);
+
     return (
-        <div className="mt-3 w-44 rounded-lg bg-[#f7efe6]/90 px-2 py-1 text-center backdrop-blur-sm dark:bg-[#050b18]/90">
+        <div className="relative mt-3 w-36 text-center sm:w-44">
             <p className="text-[9px] font-black uppercase tracking-[0.14em] text-red-600 dark:text-red-400">
                 {item.eyebrow}
             </p>
-            <h3 className="mt-0.5 text-sm font-black leading-5 text-gray-900 dark:text-white">
+            <h3 className="mt-0.5 line-clamp-2 text-[13px] font-black leading-4 text-gray-900 dark:text-white sm:text-sm sm:leading-5">
                 {item.title}
             </h3>
-            <StatusBadge item={item} />
+
+            {hasExtraInfo && (
+                <>
+                    <div className="mt-1 flex min-h-5 flex-wrap items-center justify-center gap-1 sm:hidden">
+                        {item.kind !== 'day' && item.detail && (
+                            <span className="line-clamp-1 text-[9px] font-semibold text-gray-500 dark:text-gray-400">
+                                {item.detail}
+                            </span>
+                        )}
+                        {showStatus && <StatusBadge item={item} />}
+                    </div>
+
+                    <div className="pointer-events-none absolute left-1/2 top-full z-30 mt-1 hidden min-w-32 max-w-52 -translate-x-1/2 translate-y-1 rounded-xl border border-white/80 bg-white/95 px-2.5 py-2 text-center opacity-0 shadow-lg shadow-black/10 backdrop-blur-md transition duration-200 group-hover/node:translate-y-0 group-hover/node:opacity-100 group-focus-within/node:translate-y-0 group-focus-within/node:opacity-100 dark:border-gray-700 dark:bg-gray-900/95 sm:block">
+                        {item.kind !== 'day' && item.detail && (
+                            <p className="whitespace-nowrap text-[10px] font-bold text-gray-600 dark:text-gray-300">
+                                {item.detail}
+                            </p>
+                        )}
+                        {showStatus && (
+                            <StatusBadge
+                                item={item}
+                                className={item.kind !== 'day' && item.detail ? 'mt-1.5' : ''}
+                            />
+                        )}
+                    </div>
+                </>
+            )}
         </div>
     );
 }
 
 function DayDetailContent({ day, onClose, mobile = false }) {
     const items = dayChildItems(day);
+    const completed = day.status === 'done';
 
     return (
         <div
             id={`day-materials-${day.id}`}
-            className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl shadow-black/20 dark:border-gray-800 dark:bg-gray-900"
+            className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl shadow-black/20 dark:border-gray-800 dark:bg-gray-900"
         >
-            <div className="flex items-start justify-between gap-4 bg-gray-950 px-5 py-4 text-white dark:bg-black">
+            <div className={`flex items-start justify-between gap-4 px-5 py-4 text-white ${
+                completed ? 'bg-emerald-700 dark:bg-emerald-900' : 'bg-gray-950 dark:bg-black'
+            }`}>
                 <div className="min-w-0">
-                    <p className="text-[10px] font-black uppercase tracking-[0.15em] text-red-400">
-                        Materi Hari {day.day_number}
+                    <p className={`text-[10px] font-black uppercase tracking-[0.15em] ${
+                        completed ? 'text-emerald-100' : 'text-red-400'
+                    }`}>
+                        Hari {day.day_number} {completed ? '- Selesai' : '- Jalur Belajar'}
                     </p>
                     <h3 className="mt-1 text-base font-black leading-5">
                         {day.title || `Hari ${day.day_number}`}
                     </h3>
+                    {day.description && (
+                        <p className="mt-1 line-clamp-2 text-[11px] font-semibold leading-4 text-white/65">
+                            {day.description}
+                        </p>
+                    )}
                 </div>
                 <button
                     type="button"
@@ -385,45 +694,49 @@ function DayDetailContent({ day, onClose, mobile = false }) {
                 </button>
             </div>
 
-            <div className={`space-y-3 p-4 ${mobile ? 'max-h-[55dvh] overflow-y-auto' : ''}`}>
+            <div className={`space-y-3 p-3 sm:p-4 ${mobile ? 'max-h-[65dvh] overflow-y-auto' : ''}`}>
                 {items.map((item, index) => {
                     const locked = ['locked', 'unavailable'].includes(item.status);
-                    const flashcard = item.kind === 'flashcard';
                     const row = (
                         <>
-                            <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${
+                            <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
                                 locked
                                     ? 'bg-gray-200 text-gray-400 dark:bg-gray-700'
-                                    : flashcard
-                                        ? 'bg-amber-300 text-amber-950'
+                                    : completed
+                                        ? 'bg-emerald-700 text-white'
                                         : 'bg-red-700 text-white'
                             }`}>
-                                {flashcard
-                                    ? <StyleIcon sx={{ fontSize: 24 }} />
-                                    : <QuizIcon sx={{ fontSize: 24 }} />}
+                                <QuizIcon sx={{ fontSize: 24 }} />
                             </span>
                             <span className="min-w-0 flex-1">
                                 <span className="block text-sm font-black">
-                                    {flashcard ? 'Flashcard' : 'Kuis'}
+                                    {item.status === 'done' ? 'Ulangi Kuis & Repetisi' : 'Mulai Kuis & Repetisi'}
                                 </span>
+                                {!locked && (
+                                    <span className="mt-0.5 block text-[10px] font-semibold opacity-75">
+                                        Flashcard, soal, dan latihan menulis tersedia dalam satu sesi.
+                                    </span>
+                                )}
                                 {locked && (
                                     <span className="mt-0.5 block line-clamp-2 text-[10px] font-semibold opacity-70">
                                         {item.lockReason || 'Materi belum tersedia.'}
                                     </span>
                                 )}
                             </span>
-                            <span className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[10px] font-black ${
-                                locked ? 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-300' : 'bg-white/25'
+                            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+                                locked ? 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-300' : 'bg-white/20'
                             }`}>
-                                {locked ? itemStatusLabel(item) : 'Buka'}
+                                {locked
+                                    ? <LockIcon sx={{ fontSize: 16 }} />
+                                    : <ChevronRightIcon sx={{ fontSize: 21 }} />}
                             </span>
                         </>
                     );
-                    const className = `group flex min-h-[86px] w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/60 ${
+                    const className = `group flex min-h-[78px] w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition sm:px-4 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/60 ${
                         locked
                             ? 'cursor-not-allowed bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500'
-                            : flashcard
-                                ? 'bg-amber-400 text-amber-950 shadow-[0_4px_0_#b45309] hover:bg-amber-300 active:translate-y-1 active:shadow-none'
+                            : completed
+                                ? 'bg-emerald-600 text-white shadow-[0_4px_0_#047857] hover:bg-emerald-500 active:translate-y-1 active:shadow-none'
                                 : 'bg-red-600 text-white shadow-[0_4px_0_#991b1b] hover:bg-red-500 active:translate-y-1 active:shadow-none'
                     }`;
 
@@ -472,6 +785,15 @@ function DesktopDayPopover({ day, x, onClose }) {
 }
 
 function MobileDaySheet({ day, onClose }) {
+    useEffect(() => {
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+
+        return () => {
+            document.body.style.overflow = previousOverflow;
+        };
+    }, []);
+
     return (
         <motion.div
             className="fixed inset-0 z-[90] sm:hidden"
@@ -498,8 +820,81 @@ function MobileDaySheet({ day, onClose }) {
     );
 }
 
+const PATH_ROW_HEIGHT = 148;
+const PATH_NODE_CENTER_Y = 34;
+
 function pathX(index) {
-    return 50 - (Math.sin(index * 1.05) * 14);
+    return 50 - (Math.sin(index * 1.12) * 19);
+}
+
+function connectorColor(previousItem, item) {
+    if (previousItem.status === 'done' && item.status === 'done') {
+        return '#22c55e';
+    }
+
+    if (previousItem.status === 'active' || item.status === 'active') {
+        return '#ef4444';
+    }
+
+    return '#cbd5e1';
+}
+
+function connectorPath(fromIndex, toIndex) {
+    const x1 = pathX(fromIndex);
+    const x2 = pathX(toIndex);
+    const y1 = (fromIndex * PATH_ROW_HEIGHT) + PATH_NODE_CENTER_Y;
+    const y2 = (toIndex * PATH_ROW_HEIGHT) + PATH_NODE_CENTER_Y;
+    const middleY = (y1 + y2) / 2;
+
+    return `M ${x1} ${y1} C ${x1} ${middleY}, ${x2} ${middleY}, ${x2} ${y2}`;
+}
+
+function PathConnector({ items }) {
+    if (items.length < 2) {
+        return null;
+    }
+
+    const height = ((items.length - 1) * PATH_ROW_HEIGHT) + (PATH_NODE_CENTER_Y * 2);
+
+    return (
+        <svg
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 top-4 z-0 h-auto w-full overflow-visible sm:top-6"
+            viewBox={`0 0 100 ${height}`}
+            preserveAspectRatio="none"
+            style={{ height: `${height}px` }}
+        >
+            {items.slice(0, -1).map((item, index) => {
+                const nextItem = items[index + 1];
+                const locked = ['locked', 'unavailable'].includes(nextItem.status);
+
+                return (
+                    <g key={`connector-${item.key}-${nextItem.key}`}>
+                        <path
+                            d={connectorPath(index, index + 1)}
+                            fill="none"
+                            stroke="rgba(148, 163, 184, 0.22)"
+                            strokeLinecap="round"
+                            strokeWidth="10"
+                            vectorEffect="non-scaling-stroke"
+                        />
+                        <motion.path
+                            d={connectorPath(index, index + 1)}
+                            fill="none"
+                            stroke={connectorColor(item, nextItem)}
+                            strokeDasharray={locked ? '5 9' : '1 0'}
+                            strokeLinecap="round"
+                            strokeWidth="4"
+                            vectorEffect="non-scaling-stroke"
+                            initial={{ pathLength: 0, opacity: 0 }}
+                            animate={{ pathLength: 1, opacity: locked ? 0.55 : 0.9 }}
+                            transition={{ duration: 0.45, delay: index * 0.05 }}
+                        />
+                    </g>
+                );
+            })}
+        </svg>
+    );
 }
 
 function DuolingoPath({ week, selectedDayId, onDayToggle }) {
@@ -520,6 +915,8 @@ function DuolingoPath({ week, selectedDayId, onDayToggle }) {
 
     return (
         <div className="relative mx-auto w-full max-w-3xl py-4 sm:py-6">
+            <PathConnector items={items} />
+
             {selectedDay && (
                 <button
                     type="button"
@@ -536,13 +933,14 @@ function DuolingoPath({ week, selectedDayId, onDayToggle }) {
                 return (
                     <div
                         key={item.key}
-                        className={`relative h-[142px] overflow-visible sm:h-[150px] ${selected ? 'z-50' : 'z-10'}`}
+                        className={`relative overflow-visible ${selected ? 'z-50' : 'z-10'}`}
+                        style={{ height: `${PATH_ROW_HEIGHT}px` }}
                     >
                         <motion.div
                             initial={{ opacity: 0, y: 10, scale: 0.94 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             transition={{ delay: index * 0.035 }}
-                            className="absolute top-0 flex -translate-x-1/2 flex-col items-center"
+                            className="group/node absolute top-0 flex -translate-x-1/2 flex-col items-center"
                             style={{ left: `${x}%` }}
                         >
                             <PathNode item={item} selected={selected} onDayToggle={onDayToggle} />
@@ -588,22 +986,39 @@ function WeekRoadmapSection({ week, expanded, onToggle }) {
     }, [week.id]);
 
     const toggleDay = (dayId) => {
-        setSelectedDayId((current) => current === dayId ? null : dayId);
+        const isClosing = selectedDayId === dayId;
+
+        playSoundEffect(isClosing ? 'close' : 'open');
+        setSelectedDayId(isClosing ? null : dayId);
     };
 
     return (
-        <section className="mx-auto mb-7 max-w-4xl">
+        <section className="mx-auto mb-5 max-w-4xl sm:mb-7">
             <button
                 type="button"
-                onClick={() => !locked && onToggle()}
+                onClick={() => {
+                    if (locked) return;
+
+                    playSoundEffect(expanded ? 'close' : 'open');
+                    onToggle();
+                }}
                 disabled={locked}
                 aria-expanded={expanded}
-                className={`flex min-h-[76px] w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left shadow-lg shadow-red-900/5 transition sm:px-5 ${
+                className={`relative flex min-h-[76px] w-full items-center gap-3 overflow-hidden rounded-2xl border px-3 py-3 text-left shadow-lg shadow-red-900/5 transition sm:px-5 ${
                     week.status === 'active'
-                        ? 'border-red-200 bg-white hover:border-red-300 dark:border-red-900/60 dark:bg-gray-900'
-                        : 'border-white/70 bg-white/75 hover:border-gray-200 dark:border-gray-800 dark:bg-gray-900/75'
-                } ${locked ? 'cursor-not-allowed opacity-75' : ''}`}
+                        ? 'border-red-300 bg-white hover:border-red-400 hover:shadow-xl dark:border-red-900/70 dark:bg-gray-900'
+                        : week.status === 'done'
+                            ? 'border-emerald-200 bg-white/90 hover:border-emerald-300 dark:border-emerald-900/60 dark:bg-gray-900'
+                            : 'border-white/70 bg-white/75 hover:border-gray-200 dark:border-gray-800 dark:bg-gray-900/75'
+                } ${locked ? 'cursor-not-allowed opacity-75' : 'hover:-translate-y-0.5'}`}
             >
+                <span className={`absolute inset-y-0 left-0 w-1.5 ${
+                    week.status === 'done'
+                        ? 'bg-emerald-500'
+                        : week.status === 'active'
+                            ? 'bg-red-500'
+                            : 'bg-gray-300 dark:bg-gray-700'
+                }`} />
                 <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-sm font-black ${
                     week.status === 'done'
                         ? 'bg-emerald-600 text-white'
@@ -618,8 +1033,19 @@ function WeekRoadmapSection({ week, expanded, onToggle }) {
                             : week.week_number}
                 </span>
                 <span className="min-w-0 flex-1">
-                    <span className="block text-[10px] font-black uppercase tracking-[0.15em] text-red-600 dark:text-red-400">
-                        Minggu {week.week_number}
+                    <span className="flex items-center gap-2">
+                        <span className="block text-[10px] font-black uppercase tracking-[0.15em] text-red-600 dark:text-red-400">
+                            Minggu {week.week_number}
+                        </span>
+                        <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${
+                            week.status === 'done'
+                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+                                : week.status === 'active'
+                                    ? 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300'
+                                    : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                        }`}>
+                            {itemStatusLabel(week)}
+                        </span>
                     </span>
                     <span className="block truncate text-sm font-black text-gray-900 sm:text-base dark:text-white">
                         {week.display_title || week.title}
@@ -629,7 +1055,7 @@ function WeekRoadmapSection({ week, expanded, onToggle }) {
                             <span className="h-1.5 max-w-sm flex-1 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
                                 <span className={`block h-full rounded-full ${week.status === 'done' ? 'bg-emerald-500' : 'bg-red-500'}`} style={{ width: `${progress}%` }} />
                             </span>
-                            <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400">{completedDays}/{days.length} Hari</span>
+                            <span className="shrink-0 text-[10px] font-bold text-gray-500 dark:text-gray-400">{completedDays}/{days.length} Hari</span>
                         </span>
                     ) : (
                         <span className="mt-1 block line-clamp-2 text-[10px] font-semibold text-gray-400">{week.lock_reason}</span>
@@ -648,7 +1074,7 @@ function WeekRoadmapSection({ week, expanded, onToggle }) {
                         exit={{ height: 0, opacity: 0 }}
                         className="overflow-hidden"
                     >
-                        <div className="mt-4 rounded-2xl border border-white/70 bg-white/30 px-2 py-4 shadow-xl shadow-red-900/5 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/30 sm:px-6 sm:py-6">
+                        <div className="mt-3 rounded-2xl border border-white/70 bg-white/35 px-1 py-3 shadow-xl shadow-red-900/5 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/35 sm:mt-4 sm:px-6 sm:py-6">
                             <DuolingoPath
                                 week={week}
                                 selectedDayId={selectedDayId}
@@ -660,6 +1086,151 @@ function WeekRoadmapSection({ week, expanded, onToggle }) {
                 )}
             </AnimatePresence>
         </section>
+    );
+}
+
+function LibraryShortcut({ program }) {
+    if (!program?.resources?.vocabulary_url) return null;
+
+    return (
+        <Link
+            href={program.resources.vocabulary_url}
+            className="group mb-5 flex min-h-14 items-center gap-2.5 rounded-xl border border-amber-200/80 bg-amber-50/75 px-2.5 py-2 backdrop-blur-sm transition hover:border-amber-300 hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300/40 dark:border-amber-900/60 dark:bg-amber-950/25 dark:hover:border-amber-700 dark:hover:bg-amber-950/40 min-[360px]:gap-3 min-[360px]:px-3 sm:px-3.5 xl:hidden"
+        >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-400 text-amber-950 shadow-[0_2px_0_#b45309] min-[360px]:h-10 min-[360px]:w-10">
+                <AutoStoriesIcon sx={{ fontSize: 21 }} />
+            </span>
+            <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-black text-gray-900 dark:text-white">
+                    Pustaka {program.level || 'N3'}
+                </span>
+                <span className="block truncate text-[10px] font-semibold text-gray-600 dark:text-gray-400 min-[360px]:text-[11px]">
+                    Kosakata, kanji, dan bunpo
+                </span>
+            </span>
+            <span className="flex shrink-0 items-center gap-1">
+                <span className="rounded-lg bg-white/80 px-2 py-1 text-center dark:bg-gray-900/70">
+                    <span className="block text-xs font-black leading-none text-gray-800 dark:text-gray-100">
+                        {program.resources.vocabulary_count || 0}
+                    </span>
+                    <span className="mt-0.5 block text-[8px] font-bold uppercase leading-none text-gray-500 dark:text-gray-400">
+                        Entri
+                    </span>
+                </span>
+                <ChevronRightIcon
+                    className="text-gray-400 transition-transform group-hover:translate-x-0.5 group-hover:text-amber-600"
+                    sx={{ fontSize: 21 }}
+                />
+            </span>
+        </Link>
+    );
+}
+
+function DesktopLibraryPanel({ program, open, onToggle }) {
+    if (!program?.resources?.vocabulary_url) return null;
+
+    return (
+        <aside className="sticky top-20 hidden xl:block">
+            <AnimatePresence initial={false} mode="wait">
+                {open ? (
+                    <motion.div
+                        key="library-panel"
+                        initial={{ opacity: 0, x: 16 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 12 }}
+                        transition={{ duration: 0.2, ease: 'easeOut' }}
+                        className="overflow-hidden rounded-2xl border border-amber-200/80 bg-white/90 shadow-lg shadow-amber-950/5 backdrop-blur-md dark:border-amber-900/60 dark:bg-gray-900/90"
+                    >
+                        <div className="flex items-start justify-between gap-3 border-b border-amber-100 bg-amber-50/80 p-4 dark:border-amber-900/50 dark:bg-amber-950/35">
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-400 text-amber-950 shadow-[0_2px_0_#b45309]">
+                                <AutoStoriesIcon sx={{ fontSize: 22 }} />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-black text-gray-900 dark:text-white">
+                                    Pustaka {program.level || 'N3'}
+                                </span>
+                                <span className="mt-0.5 block text-[11px] font-semibold leading-4 text-gray-500 dark:text-gray-400">
+                                    Referensi pendukung roadmap
+                                </span>
+                            </span>
+                            <button
+                                type="button"
+                                onClick={onToggle}
+                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-500 transition hover:bg-white hover:text-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-amber-300"
+                                aria-label="Tutup Pustaka"
+                                aria-expanded="true"
+                                title="Tutup Pustaka"
+                            >
+                                <ChevronRightIcon sx={{ fontSize: 20 }} />
+                            </button>
+                        </div>
+
+                        <div className="p-4">
+                            <div className="flex items-end justify-between gap-3">
+                                <div>
+                                    <p className="text-2xl font-black leading-none text-gray-900 dark:text-white">
+                                        {program.resources.vocabulary_count || 0}
+                                    </p>
+                                    <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.08em] text-gray-500 dark:text-gray-400">
+                                        Entri tersedia
+                                    </p>
+                                </div>
+                                <span className="rounded-full bg-emerald-100 px-2 py-1 text-[9px] font-black uppercase text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                    Pendukung
+                                </span>
+                            </div>
+
+                            <div className="mt-4 flex flex-wrap gap-1.5" aria-label="Isi Pustaka">
+                                {['Kosakata', 'Kanji', 'Bunpo'].map((label) => (
+                                    <span
+                                        key={label}
+                                        className="rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-[10px] font-bold text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                                    >
+                                        {label}
+                                    </span>
+                                ))}
+                            </div>
+
+                            <p className="mt-4 text-xs font-semibold leading-5 text-gray-500 dark:text-gray-400">
+                                Gunakan sebagai referensi saat mempelajari materi pada setiap Minggu.
+                            </p>
+
+                            <Link
+                                href={program.resources.vocabulary_url}
+                                className="mt-4 flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-3 text-xs font-black text-amber-950 shadow-[0_3px_0_#b45309] transition hover:bg-amber-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300/40 active:translate-y-0.5 active:shadow-[0_1px_0_#b45309]"
+                            >
+                                Buka Pustaka
+                                <ChevronRightIcon sx={{ fontSize: 18 }} />
+                            </Link>
+                        </div>
+                    </motion.div>
+                ) : (
+                    <motion.button
+                        key="library-rail"
+                        type="button"
+                        onClick={onToggle}
+                        initial={{ opacity: 0, scale: 0.92 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.92 }}
+                        transition={{ duration: 0.16 }}
+                        className="group flex w-full flex-col items-center gap-2 rounded-2xl border border-amber-200/80 bg-white/90 px-1 py-3 text-amber-900 shadow-lg shadow-amber-950/5 backdrop-blur-md transition hover:border-amber-300 hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300/40 dark:border-amber-900/60 dark:bg-gray-900/90 dark:text-amber-200 dark:hover:border-amber-700 dark:hover:bg-amber-950/40"
+                        aria-label={`Buka Pustaka ${program.level || 'N3'}`}
+                        aria-expanded="false"
+                        title={`Buka Pustaka ${program.level || 'N3'}`}
+                    >
+                        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-400 text-amber-950 shadow-[0_2px_0_#b45309] transition-transform group-hover:-translate-y-0.5">
+                            <AutoStoriesIcon sx={{ fontSize: 20 }} />
+                        </span>
+                        <span className="text-[10px] font-black leading-none">
+                            {program.resources.vocabulary_count || 0}
+                        </span>
+                        <span className="[writing-mode:vertical-rl] text-[9px] font-black uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">
+                            Pustaka
+                        </span>
+                    </motion.button>
+                )}
+            </AnimatePresence>
+        </aside>
     );
 }
 
@@ -676,6 +1247,7 @@ export default function DaftarModul({ weeks = [], program = null, back_url = nul
         || [...displayWeeks].reverse().find((week) => week.status === 'done')?.id
         || null;
     const [expandedWeekId, setExpandedWeekId] = useState(defaultExpandedWeekId);
+    const [libraryOpen, setLibraryOpen] = useState(false);
     const completedWeekCount = displayWeeks.filter((week) => week.status === 'done').length;
     const roadmapProgress = displayWeeks.length > 0
         ? Math.round((completedWeekCount / displayWeeks.length) * 100)
@@ -692,17 +1264,37 @@ export default function DaftarModul({ weeks = [], program = null, back_url = nul
         setExpandedWeekId(defaultExpandedWeekId);
     }, [defaultExpandedWeekId, program?.id]);
 
+    useEffect(() => {
+        setLibraryOpen(window.localStorage.getItem('japanlingo:roadmap-library-open') === 'true');
+    }, []);
+
+    useEffect(() => {
+        window.localStorage.setItem('japanlingo:roadmap-library-open', String(libraryOpen));
+    }, [libraryOpen]);
+
+    useEffect(() => {
+        if (!libraryOpen) return undefined;
+
+        const closeOnEscape = (event) => {
+            if (event.key === 'Escape') setLibraryOpen(false);
+        };
+
+        window.addEventListener('keydown', closeOnEscape);
+
+        return () => window.removeEventListener('keydown', closeOnEscape);
+    }, [libraryOpen]);
+
     return (
         <AuthenticatedLayout header={false}>
             <Head title={`${program?.title || 'Roadmap'} - Japanlingo`} />
 
-            <div className="relative min-h-[100dvh] overflow-hidden bg-[#f7efe6] text-gray-900 transition-colors duration-300 dark:bg-gray-950">
+            <div className="relative min-h-[100dvh] overflow-x-clip bg-[#f7efe6] text-gray-900 transition-colors duration-300 dark:bg-gray-950">
                 <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(220,38,38,0.10)_0%,transparent_28%),linear-gradient(240deg,rgba(245,158,11,0.12)_0%,transparent_30%),repeating-linear-gradient(90deg,rgba(120,53,15,0.055)_0_1px,transparent_1px_82px),repeating-linear-gradient(0deg,rgba(120,53,15,0.045)_0_1px,transparent_1px_82px)] dark:bg-[linear-gradient(120deg,rgba(220,38,38,0.14)_0%,transparent_28%),linear-gradient(240deg,rgba(245,158,11,0.08)_0%,transparent_30%),repeating-linear-gradient(90deg,rgba(255,255,255,0.035)_0_1px,transparent_1px_82px),repeating-linear-gradient(0deg,rgba(255,255,255,0.028)_0_1px,transparent_1px_82px)]" />
                 <div className="pointer-events-none absolute left-4 top-40 hidden text-[13rem] font-black leading-none text-red-900/[0.045] dark:text-white/[0.035] lg:block">道</div>
                 <div className="pointer-events-none absolute right-8 top-[560px] hidden text-[12rem] font-black leading-none text-amber-900/[0.05] dark:text-white/[0.03] lg:block">週</div>
 
                 <header className="relative z-10 px-4 pb-3 pt-5 sm:px-6 sm:pb-5 sm:pt-7 lg:px-20">
-                    <div className="mx-auto max-w-3xl">
+                    <div className="mx-auto max-w-4xl">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                             {back_url ? (
                                 <Link
@@ -719,7 +1311,7 @@ export default function DaftarModul({ weeks = [], program = null, back_url = nul
                             </span>
                         </div>
 
-                        <div className="mt-5 sm:flex sm:items-end sm:justify-between sm:gap-8">
+                        <div className="mt-5 sm:flex sm:items-start sm:justify-between sm:gap-8">
                             <div className="min-w-0">
                                 <h1 className="text-2xl font-black text-gray-900 sm:text-3xl dark:text-white">
                                     {program?.title ? `Roadmap ${program.title}` : 'Roadmap Mingguan'}
@@ -734,9 +1326,21 @@ export default function DaftarModul({ weeks = [], program = null, back_url = nul
                                     <span>{completedWeekCount} dari {displayWeeks.length} Minggu selesai</span>
                                     <span>{roadmapProgress}%</span>
                                 </div>
-                                <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/80 shadow-inner dark:bg-gray-800">
-                                    <div className="h-full rounded-full bg-red-600 transition-all" style={{ width: `${roadmapProgress}%` }} />
+                                <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-white/80 shadow-inner dark:bg-gray-800">
+                                    <motion.div
+                                        className="h-full rounded-full bg-red-600"
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${roadmapProgress}%` }}
+                                        transition={{ duration: 0.55, ease: 'easeOut' }}
+                                    />
                                 </div>
+                                {program?.id && (
+                                    <ExamTargetCard
+                                        program={program}
+                                        completedWeekCount={completedWeekCount}
+                                        totalWeeks={displayWeeks.length}
+                                    />
+                                )}
                             </div>
                         </div>
 
@@ -752,51 +1356,39 @@ export default function DaftarModul({ weeks = [], program = null, back_url = nul
                                 <span>Jadwal umum aktif</span>
                             )}
                         </div>
+
                     </div>
                 </header>
 
-                <main className="relative z-10 px-4 pb-8 pt-3 sm:px-6 sm:pb-14 sm:pt-5">
-                    {program?.resources?.vocabulary_url && (
-                        <Link
-                            href={program.resources.vocabulary_url}
-                            className="group mx-auto mb-5 flex min-h-16 max-w-4xl items-center gap-3 rounded-2xl border border-white/80 bg-white/80 px-3 py-2.5 shadow-lg shadow-amber-900/5 backdrop-blur-sm transition hover:border-amber-300 hover:bg-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300/40 dark:border-gray-800 dark:bg-gray-900/80 dark:hover:border-amber-700 dark:hover:bg-gray-900 sm:px-4"
-                        >
-                            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-400 text-amber-950 shadow-[0_3px_0_#b45309]">
-                                <AutoStoriesIcon sx={{ fontSize: 23 }} />
-                            </span>
-                            <span className="min-w-0 flex-1">
-                                <span className="block truncate text-sm font-black text-gray-900 dark:text-white">
-                                    Pustaka Materi {program?.level || 'N3'}
-                                </span>
-                                <span className="block truncate text-[11px] font-semibold text-gray-500 dark:text-gray-400">
-                                    Kosakata · Kanji · Bunpo
-                                </span>
-                            </span>
-                            <span className="flex shrink-0 items-center gap-1.5">
-                                <span className="hidden text-right sm:block">
-                                    <span className="block text-sm font-black text-gray-800 dark:text-gray-100">
-                                        {program.resources.vocabulary_count || 0}
-                                    </span>
-                                    <span className="block text-[9px] font-bold uppercase tracking-wide text-gray-400">
-                                        Materi
-                                    </span>
-                                </span>
-                                <ChevronRightIcon
-                                    className="text-gray-400 transition-transform group-hover:translate-x-0.5 group-hover:text-amber-600"
-                                    sx={{ fontSize: 24 }}
-                                />
-                            </span>
-                        </Link>
-                    )}
+                <main className="relative z-10 px-3 pb-8 pt-3 sm:px-6 sm:pb-14 sm:pt-5">
+                    <div
+                        className={`mx-auto max-w-7xl xl:grid xl:items-start xl:gap-5 ${
+                            program?.resources?.vocabulary_url
+                                ? libraryOpen
+                                    ? 'xl:grid-cols-[minmax(0,1fr)_280px]'
+                                    : 'xl:grid-cols-[minmax(0,1fr)_52px]'
+                                : 'xl:grid-cols-1'
+                        }`}
+                    >
+                        <div className="min-w-0">
+                            <LibraryShortcut program={program} />
 
-                    {displayWeeks.map((week) => (
-                        <WeekRoadmapSection
-                            key={week.id}
-                            week={week}
-                            expanded={expandedWeekId === week.id}
-                            onToggle={() => setExpandedWeekId((current) => current === week.id ? null : week.id)}
+                            {displayWeeks.map((week) => (
+                                <WeekRoadmapSection
+                                    key={week.id}
+                                    week={week}
+                                    expanded={expandedWeekId === week.id}
+                                    onToggle={() => setExpandedWeekId((current) => current === week.id ? null : week.id)}
+                                />
+                            ))}
+                        </div>
+
+                        <DesktopLibraryPanel
+                            program={program}
+                            open={libraryOpen}
+                            onToggle={() => setLibraryOpen((current) => !current)}
                         />
-                    ))}
+                    </div>
                 </main>
             </div>
         </AuthenticatedLayout>

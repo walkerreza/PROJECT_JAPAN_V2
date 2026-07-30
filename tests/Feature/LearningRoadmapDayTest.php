@@ -386,6 +386,14 @@ it('only completes a Day from its checkpoint quiz', function () {
         'passing_score' => 70,
         'status' => 'published',
     ]);
+    Soal::create([
+        'quiz_id' => $checkpoint->id,
+        'type' => 'multiple_choice',
+        'question_text' => 'Apa arti kata ini?',
+        'correct_answer' => 'arti',
+        'options' => ['arti', 'salah'],
+        'order' => 1,
+    ]);
     $otherQuiz = Kuis::create([
         'module_id' => $fixture['module']->id,
         'module_day_id' => $fixture['dayOne']->id,
@@ -1014,7 +1022,7 @@ it('deletes only the active presentation deck and its managed files', function (
     Storage::disk('public')->assertMissing("presentations/slides/{$opening->id}");
 });
 
-it('requires every published flashcard set in a Day before its checkpoint quiz unlocks', function () {
+it('opens a Day checkpoint quiz without requiring a standalone flashcard session', function () {
     $fixture = createDayRoadmapFixture();
     $user = Pengguna::factory()->create(['role' => 'user']);
     $checkpoint = Kuis::create([
@@ -1032,7 +1040,7 @@ it('requires every published flashcard set in a Day before its checkpoint quiz u
         'title' => 'Flashcard tambahan',
         'status' => 'published',
     ]);
-    $secondCard = Flashcard::create([
+    Flashcard::create([
         'flashcard_set_id' => $secondSet->id,
         'front_text' => 'tambahan',
         'back_text' => 'additional',
@@ -1049,19 +1057,14 @@ it('requires every published flashcard set in a Day before its checkpoint quiz u
     ]);
 
     $access = app(AksesKuisPenggunaService::class);
-    $blocked = $access->status($user, $checkpoint->fresh());
+    $status = $access->status($user, $checkpoint->fresh());
 
-    expect($blocked['allowed'])->toBeFalse()
-        ->and($blocked['reason'])->toBe('flashcard_required')
-        ->and($blocked['flashcard_stats'])->toBe(['total' => 2, 'reviewed' => 1]);
+    expect($status['allowed'])->toBeTrue()
+        ->and($status['reason'])->toBeNull();
 
-    ReviewFlashcard::create([
-        'user_id' => $user->id,
-        'flashcard_id' => $secondCard->id,
-        'status' => 'learning',
-    ]);
-
-    expect($access->status($user, $checkpoint->fresh())['allowed'])->toBeTrue();
+    $this->actingAs($user)
+        ->get(route('user.flashcards.show', $secondSet))
+        ->assertRedirect(route('user.quizzes.show', $checkpoint));
 });
 
 it('does not expose a manual Day completion route', function () {
@@ -1161,6 +1164,167 @@ it('rejects direct resource URLs for a locked Day', function () {
         ->get(route('user.modul.program.presentasi', $fixture['program']->slug).'?'.http_build_query($query))
         ->assertForbidden();
 });
+
+it('stores handwriting practice without changing quiz score or Day requirements', function () {
+    $fixture = createDayRoadmapFixture();
+    $user = Pengguna::factory()->create(['role' => 'user']);
+    $quiz = Kuis::create([
+        'module_id' => $fixture['module']->id,
+        'module_day_id' => $fixture['dayOne']->id,
+        'type' => 'multiple_choice',
+        'passing_score' => 70,
+        'status' => 'published',
+    ]);
+    $fixture['dayOne']->update(['checkpoint_quiz_id' => $quiz->id]);
+    $scoredQuestion = Soal::create([
+        'quiz_id' => $quiz->id,
+        'type' => 'multiple_choice',
+        'question_text' => 'Pilih jawaban benar.',
+        'correct_answer' => 'A',
+        'options' => ['A', 'B'],
+        'order' => 1,
+        'points' => 2,
+    ]);
+    $practiceQuestion = Soal::create([
+        'quiz_id' => $quiz->id,
+        'type' => 'handwriting',
+        'question_text' => 'Tulis kanji baru.',
+        'correct_answer' => '新',
+        'options' => [
+            'schema' => 'handwriting-v1',
+            'practice_only' => true,
+            'character' => '新',
+            'stroke_count' => 13,
+        ],
+        'order' => 2,
+        'points' => 50,
+    ]);
+    $set = SetFlashcard::where('module_day_id', $fixture['dayOne']->id)->firstOrFail();
+    ReviewFlashcard::create([
+        'user_id' => $user->id,
+        'flashcard_id' => $set->flashcards()->firstOrFail()->id,
+        'status' => 'learning',
+    ]);
+    app(ProgresRoadmapService::class)->selesaikanDariFlashcard($user, $set);
+
+    $this->actingAs($user)
+        ->postJson(route('user.questions.check', $practiceQuestion), [
+            'answer' => '新',
+            'answer_payload' => [
+                'completed_strokes' => 13,
+                'total_strokes' => 13,
+                'attempts_by_stroke' => array_fill(0, 13, 1),
+                'mistakes' => 0,
+                'hints_used' => 0,
+                'duration_ms' => 5000,
+                'revealed' => false,
+            ],
+        ])
+        ->assertOk()
+        ->assertJsonPath('practice_only', true)
+        ->assertJsonPath('is_correct', true);
+
+    $this->actingAs($user)
+        ->postJson(route('user.attempts.store'), [
+            'quiz_id' => $quiz->id,
+            'answers' => [
+                [
+                    'question_id' => $scoredQuestion->id,
+                    'answer_text' => 'A',
+                ],
+                [
+                    'question_id' => $practiceQuestion->id,
+                    'answer_text' => '新',
+                    'answer_payload' => [
+                        'completed_strokes' => 13,
+                        'total_strokes' => 13,
+                        'attempts_by_stroke' => array_fill(0, 13, 1),
+                        'mistakes' => 0,
+                        'hints_used' => 0,
+                        'duration_ms' => 5000,
+                        'revealed' => false,
+                    ],
+                ],
+            ],
+        ])
+        ->assertOk()
+        ->assertJsonPath('score', 100)
+        ->assertJsonPath('total_questions', 1)
+        ->assertJsonPath('practice_questions', 1)
+        ->assertJsonPath('passed', true);
+
+    $attempt = PengerjaanKuis::where('quiz_id', $quiz->id)->firstOrFail();
+
+    expect($attempt->answers()->where('question_id', $practiceQuestion->id)->value('earned_points'))->toBe(0)
+        ->and($attempt->answers()->where('question_id', $practiceQuestion->id)->value('answer_payload'))->not->toBeNull();
+})->skip('Digantikan oleh alur handwriting berbasis flashcard.');
+
+it('lets an admin add handwriting questions from the Day vocabulary picker', function () {
+    $fixture = createDayRoadmapFixture();
+    $admin = Pengguna::factory()->create(['role' => 'admin']);
+    $vocabulary = Kosakata::create([
+        'module_id' => $fixture['module']->id,
+        'content_type' => 'kanji',
+        'word' => '新',
+        'reading' => 'しん',
+        'meaning_id' => 'baru',
+        'status' => 'published',
+    ]);
+    // The picker is scoped to the Week, so vocabulary assigned to another Day remains reusable.
+    $vocabulary->days()->sync([$fixture['dayTwo']->id]);
+    $quiz = Kuis::create([
+        'module_id' => $fixture['module']->id,
+        'module_day_id' => $fixture['dayOne']->id,
+        'type' => 'multiple_choice',
+        'status' => 'draft',
+    ]);
+
+    $this->actingAs($admin)
+        ->getJson(route('admin.vocabulary.picker', [
+            'module_id' => $fixture['module']->id,
+            'module_day_id' => $fixture['dayOne']->id,
+        ]))
+        ->assertOk()
+        ->assertJsonPath('data.0.id', $vocabulary->id)
+        ->assertJsonPath('data.0.writing_characters.0.character', '新');
+
+    $this->actingAs($admin)
+        ->post(route('admin.quizzes.questions.generate-vocabulary', $quiz), [
+            'mode' => 'handwriting',
+            'count' => 1,
+            'status' => 'all',
+            'content_type' => 'all',
+            'vocabulary_ids' => [$vocabulary->id],
+            'handwriting_selections' => [[
+                'vocabulary_id' => $vocabulary->id,
+                'character' => '新',
+            ]],
+        ])
+        ->assertRedirect();
+
+    $question = $quiz->questions()->firstOrFail();
+
+    expect($question->type)->toBe('handwriting')
+        ->and($question->correct_answer)->toBe('新')
+        ->and($question->options['practice_only'])->toBeTrue()
+        ->and($question->options['vocabulary_id'])->toBe($vocabulary->id);
+})->skip('Generator soal handwriting sudah dihentikan.');
+
+it('seeds handwriting demo content idempotently', function () {
+    $this->seed(KelasDemoSeeder::class);
+    $this->seed(KelasDemoSeeder::class);
+
+    $questions = Soal::query()->where('type', 'handwriting')->get();
+    $question = $questions->firstOrFail();
+    $vocabularyId = (int) $question->options['vocabulary_id'];
+    $vocabulary = Kosakata::findOrFail($vocabularyId);
+
+    expect($questions)->toHaveCount(12)
+        ->and($question->options['practice_only'])->toBeTrue()
+        ->and($question->options['stroke_count'])->toBeGreaterThan(0)
+        ->and($vocabulary->days()->exists())->toBeTrue()
+        ->and(Flashcard::query()->where('vocabulary_id', $vocabulary->id)->count())->toBe(1);
+})->skip('Seeder sekarang menyimpan sumber handwriting sebagai flashcard.');
 
 it('seeds an idempotent two-Day roadmap for every demo Week', function () {
     $this->seed(KelasDemoSeeder::class);

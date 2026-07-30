@@ -793,7 +793,7 @@ export default function BuilderPresentasi({
                     </div>
                 )}
 
-                <header className="sticky top-0 z-30 border-b border-gray-200 bg-white px-3 py-2 dark:border-gray-800 dark:bg-gray-900 lg:px-4">
+                <header className="sticky top-16 z-30 border-b border-gray-200 bg-white px-3 py-2 dark:border-gray-800 dark:bg-gray-900 lg:top-0 lg:px-4">
                     <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                         <div className="min-w-0">
                             <button type="button" onClick={leaveWorkspace} className="text-[11px] font-black uppercase tracking-[0.22em] text-orange-600">Kembali ke Roadmap</button>

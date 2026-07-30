@@ -13,7 +13,7 @@ import MenuBookIcon from '@mui/icons-material/MenuBook';
 import SearchIcon from '@mui/icons-material/Search';
 import SchoolIcon from '@mui/icons-material/School';
 import SlideshowIcon from '@mui/icons-material/Slideshow';
-import StyleIcon from '@mui/icons-material/Style';
+import QuizOutlinedIcon from '@mui/icons-material/QuizOutlined';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
 
 const emptyForm = {
@@ -33,7 +33,7 @@ function StatusBadge({ status }) {
 
     return (
         <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-wider ${isPublished ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300' : 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300'}`}>
-            {status}
+            {isPublished ? 'Terbit' : 'Draf'}
         </span>
     );
 }
@@ -53,6 +53,7 @@ export default function ManajemenKelas({ programs = {}, levels = [], filters = {
     const [status, setStatus] = useState(filters.status || 'all');
     const [showForm, setShowForm] = useState(false);
     const [editing, setEditing] = useState(null);
+    const [managingProgram, setManagingProgram] = useState(null);
     const [deleteTarget, setDeleteTarget] = useState(null);
     const form = useForm(emptyForm);
 
@@ -119,7 +120,7 @@ export default function ManajemenKelas({ programs = {}, levels = [], filters = {
                                     <SchoolIcon sx={{ fontSize: 25 }} />
                                 </div>
                                 <div>
-                                    <p className="text-xs font-black uppercase tracking-[0.28em] text-[#E64A19]">Class Admin</p>
+                                    <p className="text-xs font-black uppercase tracking-[0.28em] text-[#E64A19]">Pengelolaan Kelas</p>
                                     <h1 className="mt-1 text-3xl font-black text-gray-900 dark:text-white">Manajemen Kelas</h1>
                                     <p className="mt-2 max-w-2xl text-sm font-semibold text-gray-500 dark:text-gray-400">
                                         Atur thumbnail, judul, pengajar, status, dan urutan kelas yang tampil di halaman user.
@@ -142,8 +143,8 @@ export default function ManajemenKelas({ programs = {}, levels = [], filters = {
                             </label>
                             <select value={status} onChange={(event) => setStatus(event.target.value)} className="h-11 rounded-2xl border border-gray-200 bg-gray-50 px-4 text-sm font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
                                 <option value="all">Semua Status</option>
-                                <option value="published">Published</option>
-                                <option value="draft">Draft</option>
+                                <option value="published">Terbit</option>
+                                <option value="draft">Draf</option>
                             </select>
                             <button className="h-11 rounded-2xl bg-gray-950 px-5 text-sm font-black text-white dark:bg-white dark:text-gray-950">Filter</button>
                         </form>
@@ -179,33 +180,17 @@ export default function ManajemenKelas({ programs = {}, levels = [], filters = {
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <MenuBookIcon sx={{ fontSize: 18 }} className="text-gray-400" />
-                                            {program.modules_count || 0} modul published
+                                            {program.modules_count || 0} minggu terbit
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                                        <Link href={route('admin.modules.index', { program_id: program.id, focus: 'roadmap' })} className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#E64A19] px-3 py-2 text-center text-xs font-black text-white">
-                                            <AccountTreeIcon sx={{ fontSize: 16 }} />
-                                            Edit Roadmap
-                                        </Link>
-                                        <Link href={route('admin.modules.index', { program_id: program.id, focus: 'flashcard' })} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-center text-xs font-black text-teal-700 dark:border-teal-900/40 dark:bg-teal-900/20 dark:text-teal-300">
-                                            <StyleIcon sx={{ fontSize: 16 }} />
-                                            Edit Flashcard
-                                        </Link>
-                                        <Link href={route('admin.modules.index', { program_id: program.id, focus: 'presentation' })} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-center text-xs font-black text-orange-700 dark:border-orange-900/40 dark:bg-orange-900/20 dark:text-orange-300">
-                                            <SlideshowIcon sx={{ fontSize: 16 }} />
-                                            Edit Presentasi
-                                        </Link>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-2 border-t border-gray-100 pt-3 dark:border-gray-800">
-                                        <button onClick={() => openEdit(program)} className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-xs font-black text-gray-700 dark:border-gray-700 dark:text-gray-200">
-                                            <EditOutlinedIcon sx={{ fontSize: 16 }} />
-                                            Pengaturan
-                                        </button>
-                                        <button onClick={() => setDeleteTarget(program)} className="flex items-center justify-center gap-2 rounded-xl border border-red-100 px-3 py-2 text-xs font-black text-red-600 dark:border-red-900/40">
-                                            <DeleteOutlineIcon sx={{ fontSize: 16 }} />
-                                            Hapus
-                                        </button>
-                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setManagingProgram(program)}
+                                        className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#E64A19] px-4 py-2.5 text-sm font-black text-white shadow-sm shadow-orange-500/20 transition-colors hover:bg-[#D84315]"
+                                    >
+                                        <MenuBookIcon sx={{ fontSize: 18 }} />
+                                        Kelola Isi
+                                    </button>
                                 </div>
                             </article>
                         ))}
@@ -215,7 +200,7 @@ export default function ManajemenKelas({ programs = {}, levels = [], filters = {
                         <section className="rounded-[1.4rem] border border-dashed border-gray-300 bg-white px-6 py-14 text-center dark:border-gray-700 dark:bg-gray-900">
                             <SchoolIcon sx={{ fontSize: 44 }} className="text-gray-300" />
                             <h2 className="mt-4 text-lg font-black text-gray-900 dark:text-white">Belum ada kelas</h2>
-                            <p className="mt-2 text-sm font-medium text-gray-500 dark:text-gray-400">Buat kelas pertama untuk menjadi container modul mingguan.</p>
+                            <p className="mt-2 text-sm font-medium text-gray-500 dark:text-gray-400">Buat kelas pertama sebagai wadah roadmap mingguan.</p>
                         </section>
                     )}
 
@@ -234,12 +219,118 @@ export default function ManajemenKelas({ programs = {}, levels = [], filters = {
                 </main>
             </div>
 
+            {managingProgram && (
+                <div
+                    className="fixed inset-0 z-[75] flex items-end justify-center bg-gray-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+                    onMouseDown={(event) => {
+                        if (event.target === event.currentTarget) {
+                            setManagingProgram(null);
+                        }
+                    }}
+                >
+                    <section
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="manage-class-title"
+                        className="w-full max-w-lg rounded-t-[1.5rem] bg-white p-5 shadow-2xl dark:bg-gray-900 sm:rounded-[1.5rem] sm:p-6"
+                    >
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0">
+                                <p className="text-xs font-black uppercase tracking-[0.2em] text-[#E64A19]">Kelola Isi Kelas</p>
+                                <h2 id="manage-class-title" className="mt-1 truncate text-xl font-black text-gray-900 dark:text-white">
+                                    {managingProgram.title}
+                                </h2>
+                                <p className="mt-1 text-sm font-medium text-gray-500 dark:text-gray-400">
+                                    Pilih bagian yang ingin dikerjakan.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setManagingProgram(null)}
+                                aria-label="Tutup panel kelola kelas"
+                                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-600 transition hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                            >
+                                <CloseIcon sx={{ fontSize: 19 }} />
+                            </button>
+                        </div>
+
+                        <div className="mt-5 grid gap-3">
+                            <Link
+                                href={route('admin.modules.index', { program_id: managingProgram.id, focus: 'roadmap' })}
+                                className="group flex min-h-[72px] items-center gap-4 rounded-2xl border border-orange-200 bg-orange-50 p-4 transition hover:border-[#E64A19] hover:bg-orange-100 dark:border-orange-900/40 dark:bg-orange-950/20 dark:hover:border-orange-700"
+                            >
+                                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#E64A19] text-white">
+                                    <AccountTreeIcon sx={{ fontSize: 22 }} />
+                                </span>
+                                <span className="min-w-0">
+                                    <span className="block text-sm font-black text-gray-900 dark:text-white">Roadmap</span>
+                                    <span className="mt-0.5 block text-xs font-semibold text-gray-500 dark:text-gray-400">Atur Week, Day, urutan belajar, dan ujian.</span>
+                                </span>
+                            </Link>
+
+                            <Link
+                                href={route('admin.modules.index', { program_id: managingProgram.id, focus: 'presentation' })}
+                                className="group flex min-h-[72px] items-center gap-4 rounded-2xl border border-sky-200 bg-sky-50 p-4 transition hover:border-sky-500 hover:bg-sky-100 dark:border-sky-900/40 dark:bg-sky-950/20 dark:hover:border-sky-700"
+                            >
+                                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-600 text-white">
+                                    <SlideshowIcon sx={{ fontSize: 22 }} />
+                                </span>
+                                <span className="min-w-0">
+                                    <span className="block text-sm font-black text-gray-900 dark:text-white">Presentasi Mingguan</span>
+                                    <span className="mt-0.5 block text-xs font-semibold text-gray-500 dark:text-gray-400">Kelola presentasi pembuka, antar Hari, dan penutup.</span>
+                                </span>
+                            </Link>
+
+                            <Link
+                                href={route('admin.modules.index', { program_id: managingProgram.id, focus: 'flashcard' })}
+                                className="group flex min-h-[72px] items-center gap-4 rounded-2xl border border-teal-200 bg-teal-50 p-4 transition hover:border-teal-500 hover:bg-teal-100 dark:border-teal-900/40 dark:bg-teal-950/20 dark:hover:border-teal-700"
+                            >
+                                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-600 text-white">
+                                    <QuizOutlinedIcon sx={{ fontSize: 22 }} />
+                                </span>
+                                <span className="min-w-0">
+                                    <span className="block text-sm font-black text-gray-900 dark:text-white">Kuis &amp; Repetisi</span>
+                                    <span className="mt-0.5 block text-xs font-semibold text-gray-500 dark:text-gray-400">Kelola materi repetisi, soal, dan latihan menulis kanji.</span>
+                                </span>
+                            </Link>
+                        </div>
+
+                        <div className="mt-5 grid grid-cols-2 gap-3 border-t border-gray-100 pt-4 dark:border-gray-800">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const program = managingProgram;
+                                    setManagingProgram(null);
+                                    openEdit(program);
+                                }}
+                                className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-xs font-black text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                            >
+                                <EditOutlinedIcon sx={{ fontSize: 16 }} />
+                                Edit Info
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const program = managingProgram;
+                                    setManagingProgram(null);
+                                    setDeleteTarget(program);
+                                }}
+                                className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-100 px-3 py-2 text-xs font-black text-red-600 transition hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-950/20"
+                            >
+                                <DeleteOutlineIcon sx={{ fontSize: 16 }} />
+                                Hapus Kelas
+                            </button>
+                        </div>
+                    </section>
+                </div>
+            )}
+
             {showForm && (
                 <div className="fixed inset-0 z-[70] overflow-y-auto bg-gray-950/60 p-4 backdrop-blur-sm">
                     <div className="mx-auto my-6 max-w-6xl overflow-hidden rounded-[1.6rem] bg-white shadow-2xl dark:bg-gray-900">
                         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-gray-800">
                             <div>
-                                <p className="text-xs font-black uppercase tracking-[0.25em] text-orange-600">Class Setup</p>
+                            <p className="text-xs font-black uppercase tracking-[0.25em] text-orange-600">Pengaturan Kelas</p>
                                 <h2 className="text-xl font-black text-gray-900 dark:text-white">{editing ? 'Edit Kelas' : 'Tambah Kelas'}</h2>
                             </div>
                             <button onClick={closeForm} className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
@@ -293,8 +384,8 @@ export default function ManajemenKelas({ programs = {}, levels = [], filters = {
                                     </Field>
                                     <Field label="Status">
                                         <select value={form.data.status} onChange={(event) => form.setData('status', event.target.value)} className={inputClass}>
-                                            <option value="published">Published</option>
-                                            <option value="draft">Draft</option>
+                                            <option value="published">Terbit</option>
+                                            <option value="draft">Draf</option>
                                         </select>
                                     </Field>
                                     <Field label="Urutan Tampil">

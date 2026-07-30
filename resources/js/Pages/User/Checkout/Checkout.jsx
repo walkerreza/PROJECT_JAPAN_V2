@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -7,6 +7,7 @@ import HourglassTopIcon from '@mui/icons-material/HourglassTop';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
+import { playSoundEffect } from '@/Components/UI/SoundEffects';
 
 const loadSnapScript = (midtrans) => new Promise((resolve, reject) => {
   if (window.snap) {
@@ -119,6 +120,7 @@ export default function Checkout({ transaction, midtrans }) {
   const [error, setError] = useState('');
   const [kloter, setKloter] = useState(transaction.kloter || null);
   const { confirmState, openConfirm, closeConfirm, setConfirmProcessing } = useConfirmAction();
+  const playedPaymentSuccessRef = useRef(transaction.status === 'success');
 
   const isDone = status === 'success' && accessState === 'active';
   const isPendingApproval = status === 'success' && accessState === 'pending_approval';
@@ -145,6 +147,13 @@ export default function Checkout({ transaction, midtrans }) {
       setSnapToken(savedPayment.snapToken);
     }
   }, [savedPayment?.snapToken]);
+
+  useEffect(() => {
+    if (status !== 'success' || playedPaymentSuccessRef.current) return;
+
+    playedPaymentSuccessRef.current = true;
+    playSoundEffect('complete');
+  }, [status]);
 
   const syncStatus = async (successMessage = '') => {
     setError('');

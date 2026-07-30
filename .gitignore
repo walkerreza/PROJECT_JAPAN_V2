@@ -19,6 +19,14 @@
 /public/fonts-manifest.dev.json
 /public/hot
 /public/storage
+/public/audio/sfx/Audio/*
+!/public/audio/sfx/Audio/confirmation_001.ogg
+!/public/audio/sfx/Audio/error_001.ogg
+!/public/audio/sfx/Audio/maximize_001.ogg
+!/public/audio/sfx/Audio/open_001.ogg
+!/public/audio/sfx/Audio/close_001.ogg
+!/public/audio/sfx/Audio/select_001.ogg
+/public/audio/sfx/*.url
 /storage/*.key
 /storage/pail
 /vendor

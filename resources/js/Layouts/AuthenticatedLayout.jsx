@@ -1,22 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
-import { motion, AnimatePresence } from 'framer-motion';
-import theme from '@/Components/theme/themes';
+import SidebarLink from '@/Components/Navigation/SidebarLink';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import PeopleIcon from '@mui/icons-material/People';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
-import QuizIcon from '@mui/icons-material/Quiz';
-import LayersIcon from '@mui/icons-material/Layers';
 import ShieldIcon from '@mui/icons-material/Shield';
 import MonitorHeartIcon from '@mui/icons-material/MonitorHeart';
-import AutoStoriesIcon from '@mui/icons-material/AutoStories';
 import SchoolIcon from '@mui/icons-material/School';
-import HelpCenterIcon from '@mui/icons-material/HelpCenter';
-import StyleIcon from '@mui/icons-material/Style';
 import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
-import SlideshowIcon from '@mui/icons-material/Slideshow';
 import MenuIcon from '@mui/icons-material/Menu';
 import CloseIcon from '@mui/icons-material/Close';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
@@ -29,7 +22,6 @@ import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 import SettingsIcon from '@mui/icons-material/Settings';
-import { KabutoIcon } from '@/Components/JapaneseIcons';
 
 const resolveThemeMode = () => {
     if (typeof window === 'undefined') {
@@ -63,9 +55,19 @@ const applyDocumentTheme = (mode = resolveThemeMode()) => {
     document.documentElement.classList.toggle('dark', shouldUseDarkMode(mode));
 };
 
+const resolveSidebarExpanded = () => {
+    if (typeof window === 'undefined') {
+        return true;
+    }
+
+    return window.localStorage.getItem('japanlingo:sidebar-expanded') !== 'false';
+};
+
 export default function AuthenticatedLayout({ children }) {
-    const { user } = usePage().props.auth;
-    const flash = usePage().props.flash || {};
+    const page = usePage();
+    const { user } = page.props.auth;
+    const flash = page.props.flash || {};
+    const currentPath = page.url?.split(/[?#]/)[0] || '/';
     const flashNotice = [
         ['error', flash.error],
         ['warning', flash.warning],
@@ -85,14 +87,16 @@ export default function AuthenticatedLayout({ children }) {
         info: 'Informasi',
     };
     const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+    const [mobileAccountOpen, setMobileAccountOpen] = useState(false);
     const [notificationOpen, setNotificationOpen] = useState(false);
     const [themeMode, setThemeMode] = useState(resolveThemeMode);
-    const [isExpanded, setIsExpanded] = useState(true);
+    const [isExpanded, setIsExpanded] = useState(resolveSidebarExpanded);
     const [mobileOpen, setMobileOpen] = useState(false);
     const [openMenuGroups, setOpenMenuGroups] = useState({});
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const menuRef = useRef(null);
+    const mobileAccountRef = useRef(null);
     const mobileMenuButtonRef = useRef(null);
 
     const [toastAchievements, setToastAchievements] = useState([]);
@@ -156,23 +160,27 @@ export default function AuthenticatedLayout({ children }) {
 
     useEffect(() => {
         function handleClickOutside(event) {
-            if (menuRef.current && !menuRef.current.contains(event.target)) {
+            const outsideSidebarMenu = !menuRef.current?.contains(event.target);
+            const outsideMobileAccount = !mobileAccountRef.current?.contains(event.target);
+
+            if (outsideSidebarMenu && outsideMobileAccount) {
                 setProfileMenuOpen(false);
+                setMobileAccountOpen(false);
                 setNotificationOpen(false);
             }
         }
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, [menuRef]);
+    }, []);
 
     useEffect(() => {
         const handleResize = () => {
             if (window.innerWidth < 1024) {
-                setIsExpanded(true);
                 return;
             }
 
             setMobileOpen(false);
+            setMobileAccountOpen(false);
             setProfileMenuOpen(false);
             setNotificationOpen(false);
         };
@@ -190,6 +198,9 @@ export default function AuthenticatedLayout({ children }) {
         const closeOnEscape = (event) => {
             if (event.key === 'Escape') {
                 setMobileOpen(false);
+                setMobileAccountOpen(false);
+                setProfileMenuOpen(false);
+                setNotificationOpen(false);
             }
         };
 
@@ -203,15 +214,33 @@ export default function AuthenticatedLayout({ children }) {
         };
     }, [mobileOpen]);
 
+    useEffect(() => {
+        if (!mobileAccountOpen && !profileMenuOpen && !notificationOpen) {
+            return undefined;
+        }
+
+        const closePopoversOnEscape = (event) => {
+            if (event.key === 'Escape') {
+                setMobileAccountOpen(false);
+                setProfileMenuOpen(false);
+                setNotificationOpen(false);
+            }
+        };
+
+        document.addEventListener('keydown', closePopoversOnEscape);
+        return () => document.removeEventListener('keydown', closePopoversOnEscape);
+    }, [mobileAccountOpen, notificationOpen, profileMenuOpen]);
+
     const handleMarkAsRead = (id, url = null) => {
         router.post(route('notifications.read', id), {}, {
             preserveScroll: true,
             onSuccess: () => {
-                setNotifications(notifications.filter(n => n.id !== id));
-                setUnreadCount(Math.max(0, unreadCount - 1));
+                setNotifications((current) => current.filter((notification) => notification.id !== id));
+                setUnreadCount((current) => Math.max(0, current - 1));
                 setNotificationOpen(false);
 
                 if (url) {
+                    handleNavigation();
                     router.visit(url);
                 }
             }
@@ -255,18 +284,22 @@ export default function AuthenticatedLayout({ children }) {
     const isPremiumUser = accessStatus.is_premium ?? user?.subscription_status === 'premium';
 
     const userMenu = [
-        { href: '/user/dashboard', icon: <DashboardIcon sx={{ fontSize: 28 }} />, label: 'Beranda' },
-        { href: '/user/kelas', icon: <SchoolIcon sx={{ fontSize: 28 }} />, label: 'Kelas' },
-        { href: '/user/leaderboard', icon: <EmojiEventsIcon sx={{ fontSize: 28 }} />, label: 'Peringkat' },
-        { href: '/user/progress', icon: <MonitorHeartIcon sx={{ fontSize: 28 }} />, label: 'Progress' },
+        { href: '/user/dashboard', activePaths: ['/user/dashboard'], icon: <DashboardIcon sx={{ fontSize: 24 }} />, label: 'Beranda' },
+        { href: '/user/kelas', activePaths: ['/user/kelas', '/user/modul', '/user/quizzes', '/user/flashcards'], icon: <SchoolIcon sx={{ fontSize: 24 }} />, label: 'Kelas' },
+        { href: '/user/leaderboard', activePaths: ['/user/leaderboard'], icon: <EmojiEventsIcon sx={{ fontSize: 24 }} />, label: 'Peringkat' },
+        { href: '/user/progress', activePaths: ['/user/progress'], icon: <MonitorHeartIcon sx={{ fontSize: 24 }} />, label: 'Progress' },
     ];
 
     const adminMenu = [
-        { href: '/admin/dashboard', icon: <DashboardIcon sx={{ fontSize: 24 }} />, label: 'Beranda' },
-        { href: '/admin/users', icon: <PeopleIcon sx={{ fontSize: 24 }} />, label: 'Kloter & Siswa' },
-        { href: '/admin/programs', icon: <SchoolIcon sx={{ fontSize: 24 }} />, label: 'Kelas' },
-        { href: '/admin/vocabulary', icon: <LibraryBooksIcon sx={{ fontSize: 24 }} />, label: 'Bank Konten N3' },
-        { href: '/admin/gamification', icon: <EmojiEventsIcon sx={{ fontSize: 24 }} />, label: 'Gamifikasi & Pencapaian' },
+        { href: '/admin/dashboard', activePaths: ['/admin/dashboard'], icon: <DashboardIcon sx={{ fontSize: 24 }} />, label: 'Beranda' },
+        { href: '/admin/users', activePaths: ['/admin/users', '/admin/kloters', '/admin/analytics'], icon: <PeopleIcon sx={{ fontSize: 24 }} />, label: 'Kloter & Siswa' },
+        {
+            href: '/admin/programs',
+            activePaths: ['/admin/programs', '/admin/modules', '/admin/module-days', '/admin/quizzes', '/admin/questions', '/admin/flashcards', '/admin/presentations', '/admin/boards'],
+            icon: <SchoolIcon sx={{ fontSize: 24 }} />,
+            label: 'Kelas',
+        },
+        { href: '/admin/vocabulary', activePaths: ['/admin/vocabulary'], icon: <LibraryBooksIcon sx={{ fontSize: 24 }} />, label: 'Bank Konten N3' },
     ];
     
     const superadminMenu = [
@@ -288,7 +321,6 @@ export default function AuthenticatedLayout({ children }) {
             icon: <MenuBookIcon sx={{ fontSize: 24 }} />,
             items: [
                 { href: '/superadmin/content', icon: <MonitorHeartIcon sx={{ fontSize: 18 }} />, label: 'News & Konten' },
-                { href: '/superadmin/gamification', icon: <EmojiEventsIcon sx={{ fontSize: 18 }} />, label: 'Gamifikasi' },
             ],
         },
         {
@@ -305,9 +337,10 @@ export default function AuthenticatedLayout({ children }) {
         {
             type: 'group',
             key: 'superadmin-system',
-            label: 'Sistem',
+            label: 'Platform',
             icon: <SettingsIcon sx={{ fontSize: 24 }} />,
             items: [
+                { href: '/superadmin/gamification', icon: <EmojiEventsIcon sx={{ fontSize: 18 }} />, label: 'Gamifikasi' },
                 { href: '/superadmin/system', icon: <SettingsIcon sx={{ fontSize: 18 }} />, label: 'Pengaturan Sistem' },
             ],
         },
@@ -317,10 +350,61 @@ export default function AuthenticatedLayout({ children }) {
     const isAdmin = user?.role === 'admin' || isSuperadmin;
     const isUser = user?.role === 'user';
     const activeMenu = isSuperadmin ? superadminMenu : (isAdmin ? adminMenu : userMenu);
-    const isActivePath = (href) => typeof window !== 'undefined' && window.location.pathname.startsWith(href);
+    const navigationExpanded = mobileOpen || isExpanded;
+    const profileHref = user?.role === 'superadmin'
+        ? route('superadmin.profile')
+        : user?.role === 'admin'
+            ? route('admin.profile')
+            : route('profile.edit');
+    const matchesPath = (path) => currentPath === path || currentPath.startsWith(`${path}/`);
+    const isActivePath = (paths) => (Array.isArray(paths) ? paths : [paths]).some(matchesPath);
+    const isActiveItem = (item) => isActivePath(item.activePaths || item.href);
+
+    const workspaceTitleRules = [
+        ['/admin/presentations', 'Presentasi'],
+        ['/admin/flashcards', 'Flashcard'],
+        ['/admin/quizzes', 'Kuis & Repetisi'],
+        ['/admin/questions', 'Bank Soal'],
+        ['/admin/modules', 'Roadmap Kelas'],
+        ['/admin/module-days', 'Roadmap Kelas'],
+        ['/admin/programs', 'Kelas'],
+        ['/admin/users', 'Kloter & Siswa'],
+        ['/admin/kloters', 'Kloter & Siswa'],
+        ['/admin/analytics', 'Monitoring Kloter'],
+        ['/admin/vocabulary', 'Bank Konten N3'],
+        ['/admin/gamification', 'Gamifikasi'],
+        ['/admin/achievements', 'Pencapaian'],
+        ['/admin/levels', 'Level'],
+        ['/admin/profile', 'Pengaturan Profil'],
+        ['/user/modul', 'Roadmap Belajar'],
+        ['/user/quizzes', 'Latihan & Kuis'],
+        ['/user/flashcards', 'Latihan & Kuis'],
+        ['/user/kelas', 'Kelas'],
+        ['/user/leaderboard', 'Peringkat'],
+        ['/user/progress', 'Progress'],
+        ['/user/news', 'Berita'],
+        ['/user/notifications', 'Notifikasi'],
+        ['/superadmin/profile', 'Pengaturan Profil'],
+        ['/profile', 'Pengaturan Profil'],
+    ];
+    const activeMenuItems = activeMenu.flatMap((item) => item.type === 'group' ? item.items : [item]);
+    const workspaceTitle = workspaceTitleRules.find(([path]) => matchesPath(path))?.[1]
+        || activeMenuItems.find(isActiveItem)?.label
+        || 'Beranda';
+
+    const setSidebarExpanded = (expanded) => {
+        setIsExpanded(expanded);
+        window.localStorage.setItem('japanlingo:sidebar-expanded', String(expanded));
+    };
+    const handleNavigation = () => {
+        setMobileOpen(false);
+        setMobileAccountOpen(false);
+        setProfileMenuOpen(false);
+        setNotificationOpen(false);
+    };
     const toggleMenuGroup = (key) => {
-        if (!isExpanded) {
-            setIsExpanded(true);
+        if (!navigationExpanded) {
+            setSidebarExpanded(true);
         }
 
         setOpenMenuGroups((current) => ({
@@ -330,35 +414,45 @@ export default function AuthenticatedLayout({ children }) {
     };
     const closeMobileMenu = () => {
         setMobileOpen(false);
+        setMobileAccountOpen(false);
         setProfileMenuOpen(false);
         setNotificationOpen(false);
     };
     const desktopPopoverPosition = isExpanded ? 'lg:left-[248px]' : 'lg:left-[96px]';
     const renderAdminGroup = (item) => {
-        const groupActive = item.items.some((child) => isActivePath(child.href));
+        const groupActive = item.items.some((child) => isActiveItem(child));
         const isOpen = openMenuGroups[item.key] || groupActive;
+        const groupPanelId = `${item.key}-items`;
 
         return (
             <div key={item.key} className="space-y-1">
                 <button
                     type="button"
+                    aria-expanded={isOpen}
+                    aria-controls={groupPanelId}
+                    aria-label={!navigationExpanded ? item.label : undefined}
+                    title={!navigationExpanded ? item.label : undefined}
                     onClick={(event) => {
                         event.stopPropagation();
                         toggleMenuGroup(item.key);
                     }}
-                    className={`flex min-h-[52px] w-full ${isExpanded ? 'flex-row items-center justify-start px-4' : 'flex-col items-center justify-center px-1'} rounded-2xl py-3 transition-all ${
+                    className={`flex min-h-[52px] w-full items-center rounded-xl py-2.5 transition-all ${
+                        navigationExpanded ? 'flex-row justify-start px-3.5' : 'justify-center px-2'
+                    } ${
                         groupActive
-                            ? 'bg-red-50 text-red-700'
-                            : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+                            ? 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300'
+                            : 'text-gray-700 hover:bg-white hover:text-gray-950 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white'
                     }`}
                 >
-                    <span className={`flex shrink-0 items-center justify-center ${isExpanded ? 'mr-3' : 'mb-0.5'} ${groupActive ? 'text-red-600' : ''}`}>
+                    <span className={`flex shrink-0 items-center justify-center ${navigationExpanded ? 'mr-3' : ''} ${groupActive ? 'text-red-600 dark:text-red-300' : ''}`}>
                         {item.icon}
                     </span>
-                    <span className={`flex-1 truncate font-bold tracking-tight ${isExpanded ? 'text-left text-[14px]' : 'w-full text-center text-[10px]'} ${groupActive ? 'text-red-700' : ''}`}>
-                        {item.label}
-                    </span>
-                    {isExpanded && (
+                    {navigationExpanded && (
+                        <span className="min-w-0 flex-1 truncate text-left text-sm font-semibold">
+                            {item.label}
+                        </span>
+                    )}
+                    {navigationExpanded && (
                         <KeyboardArrowRightIcon
                             sx={{ fontSize: 18 }}
                             className={`transition-transform ${isOpen ? 'rotate-90' : ''}`}
@@ -367,15 +461,16 @@ export default function AuthenticatedLayout({ children }) {
                 </button>
 
                 {isOpen && (
-                    <div className={`${isExpanded ? 'ml-3 border-l border-gray-200 pl-2 dark:border-gray-800' : 'space-y-1'}`}>
+                    <div id={groupPanelId} className={`${navigationExpanded ? 'ml-3 border-l border-gray-200 pl-2 dark:border-gray-800' : 'space-y-1'}`}>
                         {item.items.map((child) => (
                             <SidebarLink
                                 key={child.href}
                                 href={child.href}
                                 icon={child.icon}
-                                active={isActivePath(child.href)}
-                                isExpanded={isExpanded}
-                                className={isExpanded ? 'h-[44px] py-2 text-sm' : 'h-[48px]'}
+                                active={isActiveItem(child)}
+                                isExpanded={navigationExpanded}
+                                onNavigate={handleNavigation}
+                                className={navigationExpanded ? 'min-h-[44px] py-2' : 'min-h-[48px]'}
                             >
                                 {child.label}
                             </SidebarLink>
@@ -383,52 +478,6 @@ export default function AuthenticatedLayout({ children }) {
                     </div>
                 )}
             </div>
-        );
-    };
-    const renderUpgradeLink = (item) => {
-        const active = isActivePath(item.href);
-
-        if (!isExpanded) {
-            return (
-                <Link
-                    key={item.href}
-                    href={item.href}
-                    preserveState
-                    title="Upgrade Premium"
-                    className={`group relative mb-2 flex h-[56px] items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-amber-400 via-orange-500 to-red-600 text-white shadow-lg shadow-orange-500/25 transition-all lg:hover:-translate-y-0.5 lg:hover:shadow-xl lg:hover:shadow-orange-500/35 ${active ? 'ring-2 ring-orange-200' : ''}`}
-                >
-                    <span className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.35),transparent_28%)]" />
-                    <span className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-white/20 backdrop-blur transition-transform group-hover:scale-110">
-                        {item.icon}
-                    </span>
-                </Link>
-            );
-        }
-
-        return (
-            <Link
-                key={item.href}
-                href={item.href}
-                preserveState
-                className={`group relative mb-2 block overflow-hidden rounded-2xl bg-gradient-to-br from-amber-400 via-orange-500 to-red-600 p-[1px] shadow-lg shadow-orange-500/25 transition-all lg:hover:-translate-y-0.5 lg:hover:shadow-xl lg:hover:shadow-orange-500/35 ${active ? 'ring-2 ring-orange-200' : ''}`}
-            >
-                <span className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(255,255,255,0.45),transparent_24%)] opacity-90" />
-                <span className="relative flex min-h-[74px] items-center gap-3 rounded-2xl bg-gradient-to-br from-orange-500/20 to-red-900/20 px-4 py-3 text-white">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20 shadow-inner backdrop-blur transition-transform group-hover:scale-105">
-                        {item.icon}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-2">
-                            <span className="text-sm font-black leading-none">Upgrade</span>
-                            <span className="rounded-full bg-white/20 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-white/90 backdrop-blur">Premium</span>
-                        </span>
-                        <span className="mt-1 block text-[11px] font-bold leading-snug text-white/85">
-                            Buka akses belajar
-                        </span>
-                    </span>
-                    <KeyboardArrowRightIcon sx={{ fontSize: 18 }} className="text-white/80 transition-transform group-hover:translate-x-0.5" />
-                </span>
-            </Link>
         );
     };
     const isDarkModeActive = shouldUseDarkMode(themeMode);
@@ -442,8 +491,72 @@ export default function AuthenticatedLayout({ children }) {
                 className={`${compact ? 'h-10 w-10' : 'h-11 px-3'} inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white text-sm font-black text-gray-700 shadow-sm transition hover:-translate-y-0.5 hover:border-red-200 hover:text-red-600 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200 dark:hover:border-red-500/40 dark:hover:text-red-300`}
             >
                 {isDarkModeActive ? <LightModeIcon sx={{ fontSize: 19 }} /> : <DarkModeIcon sx={{ fontSize: 19 }} />}
-                {!compact && <span>{isDarkModeActive ? 'Light' : 'Dark'}</span>}
+                {!compact && <span>{isDarkModeActive ? 'Terang' : 'Gelap'}</span>}
             </button>
+        </div>
+    );
+    const renderProfileMenuPanel = (id, positionClass) => (
+        <div
+            id={id}
+            className={`max-h-[60dvh] overflow-y-auto rounded-2xl border border-gray-100 bg-white text-left shadow-[0_10px_40px_-10px_rgba(0,0,0,0.25)] animate-in dark:border-gray-800 dark:bg-gray-900 ${positionClass}`}
+        >
+            <Link
+                href={profileHref}
+                onClick={handleNavigation}
+                className="flex items-center justify-between gap-3 p-4 transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-500 dark:hover:bg-gray-800"
+            >
+                <span className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-red-600 text-lg font-black text-white shadow-sm">
+                        {user?.avatar ? (
+                            <img src={user.avatar} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                            (user?.username || user?.name || 'User')?.charAt(0).toUpperCase()
+                        )}
+                    </span>
+                    <span className="min-w-0">
+                        <span className="flex min-w-0 items-center gap-1.5">
+                            <span className="truncate text-sm font-bold text-gray-900 dark:text-white">
+                                {user?.username || user?.name || 'User'}
+                            </span>
+                            {isPremiumUser && (
+                                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                                    <WorkspacePremiumIcon sx={{ fontSize: 11 }} /> Premium
+                                </span>
+                            )}
+                        </span>
+                        <span className="mt-0.5 block truncate text-xs font-medium text-gray-700 dark:text-gray-300">{user?.email}</span>
+                        {isPremiumUser && accessStatus.active_until_label && (
+                            <span className="mt-0.5 block truncate text-[10px] font-bold text-amber-600 dark:text-amber-300">
+                                Aktif sampai {accessStatus.active_until_label}
+                            </span>
+                        )}
+                    </span>
+                </span>
+                <KeyboardArrowRightIcon sx={{ fontSize: 18 }} className="shrink-0 text-gray-600 dark:text-gray-300" />
+            </Link>
+
+            <div className="border-t border-gray-100 py-2 dark:border-gray-800">
+                <Link
+                    href={profileHref}
+                    onClick={handleNavigation}
+                    className="flex w-full items-center gap-3 px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-500 dark:text-gray-300 dark:hover:bg-gray-800"
+                >
+                    <SettingsOutlinedIcon sx={{ fontSize: 18 }} className="text-gray-700 dark:text-gray-300" />
+                    Pengaturan profil
+                </Link>
+            </div>
+
+            <div className="border-t border-gray-100 py-1 dark:border-gray-800">
+                <Link
+                    href={route('logout')}
+                    method="post"
+                    as="button"
+                    onClick={handleNavigation}
+                    className="flex w-full items-center gap-3 px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-500 dark:text-red-400 dark:hover:bg-red-900/30"
+                >
+                    <LogoutOutlinedIcon sx={{ fontSize: 18 }} /> Keluar Akun
+                </Link>
+            </div>
         </div>
     );
 
@@ -451,21 +564,51 @@ export default function AuthenticatedLayout({ children }) {
         <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 flex flex-col lg:flex-row w-full overflow-x-clip transition-colors duration-300">
             {/* ====== HEADER MOBILE ====== */}
             <div className="lg:hidden flex min-h-[64px] items-center justify-between bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-3 py-2 sticky top-0 z-30 shadow-sm transition-colors duration-300">
-                <div className="flex items-center gap-3">
-                    <button ref={mobileMenuButtonRef} type="button" onClick={() => setMobileOpen(true)} aria-label="Buka navigasi" aria-controls="main-sidebar" aria-expanded={mobileOpen} className="flex h-11 w-11 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:hover:bg-gray-800 dark:hover:text-white">
+                <div className="flex min-w-0 items-center gap-2.5">
+                    <button
+                        ref={mobileMenuButtonRef}
+                        type="button"
+                        onClick={() => {
+                            setMobileAccountOpen(false);
+                            setMobileOpen(true);
+                        }}
+                        aria-label="Buka navigasi"
+                        aria-controls="main-sidebar"
+                        aria-expanded={mobileOpen}
+                        className="flex h-11 w-11 items-center justify-center rounded-lg text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white"
+                    >
                         <MenuIcon sx={{ fontSize: 26 }} />
                     </button>
-                    <span className="font-black text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-red-400 text-lg tracking-tight">Japanlingo</span>
+                    <div className="min-w-0">
+                        <span className="block truncate text-base font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-red-400">Japanlingo</span>
+                        <span className="block truncate text-[11px] font-semibold text-gray-700 dark:text-gray-300">{workspaceTitle}</span>
+                    </div>
                 </div>
                 <div className="flex items-center gap-2">
                     {renderUtilityControls(true)}
-                    <button type="button" onClick={() => setMobileOpen(true)} aria-label="Buka menu akun dan navigasi" className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-red-600 text-sm font-black text-white shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2">
-                        {user?.avatar ? (
-                            <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                        ) : (
-                            (user?.username || user?.name || "User")?.charAt(0).toUpperCase()
+                    <div ref={mobileAccountRef} className="relative">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setMobileAccountOpen((open) => !open);
+                                setMobileOpen(false);
+                            }}
+                            aria-label="Buka menu akun"
+                            aria-controls="mobile-account-menu"
+                            aria-expanded={mobileAccountOpen}
+                            className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-red-600 text-sm font-black text-white shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
+                        >
+                            {user?.avatar ? (
+                                <img src={user.avatar} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                            ) : (
+                                (user?.username || user?.name || 'User')?.charAt(0).toUpperCase()
+                            )}
+                        </button>
+                        {mobileAccountOpen && renderProfileMenuPanel(
+                            'mobile-account-menu',
+                            'absolute right-0 top-[calc(100%+0.5rem)] z-[90] w-[min(20rem,calc(100vw-1.5rem))]',
                         )}
-                    </button>
+                    </div>
                 </div>
             </div>
 
@@ -482,7 +625,7 @@ export default function AuthenticatedLayout({ children }) {
             {/* ====== SIDEBAR VERTIKAL ====== */}
             <aside id="main-sidebar" aria-label="Navigasi utama" className={`fixed inset-y-0 left-0 z-[80] flex w-[calc(100vw-3rem)] max-w-[20rem] flex-col border-r border-gray-200 bg-gray-100 transition-[transform,width] duration-300 ease-in-out dark:border-gray-800 dark:bg-gray-900 ${isExpanded ? 'lg:w-[240px]' : 'lg:w-[88px]'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
                 
-                <div className="mb-4 border-b border-gray-100 dark:border-gray-800">
+                <div className="relative mb-4 border-b border-gray-100 dark:border-gray-800">
                     <div className="flex h-14 items-center justify-between px-3 lg:hidden">
                         <div className="flex min-w-0 items-center gap-2.5">
                             <img src="/logo.png" alt="Japanlingo" className="h-9 w-9 shrink-0 object-contain" />
@@ -499,28 +642,39 @@ export default function AuthenticatedLayout({ children }) {
                             <CloseIcon sx={{ fontSize: 22 }} />
                         </button>
                     </div>
-                    <div
-                        onClick={() => setIsExpanded(!isExpanded)}
-                        className={`hidden cursor-pointer items-center p-3 transition-all hover:bg-white dark:hover:bg-gray-800 lg:flex ${isExpanded ? 'w-full gap-3 rounded-lg' : 'h-16 justify-center'}`}
-                    >
-                        <img src="/logo.png" alt="Logo" className={`${isExpanded ? 'h-10 w-10' : 'h-8 w-8'} object-contain transition-all duration-300`} />
+                    <div className={`hidden h-16 items-center p-3 lg:flex ${isExpanded ? 'gap-3' : 'justify-center'}`}>
+                        <img src="/logo.png" alt="Japanlingo" className={`${isExpanded ? 'h-10 w-10' : 'h-8 w-8'} object-contain transition-all duration-300`} />
                         {isExpanded && (
                             <span className="font-black text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-red-400 text-lg tracking-tight animate-in fade-in slide-in-from-left-2 duration-300">
                                 Japanlingo
                             </span>
                         )}
                     </div>
+                    <button
+                        type="button"
+                        onClick={() => setSidebarExpanded(!isExpanded)}
+                        aria-label={isExpanded ? 'Ciutkan sidebar' : 'Perluas sidebar'}
+                        aria-expanded={isExpanded}
+                        title={isExpanded ? 'Ciutkan sidebar' : 'Perluas sidebar'}
+                        className="absolute -right-3 top-[18px] hidden h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 shadow-sm transition hover:border-red-200 hover:text-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-red-500/50 dark:hover:text-red-300 lg:flex"
+                    >
+                        <KeyboardArrowRightIcon
+                            sx={{ fontSize: 18 }}
+                            className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                        />
+                    </button>
                 </div>
 
-                <nav className="hide-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3 pb-3" onClick={closeMobileMenu}>
-                    {activeMenu.map((item, idx) => (
-                        item.variant === 'upgrade' ? renderUpgradeLink(item) : item.type === 'group' ? renderAdminGroup(item) : (
+                <nav className="hide-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3 pb-3">
+                    {activeMenu.map((item) => (
+                        item.type === 'group' ? renderAdminGroup(item) : (
                             <SidebarLink 
-                                key={idx} 
+                                key={item.href}
                                 href={item.href} 
                                 icon={item.icon} 
-                                active={isActivePath(item.href)} 
-                                isExpanded={isExpanded}
+                                active={isActiveItem(item)}
+                                isExpanded={navigationExpanded}
+                                onNavigate={handleNavigation}
                             >
                                 {item.label}
                             </SidebarLink>
@@ -528,45 +682,65 @@ export default function AuthenticatedLayout({ children }) {
                     ))}
                 </nav>
 
-                <div className={`p-3 flex flex-col ${isExpanded ? 'gap-2 px-4' : 'items-center'} mt-auto border-t border-gray-200/60 dark:border-gray-800 relative`} ref={menuRef}>
+                <div className={`relative mt-auto flex flex-col border-t border-gray-200/60 p-3 dark:border-gray-800 ${navigationExpanded ? 'gap-2 px-4' : 'items-center'}`} ref={menuRef}>
                     {/* Lonceng Notifikasi */}
                     <button
                         type="button"
-                        onClick={() => { setNotificationOpen(!notificationOpen); setProfileMenuOpen(false); }}
-                        className={`relative mb-2 flex min-h-11 w-full items-center ${isExpanded ? 'justify-start px-3' : 'justify-center'} rounded-xl text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200`}
+                        onClick={() => {
+                            setNotificationOpen((open) => !open);
+                            setProfileMenuOpen(false);
+                        }}
+                        aria-label={unreadCount > 0 ? `Notifikasi, ${unreadCount} belum dibaca` : 'Notifikasi'}
+                        aria-controls="sidebar-notification-menu"
+                        aria-expanded={notificationOpen}
+                        title={!navigationExpanded ? 'Notifikasi' : undefined}
+                        className={`relative mb-2 flex min-h-11 w-full items-center rounded-xl text-gray-700 transition-colors hover:bg-gray-200 hover:text-gray-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white ${navigationExpanded ? 'justify-start px-3' : 'justify-center'}`}
                     >
                         <NotificationsOutlinedIcon sx={{ fontSize: 24 }} />
-                        {isExpanded && <span className="ml-3 text-sm font-bold animate-in fade-in slide-in-from-left-2">Notifikasi</span>}
+                        {navigationExpanded && <span className="ml-3 text-sm font-semibold animate-in">Notifikasi</span>}
                         {unreadCount > 0 && (
-                            <span className={`absolute ${isExpanded ? 'left-7 top-2' : 'top-1.5 right-1.5'} w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-white dark:border-gray-900`}></span>
+                            <span className={`absolute inline-flex min-w-5 items-center justify-center rounded-full border-2 border-white bg-red-600 px-1 text-[9px] font-black leading-4 text-white dark:border-gray-900 ${navigationExpanded ? 'right-2 top-2' : 'right-0.5 top-0.5'}`}>
+                                {unreadCount > 99 ? '99+' : unreadCount}
+                            </span>
                         )}
                     </button>
 
                     {/* Popup Notifikasi */}
                     {notificationOpen && (
-                        <div className={`absolute bottom-[110px] left-3 right-3 z-50 w-auto max-h-[60dvh] overflow-hidden rounded-2xl border border-gray-100 bg-white text-left shadow-[0_10px_40px_-10px_rgba(0,0,0,0.25)] transform origin-bottom-left animate-in fade-in slide-in-from-bottom-5 duration-200 dark:border-gray-800 dark:bg-gray-900 ${desktopPopoverPosition} lg:right-auto lg:w-[320px] lg:max-h-[360px]`}>
+                        <div id="sidebar-notification-menu" className={`absolute bottom-[110px] left-3 right-3 z-50 max-h-[60dvh] w-auto origin-bottom-left overflow-hidden rounded-2xl border border-gray-100 bg-white text-left shadow-[0_10px_40px_-10px_rgba(0,0,0,0.25)] animate-in dark:border-gray-800 dark:bg-gray-900 ${desktopPopoverPosition} lg:right-auto lg:max-h-[360px] lg:w-[320px]`}>
                             <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
                                 <h3 className="font-black text-gray-900 dark:text-white">Notifikasi</h3>
                                 {unreadCount > 0 && (
-                                    <span onClick={handleMarkAllAsRead} className="text-[10px] text-red-600 font-bold bg-red-50 dark:bg-red-900/30 px-2 py-1 rounded-md cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors">Tandai semua dibaca</span>
+                                    <button
+                                        type="button"
+                                        onClick={handleMarkAllAsRead}
+                                        className="rounded-md bg-red-50 px-2 py-1 text-[10px] font-bold text-red-600 transition-colors hover:bg-red-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:bg-red-900/30 dark:hover:bg-red-900/50"
+                                    >
+                                        Tandai semua dibaca
+                                    </button>
                                 )}
                             </div>
                             <div className="max-h-[calc(60dvh-74px)] overflow-y-auto lg:max-h-[300px]">
                                 {unreadCount === 0 ? (
-                                    <div className="p-6 text-center text-gray-400 dark:text-gray-500 text-xs">
+                                    <div className="p-6 text-center text-xs font-medium text-gray-600 dark:text-gray-300">
                                         Tidak ada notifikasi baru.
                                     </div>
                                 ) : (
                                     notifications.map((notif) => (
-                                        <div key={notif.id} onClick={() => handleMarkAsRead(notif.id, notif.data.url)} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-800 border-b border-gray-50 dark:border-gray-800 cursor-pointer transition-colors relative group">
-                                            <div className="absolute top-4 right-4 w-1.5 h-1.5 bg-red-500 rounded-full group-hover:scale-150 transition-transform"></div>
+                                        <button
+                                            type="button"
+                                            key={notif.id}
+                                            onClick={() => handleMarkAsRead(notif.id, notif.data.url)}
+                                            className="group relative block w-full border-b border-gray-50 p-4 text-left transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-500 dark:border-gray-800 dark:hover:bg-gray-800"
+                                        >
+                                            <span className="absolute right-4 top-4 h-1.5 w-1.5 rounded-full bg-red-500 transition-transform group-hover:scale-150" />
                                             <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-black mb-2 ${notificationTone(notif.severity || notif.data?.severity)}`}>
                                                 {notificationCategoryLabel(notif.category || notif.data?.category)}
                                             </span>
                                             <p className="text-xs font-bold text-gray-900 dark:text-white mb-1 pr-4">{notif.data.title || 'Pemberitahuan Sistem'}</p>
-                                            <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight">{notif.data.message || 'Silakan cek pembaruan terbaru di dashboard Anda.'}</p>
+                                            <p className="text-[11px] font-medium leading-tight text-gray-700 dark:text-gray-300">{notif.data.message || 'Silakan cek pembaruan terbaru di dashboard Anda.'}</p>
                                             <p className="text-[9px] font-black text-red-500 dark:text-red-400 mt-2">{notif.created_at}</p>
-                                        </div>
+                                        </button>
                                     ))
                                 )}
                             </div>
@@ -576,14 +750,25 @@ export default function AuthenticatedLayout({ children }) {
                     {/* Avatar Pemicu Popup */}
                     <button
                         type="button"
-                        onClick={() => { setProfileMenuOpen(!profileMenuOpen); setNotificationOpen(false); }}
-                        className={`relative flex min-h-11 w-full items-center overflow-hidden rounded-2xl ring-2 transition-all focus:outline-none focus-visible:ring-red-500 ${isExpanded ? 'gap-3 border border-gray-200 bg-white px-2 py-1.5 shadow-sm dark:border-gray-700 dark:bg-gray-800' : 'justify-center'} ${profileMenuOpen ? 'ring-gray-300 ring-offset-2 dark:ring-gray-600 dark:ring-offset-gray-900' : 'ring-transparent'}`}
+                        onClick={() => {
+                            setProfileMenuOpen((open) => !open);
+                            setNotificationOpen(false);
+                        }}
+                        aria-label="Buka menu akun"
+                        aria-controls="sidebar-profile-menu"
+                        aria-expanded={profileMenuOpen}
+                        title={!navigationExpanded ? 'Akun' : undefined}
+                        className={`relative flex min-h-11 w-full items-center overflow-hidden rounded-2xl ring-2 transition-all focus:outline-none focus-visible:ring-red-500 ${
+                            navigationExpanded
+                                ? 'gap-3 border border-gray-200 bg-white px-2 py-1.5 shadow-sm dark:border-gray-700 dark:bg-gray-800'
+                                : 'justify-center'
+                        } ${profileMenuOpen ? 'ring-gray-300 ring-offset-2 dark:ring-gray-600 dark:ring-offset-gray-900' : 'ring-transparent'}`}
                     >
-                        <div className={`relative shrink-0 ${isExpanded ? 'w-8 h-8 text-sm' : 'w-[42px] h-[42px] text-xl'} rounded-full bg-red-600 text-white font-black flex items-center justify-center shadow-sm transition-all overflow-hidden`}>
+                        <div className={`relative flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-red-600 font-black text-white shadow-sm transition-all ${navigationExpanded ? 'h-8 w-8 text-sm' : 'h-[42px] w-[42px] text-xl'}`}>
                             {user?.avatar ? (
-                                <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                <img src={user.avatar} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
                             ) : (
-                                (user?.username || user?.name || "User")?.charAt(0).toUpperCase()
+                                (user?.username || user?.name || 'User')?.charAt(0).toUpperCase()
                             )}
                             {isPremiumUser && (
                                 <span className="absolute -right-1 -bottom-1 w-5 h-5 rounded-full bg-amber-400 text-white border-2 border-white dark:border-gray-800 flex items-center justify-center shadow-sm">
@@ -591,65 +776,17 @@ export default function AuthenticatedLayout({ children }) {
                                 </span>
                             )}
                         </div>
-                        {isExpanded && (
-                            <div className="flex-1 text-left truncate animate-in fade-in slide-in-from-left-2">
-                                <p className="text-xs font-bold text-gray-900 dark:text-white leading-tight">{(user?.username || user?.name || "User")}</p>
-                                <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate mt-0.5">Pengaturan Akun</p>
+                        {navigationExpanded && (
+                            <div className="min-w-0 flex-1 text-left animate-in">
+                                <p className="truncate text-xs font-bold leading-tight text-gray-900 dark:text-white">{user?.username || user?.name || 'User'}</p>
+                                <p className="mt-0.5 truncate text-[11px] font-medium text-gray-700 dark:text-gray-300">Pengaturan akun</p>
                             </div>
                         )}
                     </button>
 
-                    {profileMenuOpen && (
-                        <div className={`absolute bottom-16 left-3 right-3 z-50 w-auto max-h-[60dvh] overflow-y-auto rounded-2xl border border-gray-100 bg-white text-left shadow-[0_10px_40px_-10px_rgba(0,0,0,0.25)] transform origin-bottom-left animate-in fade-in slide-in-from-bottom-5 duration-200 dark:border-gray-800 dark:bg-gray-900 ${desktopPopoverPosition} lg:right-auto lg:w-[300px] lg:max-h-[360px]`}>
-                            
-                            <div className="p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer flex items-center justify-between group">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-red-600 flex items-center justify-center text-white font-black text-lg shadow-sm overflow-hidden">
-                                        {user?.avatar ? (
-                                            <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                                        ) : (
-                                            (user?.username || user?.name || "User")?.charAt(0).toUpperCase()
-                                        )}
-                                    </div>
-                                    <div>
-                                        <div className="flex items-center gap-1.5">
-                                            <p className="text-sm font-bold text-gray-900 dark:text-white leading-tight group-hover:text-red-600 dark:group-hover:text-red-400">{(user?.username || user?.name || "User")}</p>
-                                            {isPremiumUser && (
-                                                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-                                                    <WorkspacePremiumIcon sx={{ fontSize: 11 }} /> Premium
-                                                </span>
-                                            )}
-                                        </div>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">{user?.email}</p>
-                                        {isPremiumUser && accessStatus.active_until_label && (
-                                            <p className="text-[10px] font-bold text-amber-600 dark:text-amber-300 mt-0.5">Masa aktif sampai {accessStatus.active_until_label}</p>
-                                        )}
-                                    </div>
-                                </div>
-                                <KeyboardArrowRightIcon sx={{ fontSize: 18 }} className="text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300" />
-                            </div>
-
-                            <div className="h-px bg-gray-100 dark:bg-gray-800 w-full"></div>
-
-                            <div className="py-2">
-                                <Link href={user?.role === 'superadmin' ? route('superadmin.profile') : user?.role === 'admin' ? route('admin.profile') : route('profile.edit')} className="w-full flex items-center justify-between px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 font-medium transition-colors">
-                                    <div className="flex items-center gap-3"><SettingsOutlinedIcon sx={{ fontSize: 18 }} className="text-gray-500 dark:text-gray-400" /> Pengaturan profil</div>
-                                </Link>
-                            </div>
-
-                            <div className="h-px bg-gray-100 dark:bg-gray-800 w-full my-1"></div>
-
-                            <div className="py-1">
-                                <Link 
-                                    href={route('logout')} 
-                                    method="post" 
-                                    as="button"
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 font-bold"
-                                >
-                                    <LogoutOutlinedIcon sx={{ fontSize: 18 }} /> Keluar Akun
-                                </Link>
-                            </div>
-                        </div>
+                    {profileMenuOpen && renderProfileMenuPanel(
+                        'sidebar-profile-menu',
+                        `absolute bottom-16 left-3 right-3 z-50 w-auto ${desktopPopoverPosition} lg:right-auto lg:max-h-[360px] lg:w-[300px]`,
                     )}
                 </div>
             </aside>
@@ -660,15 +797,15 @@ export default function AuthenticatedLayout({ children }) {
                         <p className="text-[11px] font-black uppercase tracking-[0.22em] text-red-500 dark:text-red-300">
                             Japanlingo
                         </p>
-                        <p className="truncate text-sm font-bold text-slate-600 dark:text-slate-300">
-                            Learning workspace
+                        <p className="truncate text-sm font-semibold text-slate-600 dark:text-slate-300">
+                            {workspaceTitle}
                         </p>
                     </div>
                     {renderUtilityControls(false)}
                 </header>
                 <main className="min-h-screen bg-slate-50 dark:bg-[#0b1121] text-slate-900 dark:text-slate-100 shadow-[-5px_0_30px_-10px_rgba(0,0,0,0.05)] relative z-0 transition-colors duration-300">
                     {flashNotice && (
-                        <div className="pointer-events-none fixed inset-x-3 top-20 z-40 flex justify-center lg:left-[260px] lg:right-6 lg:top-20">
+                        <div className={`pointer-events-none fixed inset-x-3 top-20 z-40 flex justify-center lg:right-6 lg:top-20 ${isExpanded ? 'lg:left-[260px]' : 'lg:left-[108px]'}`}>
                             <div className={`pointer-events-auto w-full max-w-3xl rounded-xl border px-4 py-3 text-sm shadow-lg backdrop-blur ${flashNoticeStyle[flashNotice[0]]}`}>
                                 <p className="text-xs font-black uppercase tracking-[0.18em]">
                                     {flashNoticeLabel[flashNotice[0]]}
@@ -682,7 +819,7 @@ export default function AuthenticatedLayout({ children }) {
                     {children}
                 </main>
                 {isUser && (
-                    <footer className="border-t border-gray-200/80 bg-white px-4 py-2 text-xs text-gray-500 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-400">
+                    <footer className="border-t border-gray-200/80 bg-white px-4 py-2 text-xs font-medium text-gray-700 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
                         <div className="mx-auto flex max-w-7xl flex-col items-center justify-center gap-1 text-center sm:flex-row sm:justify-between sm:gap-4 sm:text-left">
                             <span>© {new Date().getFullYear()} Japanlingo</span>
                             <Link href={route('about')} className="inline-flex min-h-11 items-center px-2 font-semibold text-gray-600 transition-colors hover:text-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 dark:text-gray-300 dark:hover:text-red-400 dark:focus-visible:ring-offset-gray-950">
@@ -703,7 +840,7 @@ export default function AuthenticatedLayout({ children }) {
                             <div className="min-w-0 flex-1">
                                 <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Lencana Terbuka!</p>
                                 <p className="break-words text-sm font-black text-gray-900">{ach.name}</p>
-                                <p className="break-words text-xs font-medium text-gray-500">{ach.description}</p>
+                                <p className="break-words text-xs font-medium text-gray-700">{ach.description}</p>
                                 {ach.xp_reward > 0 && <span className="text-[10px] font-black text-green-600 bg-green-50 px-2 py-0.5 rounded-full mt-1 inline-block">+{ach.xp_reward} XP</span>}
                             </div>
                         </div>
@@ -735,23 +872,3 @@ export default function AuthenticatedLayout({ children }) {
         </div>
     );
 }
-
-const SidebarLink = ({ href, active, children, icon, isExpanded, className = '' }) => {
-    return (
-        <Link
-            href={href}
-            className={`group flex min-h-[56px] w-full items-center ${isExpanded ? 'flex-row justify-start px-4' : 'flex-col justify-center px-1'} rounded-2xl transition-all duration-200 ${
-                active
-                    ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-lg shadow-red-500/20'
-                    : 'text-gray-500 lg:hover:-translate-y-0.5 lg:hover:bg-white lg:hover:text-red-700 lg:hover:shadow-md lg:hover:shadow-red-900/5 dark:text-gray-400 lg:dark:hover:bg-gray-800 lg:dark:hover:text-red-300 lg:dark:hover:shadow-black/20'
-            } ${className}`}
-        >
-            <span className={`flex shrink-0 items-center justify-center transition-transform duration-200 lg:group-hover:scale-110 ${isExpanded ? 'mr-3' : 'mb-0.5'} ${active ? 'text-white' : ''}`}>
-                {icon}
-            </span>
-            <span className={`min-w-0 flex-1 truncate tracking-tight ${isExpanded ? 'text-left font-black text-[15px]' : 'w-full text-center font-black text-[11px] leading-tight'} ${active ? 'text-white' : ''}`}>
-                {children}
-            </span>
-        </Link>
-    );
-};
