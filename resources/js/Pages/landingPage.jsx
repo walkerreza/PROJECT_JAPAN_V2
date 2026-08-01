@@ -6,6 +6,7 @@ import Card from '@/Components/UI/Card';
 import Avatar from '@/Components/UI/Avatar';
 import GuestNavbar from '@/Components/Layout/GuestNavbar';
 import Footer from '@/Components/Layout/GuestFooter';
+import WhatsAppContact from '@/Components/Marketing/WhatsAppContact';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import BoltIcon from '@mui/icons-material/Bolt';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
@@ -434,6 +435,7 @@ const LandingPage = () => {
         </div>
       </section>
 
+      <WhatsAppContact />
       <Footer />
     </>
   );
