@@ -257,17 +257,6 @@ export default function AuthenticatedLayout({ children }) {
         });
     };
 
-    const notificationTone = (severity = 'info') => {
-        const tones = {
-            success: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200',
-            warning: 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200',
-            danger: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-200',
-            info: 'bg-sky-50 text-sky-700 dark:bg-sky-900/30 dark:text-sky-200',
-        };
-
-        return tones[severity] || tones.info;
-    };
-
     const notificationCategoryLabel = (category = 'system') => {
         const labels = {
             payment: 'Pembayaran',
@@ -707,43 +696,56 @@ export default function AuthenticatedLayout({ children }) {
 
                     {/* Popup Notifikasi */}
                     {notificationOpen && (
-                        <div id="sidebar-notification-menu" className={`absolute bottom-[110px] left-3 right-3 z-50 max-h-[60dvh] w-auto origin-bottom-left overflow-hidden rounded-2xl border border-gray-100 bg-white text-left shadow-[0_10px_40px_-10px_rgba(0,0,0,0.25)] animate-in dark:border-gray-800 dark:bg-gray-900 ${desktopPopoverPosition} lg:right-auto lg:max-h-[360px] lg:w-[320px]`}>
-                            <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-                                <h3 className="font-black text-gray-900 dark:text-white">Notifikasi</h3>
+                        <div id="sidebar-notification-menu" className={`fixed inset-x-3 bottom-3 z-[70] max-h-[75dvh] origin-bottom overflow-hidden rounded-xl border border-gray-200 bg-white text-left shadow-2xl animate-in dark:border-gray-700 dark:bg-gray-950 lg:absolute lg:inset-x-auto lg:bottom-[110px] lg:max-h-[420px] lg:w-[340px] lg:origin-bottom-left ${desktopPopoverPosition}`}>
+                            <div className="flex items-start justify-between gap-3 border-b border-gray-200 p-4 dark:border-gray-800">
+                                <div>
+                                    <h3 className="font-black text-gray-950 dark:text-white">Notifikasi</h3>
+                                    <p className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">{unreadCount > 0 ? `${unreadCount} belum dibaca` : 'Semua sudah dibaca'}</p>
+                                </div>
                                 {unreadCount > 0 && (
                                     <button
                                         type="button"
                                         onClick={handleMarkAllAsRead}
-                                        className="rounded-md bg-red-50 px-2 py-1 text-[10px] font-bold text-red-600 transition-colors hover:bg-red-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:bg-red-900/30 dark:hover:bg-red-900/50"
+                                        className="min-h-9 rounded-lg border border-gray-200 px-2.5 text-[10px] font-bold text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
                                     >
                                         Tandai semua dibaca
                                     </button>
                                 )}
                             </div>
-                            <div className="max-h-[calc(60dvh-74px)] overflow-y-auto lg:max-h-[300px]">
+                            <div className="max-h-[calc(75dvh-132px)] overflow-y-auto lg:max-h-[300px]">
                                 {unreadCount === 0 ? (
                                     <div className="p-6 text-center text-xs font-medium text-gray-600 dark:text-gray-300">
                                         Tidak ada notifikasi baru.
                                     </div>
                                 ) : (
-                                    notifications.map((notif) => (
+                                    notifications.slice(0, 5).map((notif) => (
                                         <button
                                             type="button"
                                             key={notif.id}
                                             onClick={() => handleMarkAsRead(notif.id, notif.data.url)}
-                                            className="group relative block w-full border-b border-gray-50 p-4 text-left transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-500 dark:border-gray-800 dark:hover:bg-gray-800"
+                                            className="group relative block w-full border-b border-gray-100 p-4 text-left transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-500 dark:border-gray-800 dark:hover:bg-gray-900"
                                         >
                                             <span className="absolute right-4 top-4 h-1.5 w-1.5 rounded-full bg-red-500 transition-transform group-hover:scale-150" />
-                                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-black mb-2 ${notificationTone(notif.severity || notif.data?.severity)}`}>
+                                            <span className={`mb-2 inline-flex items-center rounded-md border px-2 py-0.5 text-[9px] font-black ${notif.severity === 'danger' || notif.data?.severity === 'danger' ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300' : 'border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300'}`}>
                                                 {notificationCategoryLabel(notif.category || notif.data?.category)}
                                             </span>
                                             <p className="text-xs font-bold text-gray-900 dark:text-white mb-1 pr-4">{notif.data.title || 'Pemberitahuan Sistem'}</p>
                                             <p className="text-[11px] font-medium leading-tight text-gray-700 dark:text-gray-300">{notif.data.message || 'Silakan cek pembaruan terbaru di dashboard Anda.'}</p>
-                                            <p className="text-[9px] font-black text-red-500 dark:text-red-400 mt-2">{notif.created_at}</p>
+                                            <p className="mt-2 text-[10px] font-semibold text-gray-500 dark:text-gray-400">{notif.created_at}</p>
                                         </button>
                                     ))
                                 )}
                             </div>
+                            <Link
+                                href={route('user.notifications.index')}
+                                onClick={() => {
+                                    setNotificationOpen(false);
+                                    handleNavigation();
+                                }}
+                                className="flex min-h-11 items-center justify-center border-t border-gray-200 px-4 text-xs font-bold text-gray-800 transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-500 dark:border-gray-800 dark:text-gray-100 dark:hover:bg-gray-900"
+                            >
+                                Lihat semua notifikasi
+                            </Link>
                         </div>
                     )}
 

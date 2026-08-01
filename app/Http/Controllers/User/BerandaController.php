@@ -303,7 +303,7 @@ class BerandaController extends Controller
                 'title' => 'Kuis',
                 'description' => 'Evaluasi pemahaman setelah materi selesai.',
                 'available' => (bool) ($quizAccess['allowed'] ?? false),
-                'href' => ($quizAccess['allowed'] ?? false) ? route('user.modul.quiz', $module->id) : null,
+                'href' => ($quizAccess['allowed'] ?? false) ? route('user.quizzes.show', $quiz->id) : null,
                 'message' => $quiz
                     ? ($quizAccess['message'] ?? 'Kuis belum dapat dibuka.')
                     : 'Kuis belum tersedia untuk minggu ini.',
@@ -347,7 +347,7 @@ class BerandaController extends Controller
                 'title' => 'Week ' . ($module?->week_number ?? '-') . ' - ' . ($module?->title ?? 'Kuis Aktif'),
                 'score' => $bestScore,
                 'questions_count' => $quiz->questions_count,
-                'url' => $module ? route('user.modul.quiz', $module->id) : route('user.quizzes.show', $quiz->id),
+                'url' => route('user.quizzes.show', $quiz->id),
             ];
         }
 
@@ -389,9 +389,7 @@ class BerandaController extends Controller
             'xp_earned' => $attempt->xp_earned,
             'attempted_at' => optional($attempt->attempted_at)->toIso8601String(),
             'questions_count' => $quiz->questions_count,
-            'url' => $module
-                ? route('user.modul.quiz', $module->id)
-                : route('user.quizzes.show', $quiz->id),
+            'url' => route('user.quizzes.show', $quiz->id),
         ];
     }
 

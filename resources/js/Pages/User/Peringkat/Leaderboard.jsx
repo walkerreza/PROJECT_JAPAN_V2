@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Head, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { KabutoIcon } from '@/Components/JapaneseIcons';
+import { DarumaIcon, KabutoIcon, SakuraIcon, ScrollIcon, ShurikenIcon, ToriiIcon } from '@/Components/JapaneseIcons';
 import LeagueIcon from '@/Components/Gamification/LeagueIcon';
 import { motion } from 'framer-motion';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
@@ -25,12 +25,32 @@ const hashColor = (name) => {
     return colors[Math.abs(hash) % colors.length];
 };
 
-const Avatar = ({ name, size = 'md', gradient }) => {
+const Avatar = ({ name, src, size = 'md', gradient }) => {
     const sizes = { sm: 'w-10 h-10 text-base', md: 'w-12 h-12 text-lg', lg: 'h-12 w-12 text-xl sm:h-16 sm:w-16 sm:text-2xl', xl: 'h-14 w-14 text-2xl sm:h-20 sm:w-20 sm:text-3xl' };
     const bg = gradient || hashColor(name);
+    const avatarIcons = [DarumaIcon, ToriiIcon, SakuraIcon, ScrollIcon, ShurikenIcon, KabutoIcon];
+    const iconIndex = Math.abs([...name].reduce((total, character) => total + character.charCodeAt(0), 0)) % avatarIcons.length;
+    const Icon = avatarIcons[iconIndex];
+    const [imageFailed, setImageFailed] = useState(false);
+
     return (
-        <div className={`${sizes[size]} rounded-full bg-gradient-to-br ${bg} flex items-center justify-center font-bold text-white shadow-lg flex-shrink-0 transition-colors duration-300`}>
-            {name.charAt(0).toUpperCase()}
+        <div
+            title={name}
+            aria-label={`Avatar ${name}`}
+            className={`${sizes[size]} flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br text-white shadow-lg transition-colors duration-300 ${bg}`}
+        >
+            {src && !imageFailed ? (
+                <img
+                    src={src}
+                    alt={`Foto profil ${name}`}
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    onError={() => setImageFailed(true)}
+                    className="h-full w-full rounded-full object-cover"
+                />
+            ) : (
+                <Icon className="h-[58%] w-[58%]" />
+            )}
         </div>
     );
 };
@@ -213,7 +233,7 @@ export default function Leaderboard({
                                                     className="absolute inset-0 rounded-full bg-amber-400/30 blur-md"
                                                 />
                                             )}
-                                            <Avatar name={player.name} size={isFirst ? 'xl' : 'lg'} gradient={st.avatarGrad} />
+                                            <Avatar name={player.name} src={player.avatar} size={isFirst ? 'xl' : 'lg'} gradient={st.avatarGrad} />
                                         </div>
 
                                         {/* Name + XP */}
@@ -252,7 +272,7 @@ export default function Leaderboard({
                                             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-600 text-lg font-black text-white shadow-lg">
                                                 #{player.displayRank}
                                             </div>
-                                            <Avatar name={player.name} size="lg" gradient={st.avatarGrad} />
+                                            <Avatar name={player.name} src={player.avatar} size="lg" gradient={st.avatarGrad} />
                                             <div className="min-w-0">
                                                 <p className="truncate text-sm font-black text-slate-900 dark:text-white">{player.name}</p>
                                                 <p className="text-xs font-bold text-amber-600 dark:text-amber-300">{player.xp?.toLocaleString()} XP</p>
@@ -295,7 +315,7 @@ export default function Leaderboard({
                             return (
                                 <div className="sticky top-0 z-10 border-l-4 border-amber-400 bg-amber-50/90 dark:bg-amber-950/40 backdrop-blur-sm px-4 py-3 flex items-center gap-3 border-b border-slate-200 dark:border-gray-800 transition-colors duration-300">
                                     <span className="w-6 text-center text-sm font-bold text-amber-600 dark:text-amber-400 transition-colors duration-300">#{meRow.displayRank}</span>
-                                    <Avatar name={meRow.name} size="sm" />
+                                    <Avatar name={meRow.name} src={meRow.avatar} size="sm" />
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-bold text-amber-600 dark:text-amber-300 flex items-center gap-1 transition-colors duration-300">
                                             {meRow.name} <span className="text-xs bg-amber-200/50 dark:bg-amber-500/30 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-full transition-colors duration-300">Kamu</span>
@@ -340,7 +360,7 @@ export default function Leaderboard({
                                         </div>
 
                                         {/* Avatar */}
-                                        <Avatar name={player.name} size="sm" gradient={isTop3 ? podiumStyles[player.displayRank]?.avatarGrad : undefined} />
+                                        <Avatar name={player.name} src={player.avatar} size="sm" gradient={isTop3 ? podiumStyles[player.displayRank]?.avatarGrad : undefined} />
 
                                         {/* Info */}
                                         <div className="flex-1 min-w-0">
@@ -396,7 +416,7 @@ export default function Leaderboard({
                             {mePlayer ? (
                                 <div className="mt-4">
                                     <div className="flex items-center gap-3">
-                                        <Avatar name={mePlayer.name} size="lg" />
+                                        <Avatar name={mePlayer.name} src={mePlayer.avatar} size="lg" />
                                         <div className="min-w-0">
                                             <p className="truncate text-lg font-black text-slate-900 dark:text-white">{mePlayer.name}</p>
                                             <p className="text-sm font-semibold text-slate-500 dark:text-gray-400">Rank #{mePlayer.displayRank || mePlayer.rank}</p>

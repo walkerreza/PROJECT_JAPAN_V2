@@ -344,6 +344,7 @@ export default function KelasPage({ programs = [], selectedPlanId = null }) {
         () => programs.filter((item) => item.has_class_access || item.waiting_for_approval || item.refund_required),
         [programs],
     );
+    const [mobileSection, setMobileSection] = useState(ownedCourses.length > 0 ? 'owned' : 'catalog');
     const activeCourses = useMemo(
         () => ownedCourses.filter((item) => !item.waiting_for_approval && !item.refund_required),
         [ownedCourses],
@@ -461,8 +462,31 @@ export default function KelasPage({ programs = [], selectedPlanId = null }) {
                 </section>
 
                 <div className="relative z-10 mx-auto max-w-7xl space-y-10 px-4 py-8 sm:px-6 lg:px-8">
-                    {ownedCourses.length > 0 && (
-                        <section aria-labelledby="kelas-saya-title">
+                    <div className="grid grid-cols-2 rounded-lg bg-slate-200/80 p-1 dark:bg-gray-900 lg:hidden" role="tablist" aria-label="Tampilan kelas">
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={mobileSection === 'owned'}
+                            onClick={() => setMobileSection('owned')}
+                            className={`min-h-11 rounded-md px-3 text-sm font-black transition-colors ${mobileSection === 'owned' ? 'bg-white text-slate-950 shadow-sm dark:bg-gray-800 dark:text-white' : 'text-slate-600 dark:text-gray-300'}`}
+                        >
+                            Kelas Saya{ownedCourses.length > 0 ? ` (${ownedCourses.length})` : ''}
+                        </button>
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={mobileSection === 'catalog'}
+                            onClick={() => setMobileSection('catalog')}
+                            className={`min-h-11 rounded-md px-3 text-sm font-black transition-colors ${mobileSection === 'catalog' ? 'bg-white text-slate-950 shadow-sm dark:bg-gray-800 dark:text-white' : 'text-slate-600 dark:text-gray-300'}`}
+                        >
+                            Jelajahi{catalogCourses.length > 0 ? ` (${catalogCourses.length})` : ''}
+                        </button>
+                    </div>
+
+                    <section
+                        aria-labelledby="kelas-saya-title"
+                        className={`${mobileSection === 'owned' ? 'block' : 'hidden'} ${ownedCourses.length > 0 ? 'lg:block' : 'lg:hidden'}`}
+                    >
                             <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
                                 <div>
                                     <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-300">Pembelajaran saya</p>
@@ -473,15 +497,22 @@ export default function KelasPage({ programs = [], selectedPlanId = null }) {
                             <div className="space-y-4">
                                 {activeCourses.map((item) => <OwnedCourseCard key={item.id} item={item} />)}
                                 {waitingCourses.map((item) => <OwnedCourseCard key={item.id} item={item} />)}
+                                {ownedCourses.length === 0 && (
+                                    <div className="rounded-lg border border-dashed border-slate-300 bg-white px-5 py-10 text-center dark:border-gray-700 dark:bg-gray-900">
+                                        <SchoolIcon sx={{ fontSize: 34 }} className="text-rose-500" />
+                                        <h3 className="mt-3 text-base font-black text-slate-950 dark:text-white">Belum ada kelas di akunmu</h3>
+                                        <p className="mx-auto mt-1 max-w-sm text-sm leading-6 text-slate-600 dark:text-gray-300">Pilih kelas yang sesuai untuk mulai mengikuti roadmap belajar.</p>
+                                        <button type="button" onClick={() => setMobileSection('catalog')} className="mt-4 min-h-10 rounded-lg bg-rose-600 px-4 text-sm font-black text-white">Jelajahi kelas</button>
+                                    </div>
+                                )}
                             </div>
-                        </section>
-                    )}
+                    </section>
 
                     {checkoutError && (
                         <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-300">{checkoutError}</p>
                     )}
 
-                    <section id="jelajahi-kelas" aria-labelledby="jelajahi-kelas-title">
+                    <section id="jelajahi-kelas" aria-labelledby="jelajahi-kelas-title" className={`${mobileSection === 'catalog' ? 'block' : 'hidden'} lg:block`}>
                         <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 dark:border-gray-800 lg:flex-row lg:items-end lg:justify-between">
                             <div>
                                 <p className="text-xs font-black uppercase tracking-[0.18em] text-rose-600 dark:text-rose-300">Katalog kelas</p>

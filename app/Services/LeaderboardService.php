@@ -50,6 +50,7 @@ class LeaderboardService
             ->select([
                 'users.id',
                 'users.username',
+                'users.avatar',
                 'users.level',
                 'users.xp',
                 'users.streak_count',
@@ -168,6 +169,7 @@ class LeaderboardService
         return [
             'rank' => $rank,
             'name' => $user->username,
+            'avatar' => $user->avatar,
             'level' => 'Level ' . $user->level,
             'xp' => (int) $user->score,
             'total_xp' => (int) $user->xp,

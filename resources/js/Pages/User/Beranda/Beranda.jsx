@@ -14,20 +14,7 @@ import QuizIcon from '@mui/icons-material/Quiz';
 import SchoolIcon from '@mui/icons-material/School';
 import SearchIcon from '@mui/icons-material/Search';
 import SlideshowIcon from '@mui/icons-material/Slideshow';
-import StyleIcon from '@mui/icons-material/Style';
 import TranslateIcon from '@mui/icons-material/Translate';
-
-function StatBubble({ icon, label, value }) {
-    return (
-        <div className="flex min-h-11 items-center gap-2.5 rounded-2xl border border-white/70 bg-white/90 px-3 py-2 shadow-sm backdrop-blur-sm transition-colors duration-300 sm:gap-3 sm:px-5 sm:py-3 dark:border-gray-800 dark:bg-gray-900/90">
-            {icon}
-            <div className="text-left leading-tight">
-                <p className="text-[11px] font-bold uppercase tracking-widest text-gray-700 dark:text-gray-300">{label}</p>
-                <p className="text-base font-black text-gray-900 dark:text-white">{value}</p>
-            </div>
-        </div>
-    );
-}
 
 function SectionHeader({ eyebrow, title, actionHref, actionLabel }) {
     return (
@@ -117,7 +104,6 @@ export default function BerandaUser({
     const resourceVisuals = {
         presentasi: { icon: SlideshowIcon, tone: 'from-red-500 to-rose-600' },
         kosakata: { icon: TranslateIcon, tone: 'from-emerald-500 to-teal-600' },
-        flashcard: { icon: StyleIcon, tone: 'from-amber-500 to-orange-600' },
         kuis: { icon: QuizIcon, tone: 'from-indigo-500 to-violet-600' },
     };
     const resourceCards = (learningDashboard?.resources || []).map((item) => ({
@@ -125,14 +111,21 @@ export default function BerandaUser({
         icon: resourceVisuals[item.category]?.icon || AutoStoriesIcon,
         tone: resourceVisuals[item.category]?.tone || theme.ctaBg,
     }));
-    const resourceByCategory = Object.fromEntries(resourceCards.map((item) => [item.category, item]));
+    const visibleResourceCards = resourceCards.filter((item) => item.category !== 'flashcard');
+    const resourceByCategory = Object.fromEntries(visibleResourceCards.map((item) => [item.category, item]));
+    const quizShortcutUrl = resourceByCategory.kuis?.available && resourceByCategory.kuis?.href
+        ? resourceByCategory.kuis.href
+        : quickQuiz?.url || lastCompletedQuiz?.url || null;
     const quickLinks = [
         { label: 'Kelas Saya', href: activeLearning?.roadmap_url || route('user.kelas.index'), icon: SchoolIcon },
-        { label: 'PPT', href: resourceByCategory.presentasi?.href || activeLearning?.roadmap_url || route('user.kelas.index'), icon: SlideshowIcon },
-        { label: 'Kosakata', href: resourceByCategory.kosakata?.href || activeLearning?.roadmap_url || route('user.kelas.index'), icon: TranslateIcon },
-        { label: 'Flashcard', href: resourceByCategory.flashcard?.href || activeLearning?.roadmap_url || route('user.kelas.index'), icon: StyleIcon },
-        { label: 'Kuis', href: resourceByCategory.kuis?.href || quickQuizUrl, icon: QuizIcon },
-    ];
+        resourceByCategory.presentasi?.available && resourceByCategory.presentasi?.href
+            ? { label: 'Presentasi', href: resourceByCategory.presentasi.href, icon: SlideshowIcon }
+            : null,
+        resourceByCategory.kosakata?.available && resourceByCategory.kosakata?.href
+            ? { label: 'Kosakata', href: resourceByCategory.kosakata.href, icon: TranslateIcon }
+            : null,
+        quizShortcutUrl ? { label: 'Kuis', href: quizShortcutUrl, icon: QuizIcon } : null,
+    ].filter(Boolean);
 
     const searchResults = useMemo(() => {
         const query = searchQuery.trim().toLowerCase();
@@ -160,7 +153,7 @@ export default function BerandaUser({
                 icon: AutoStoriesIcon,
                 searchText: `${activeLearning.title} ${activeLearning.program_title} week ${activeLearning.week_number}`,
             }] : []),
-            ...resourceCards
+            ...visibleResourceCards
                 .filter((item) => item.available && item.href)
                 .map((item) => ({
                     id: `resource-${item.category}`,
@@ -186,7 +179,7 @@ export default function BerandaUser({
             .filter((item) => item.searchText.toLowerCase().includes(query))
             .filter((item, index, list) => list.findIndex((candidate) => candidate.href === item.href) === index)
             .slice(0, 6);
-    }, [activeLearning, ownedPrograms, quickQuiz, resourceCards, searchQuery]);
+    }, [activeLearning, ownedPrograms, quickQuiz, searchQuery, visibleResourceCards]);
 
     const isSearchReady = searchQuery.trim().length >= 2;
 
@@ -308,48 +301,57 @@ export default function BerandaUser({
                             )}
                         </form>
 
-                        <div className="mb-7 flex max-w-3xl flex-wrap justify-center gap-2">
+                        <nav aria-label="Akses cepat" className="mb-4 grid w-full max-w-3xl grid-cols-2 gap-2 sm:flex sm:justify-center">
                             {quickLinks.map((item) => {
                                 const Icon = item.icon;
+                                const isPrimary = item.label === 'Kelas Saya';
+                                const isQuiz = item.label === 'Kuis';
 
                                 return (
                                     <Link
                                         key={item.label}
                                         href={item.href}
-                                        className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/88 px-4 py-2.5 text-xs font-black text-gray-700 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:bg-white hover:text-red-600 dark:border-gray-800 dark:bg-gray-900/88 dark:text-gray-300 dark:hover:text-red-300"
+                                        className={`group inline-flex min-h-12 min-w-0 items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-xs font-black shadow-sm backdrop-blur transition sm:min-w-36 ${isPrimary
+                                            ? 'border-red-600 bg-red-600 text-white hover:bg-red-700'
+                                            : isQuiz
+                                                ? 'border-gray-900 bg-gray-950 text-white hover:border-red-700 hover:bg-red-700 dark:border-white dark:bg-white dark:text-gray-950 dark:hover:border-red-300 dark:hover:bg-red-100'
+                                                : 'border-white/80 bg-white/90 text-gray-700 hover:border-red-200 hover:bg-white hover:text-red-600 dark:border-gray-800 dark:bg-gray-900/90 dark:text-gray-200 dark:hover:border-red-900 dark:hover:text-red-300'}`}
                                     >
-                                        <Icon sx={{ fontSize: 17 }} />
-                                        {item.label}
+                                        <span className="flex min-w-0 items-center gap-2">
+                                            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${isPrimary || isQuiz ? 'bg-white/15 dark:bg-gray-950/10' : 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-300'}`}>
+                                                <Icon sx={{ fontSize: 18 }} />
+                                            </span>
+                                            <span className="truncate">{item.label}</span>
+                                        </span>
+                                        <ArrowRightAltIcon className="shrink-0 opacity-60 transition group-hover:translate-x-0.5 group-hover:opacity-100" sx={{ fontSize: 18 }} />
                                     </Link>
                                 );
                             })}
-                        </div>
+                        </nav>
 
-                        <div className="flex flex-wrap justify-center gap-4">
-                            <StatBubble
-                                label="Total XP"
-                                value={user.xp || 0}
-                                icon={(
-                                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 font-black text-red-600 shadow-inner dark:bg-red-900/50 dark:text-red-400">
-                                        Lv.{user.level || 1}
-                                    </div>
-                                )}
-                            />
-                            <StatBubble
-                                label="Beruntun"
-                                value={`${user.streak_count || 0} Hari`}
-                                icon={<HitodamaIcon className="inline-block h-5 w-5 text-orange-500" />}
-                            />
-                            <StatBubble
-                                label="Status Akses"
-                                value={isPremium ? 'Premium' : 'Gratis'}
-                                icon={(
-                                    <div className={`flex h-10 w-10 items-center justify-center rounded-full shadow-inner ${isPremium ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/50 dark:text-yellow-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}`}>
-                                        {isPremium ? <KabutoIcon className="h-5 w-5 text-yellow-500" /> : <ScrollIcon className="h-5 w-5 text-gray-500" />}
-                                    </div>
-                                )}
-                            />
-                        </div>
+                        <dl className="grid w-full max-w-2xl grid-cols-3 divide-x divide-gray-200/80 overflow-hidden rounded-xl border border-white/80 bg-white/90 text-left shadow-sm backdrop-blur dark:divide-gray-800 dark:border-gray-800 dark:bg-gray-900/90">
+                            <div className="min-w-0 px-3 py-3 sm:px-5">
+                                <dt className="flex items-center gap-1.5 text-[10px] font-black uppercase text-gray-500 dark:text-gray-400">
+                                    <span className="rounded-md bg-red-50 px-1.5 py-0.5 text-red-600 dark:bg-red-950/40 dark:text-red-300">Lv.{user.level || 1}</span>
+                                    <span className="truncate">Total XP</span>
+                                </dt>
+                                <dd className="mt-1 text-lg font-black tabular-nums text-gray-950 dark:text-white sm:text-xl">{user.xp || 0}</dd>
+                            </div>
+                            <div className="min-w-0 px-3 py-3 sm:px-5">
+                                <dt className="flex items-center gap-1.5 text-[10px] font-black uppercase text-gray-500 dark:text-gray-400">
+                                    <HitodamaIcon className="h-4 w-4 shrink-0 text-orange-500" />
+                                    <span className="truncate">Beruntun</span>
+                                </dt>
+                                <dd className="mt-1 truncate text-lg font-black tabular-nums text-gray-950 dark:text-white sm:text-xl">{user.streak_count || 0} hari</dd>
+                            </div>
+                            <div className="min-w-0 px-3 py-3 sm:px-5">
+                                <dt className="flex items-center gap-1.5 text-[10px] font-black uppercase text-gray-500 dark:text-gray-400">
+                                    {isPremium ? <KabutoIcon className="h-4 w-4 shrink-0 text-amber-500" /> : <ScrollIcon className="h-4 w-4 shrink-0 text-gray-500" />}
+                                    <span className="truncate">Akses</span>
+                                </dt>
+                                <dd className={`mt-1 truncate text-lg font-black sm:text-xl ${isPremium ? 'text-amber-700 dark:text-amber-300' : 'text-gray-950 dark:text-white'}`}>{isPremium ? 'Premium' : 'Gratis'}</dd>
+                            </div>
+                        </dl>
 
                         {isPremium && activeSubscription && (
                             <div className="mt-5 rounded-full border border-yellow-200 bg-yellow-50 px-5 py-2 text-xs font-black text-yellow-700 dark:border-yellow-900/40 dark:bg-yellow-900/20 dark:text-yellow-300">
@@ -402,7 +404,7 @@ export default function BerandaUser({
                                     <ArrowRightAltIcon sx={{ fontSize: 22 }} />
                                 </Link>
                                 <div className="grid grid-cols-2 gap-2">
-                                    {resourceCards.filter((item) => item.available && item.href).slice(0, 4).map((item) => {
+                                    {visibleResourceCards.filter((item) => item.available && item.href).slice(0, 4).map((item) => {
                                         const Icon = item.icon;
 
                                         return (
@@ -424,11 +426,11 @@ export default function BerandaUser({
                             eyebrow="Kelas Saya"
                             title="Roadmap yang dapat kamu ikuti"
                             actionHref={route('user.kelas.index')}
-                            actionLabel="Jelajahi kelas"
+                            actionLabel="Lihat semua kelas"
                         />
 
                         <div className="space-y-3">
-                            {ownedPrograms.map((program) => {
+                            {ownedPrograms.slice(0, 2).map((program) => {
                                 const cardClass = 'relative grid grid-cols-[72px_minmax(0,1fr)] gap-3 overflow-hidden rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition sm:grid-cols-[96px_minmax(0,1fr)_auto] sm:items-center sm:gap-4 sm:p-4 dark:border-gray-800 dark:bg-gray-950';
                                 const content = (
                                     <>
