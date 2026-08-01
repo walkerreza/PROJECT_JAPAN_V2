@@ -5,7 +5,7 @@ import Confetti from 'react-confetti';
 import theme from '@/Components/theme/themes';
 import { FloatingLearningDecor, RewardSummary } from '@/Components/User/UserVisuals';
 import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
-import JapaneseSpeechButton from '@/Components/UI/JapaneseSpeechButton';
+import JapaneseSpeechButton, { preloadNarrationAudio } from '@/Components/UI/JapaneseSpeechButton';
 import { playSoundEffect } from '@/Components/UI/SoundEffects';
 import KanjiHandwritingCanvas from '@/Components/Features/Handwriting/KanjiHandwritingCanvas';
 import StrokeCharacterPreview from '@/Components/Features/Handwriting/StrokeCharacterPreview';
@@ -55,6 +55,8 @@ const getJapaneseSpeechText = (question) => {
 
     return matches?.length ? matches.join('') : '';
 };
+
+const isStreamableAudio = (audioUrl) => audioUrl && !audioUrl.includes('youtube.com') && !audioUrl.includes('youtu.be');
 
 const SOUND_PREFERENCE_KEY = 'japanlingo.quizSoundEnabled';
 
@@ -251,9 +253,17 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
     const currentType = currentQ?.type || 'multiple_choice';
     const currentSpeechText = getJapaneseSpeechText(currentQ);
     const hasQuestionAudio = Boolean(currentQ?.audio_url || currentSpeechText);
+    const narrationAudioUrl = isStreamableAudio(currentQ?.audio_url) ? currentQ.audio_url : null;
     const totalQuestionCount = rawQuestions.length || questions.length;
     const scoredQuestionCount = rawQuestions.length || questions.filter((question) => !question.isRepeat).length;
     const originalQuestionCount = rawQuestions.length || questions.filter((question) => !question.isRepeat).length || questions.length;
+
+    useEffect(() => {
+        const nextQuestion = questions[currentIndex + 1];
+        if (isStreamableAudio(nextQuestion?.audio_url)) {
+            preloadNarrationAudio(nextQuestion.audio_url);
+        }
+    }, [currentIndex, questions]);
     const answeredCount = Object.keys(answerLogRef.current).length;
     const correctCount = Object.values(correctMapRef.current).filter(Boolean).length;
     const passingScore = Number(quiz?.passing_score || 70);
@@ -937,6 +947,15 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
 
             {/* Quiz Content Area */}
             <main className="w-full max-w-3xl flex-1 flex flex-col items-center relative z-10">
+                <JapaneseSpeechButton
+                    text={currentSpeechText || currentQ?.kanji || currentQ?.question}
+                    audioUrl={narrationAudioUrl}
+                    autoPlay={currentType === 'listening' && Boolean(narrationAudioUrl || currentSpeechText)}
+                    autoPlayEnabled={soundEnabled}
+                    playbackKey={`question-${currentQ?.attemptKey}`}
+                    renderButton={false}
+                    usePreloadedAudio
+                />
                 
                 <AnimatePresence mode="wait">
                     <motion.div 
@@ -981,7 +1000,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                                             <JapaneseSpeechButton
                                                 audioUrl={currentQ.audio_url}
                                                 text={currentSpeechText || currentQ.kanji || currentQ.question}
-                                                autoPlay={currentType === 'listening'}
+                                                autoPlay={false}
                                                 autoPlayEnabled={soundEnabled}
                                                 playbackKey={`question-${currentQ.attemptKey}`}
                                                 className="absolute bottom-4 right-4 md:bottom-6 md:right-6 w-12 h-12 text-white rounded-2xl shadow-md border-b-4 flex items-center justify-center active:translate-y-1 active:border-b-0 transition-all hover:brightness-110"
@@ -993,7 +1012,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                                 {!currentQ.audio_url && hasQuestionAudio && (
                                     <JapaneseSpeechButton
                                         text={currentSpeechText || currentQ.kanji || currentQ.question}
-                                        autoPlay={currentType === 'listening'}
+                                        autoPlay={false}
                                         autoPlayEnabled={soundEnabled}
                                         playbackKey={`question-${currentQ.attemptKey}`}
                                         className="absolute bottom-4 right-4 md:bottom-6 md:right-6 w-12 h-12 text-white rounded-2xl shadow-md border-b-4 flex items-center justify-center active:translate-y-1 active:border-b-0 transition-all hover:brightness-110"
