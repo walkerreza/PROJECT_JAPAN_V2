@@ -8,6 +8,7 @@ import Badge from '@/Components/UI/Badge';
 import Button from '@/Components/UI/Button';
 import Footer from '@/Components/Layout/GuestFooter';
 import GuestNavbar from '@/Components/Layout/GuestNavbar';
+import FallEffect from '@/Components/theme/FallEffect';
 
 const faqs = [
   {
@@ -203,6 +204,7 @@ export default function Pricing({ programs = [] }) {
 
   return (
     <>
+      <FallEffect />
       <Head title="Kelas dan Harga - Japanlingo" />
       <GuestNavbar />
 
