@@ -77,7 +77,7 @@ const LandingPage = ({ programs = [] }) => {
       <GuestNavbar />
 
       {/* Hero */}
-      <section className={`relative flex flex-col lg:flex-row items-center justify-between px-6 pb-16 pt-28 sm:pt-32 lg:px-24 lg:pb-32 lg:pt-40 ${theme.heroBg} gap-12 lg:gap-16 overflow-hidden`}>
+      <section className={`relative flex flex-col lg:flex-row items-center justify-between px-6 py-16 lg:px-24 lg:py-32 ${theme.heroBg} gap-12 lg:gap-16 overflow-hidden`}>
         <img
           src={heroStaticImage}
           alt="Gunung Fuji Japanlingo"

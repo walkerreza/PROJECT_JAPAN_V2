@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react';
 import CloseIcon from '@mui/icons-material/Close';
 import MenuIcon from '@mui/icons-material/Menu';
 
+const seigaihaPattern = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 48'%3E%3Cg fill='none' stroke='%23fbbf24' stroke-opacity='.24' stroke-width='1.35'%3E%3Cpath d='M0 48A24 24 0 0 1 48 48M8 48A16 16 0 0 1 40 48M16 48A8 8 0 0 1 32 48M48 48A24 24 0 0 1 96 48M56 48A16 16 0 0 1 88 48M64 48A8 8 0 0 1 80 48M24 24A24 24 0 0 1 72 24M32 24A16 16 0 0 1 64 24M40 24A8 8 0 0 1 56 24'/%3E%3C/g%3E%3C/svg%3E")`;
+
 export default function GuestNavbar({ heroTone = 'light' }) {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [hasScrolled, setHasScrolled] = useState(false);
@@ -51,13 +53,13 @@ export default function GuestNavbar({ heroTone = 'light' }) {
     const closeMenu = () => setIsMenuOpen(false);
 
     return (
-        <nav className={`relative ${isHeroPage ? 'fixed inset-x-0 top-0' : 'sticky top-0'} z-50 border-b transition-[background-color,border-color,box-shadow] duration-300 ${isHeroState ? 'border-white/30 bg-white/35 backdrop-blur-md' : 'border-gray-200/90 bg-white/95 shadow-sm backdrop-blur'}`}>
+        <nav className={`sticky top-0 z-50 border-b transition-[background-color,border-color,box-shadow] duration-300 ${usesDarkHero ? 'border-white/10 bg-slate-950/95 shadow-lg shadow-slate-950/20 backdrop-blur' : 'border-gray-200/90 bg-white/95 shadow-sm backdrop-blur'}`}>
             <div
                 aria-hidden="true"
-                className={`pointer-events-none absolute inset-0 bg-repeat transition-opacity duration-300 ${isHeroState ? 'opacity-0' : 'opacity-100'}`}
+                className={`pointer-events-none absolute inset-0 bg-repeat transition-opacity duration-300 ${usesDarkHero ? 'opacity-100' : 'opacity-0'}`}
                 style={{
-                    backgroundImage: 'radial-gradient(circle at 50% 100%, transparent 0 14px, rgba(220,38,38,0.10) 14px 15px, transparent 16px)',
-                    backgroundSize: '44px 22px',
+                    backgroundImage: seigaihaPattern,
+                    backgroundSize: '96px 48px',
                 }}
             />
             <div className="relative flex items-center justify-between px-5 py-3 sm:px-6 sm:py-4 lg:px-20">
@@ -89,7 +91,7 @@ export default function GuestNavbar({ heroTone = 'light' }) {
                 </div>
                 <button
                     type="button"
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200/80 bg-white/80 text-gray-700 shadow-sm transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-600/30 md:hidden"
+                    className={`inline-flex h-10 w-10 items-center justify-center rounded-lg border shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-red-600/30 md:hidden ${usesDarkHero ? 'border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-amber-200' : 'border-gray-200/80 bg-white/80 text-gray-700 hover:border-red-200 hover:bg-red-50 hover:text-red-600'}`}
                     onClick={() => setIsMenuOpen((open) => !open)}
                     aria-expanded={isMenuOpen}
                     aria-controls="guest-mobile-menu"
