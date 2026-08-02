@@ -7,8 +7,11 @@ import MenuIcon from '@mui/icons-material/Menu';
 
 export default function GuestNavbar() {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [hasScrolled, setHasScrolled] = useState(false);
     const { url, props } = usePage();
     const isAuthenticated = Boolean(props.auth?.user);
+    const isLandingPage = url === '/';
+    const isHeroState = isLandingPage && !hasScrolled && !isMenuOpen;
 
     const navigationItems = [
         { href: '/', label: 'Beranda' },
@@ -31,20 +34,33 @@ export default function GuestNavbar() {
         return () => window.removeEventListener('keydown', closeOnEscape);
     }, []);
 
+    useEffect(() => {
+        if (!isLandingPage) {
+            setHasScrolled(true);
+            return undefined;
+        }
+
+        const updateScrollState = () => setHasScrolled(window.scrollY > 20);
+        updateScrollState();
+        window.addEventListener('scroll', updateScrollState, { passive: true });
+
+        return () => window.removeEventListener('scroll', updateScrollState);
+    }, [isLandingPage]);
+
     const closeMenu = () => setIsMenuOpen(false);
 
     return (
-        <nav className="sticky top-0 z-50 border-b border-gray-200/90 bg-white/95 backdrop-blur">
-            <div className="flex items-center justify-between px-6 py-4 lg:px-20">
+        <nav className={`${isLandingPage ? 'fixed inset-x-0 top-0' : 'sticky top-0'} z-50 border-b transition-[background-color,border-color,box-shadow] duration-300 ${isHeroState ? 'border-white/30 bg-white/35 backdrop-blur-md' : 'border-gray-200/90 bg-white/95 shadow-sm backdrop-blur'}`}>
+            <div className="flex items-center justify-between px-5 py-3 sm:px-6 sm:py-4 lg:px-20">
                 <ApplicationLogo />
-                <ul className="hidden list-none gap-8 md:flex">
+                <ul className="hidden list-none items-center gap-7 md:flex lg:gap-8">
                     {navigationItems.map((item) => (
                         <li key={item.href}>
                             <Link
                                 href={item.href}
-                                className={`relative py-2 text-sm font-medium no-underline transition-colors after:absolute after:-bottom-1 after:left-0 after:h-0.5 after:rounded-full after:bg-red-600 after:transition-transform ${isActive(item.href)
+                                className={`relative py-2 text-sm font-bold no-underline transition-colors after:absolute after:-bottom-1 after:left-0 after:h-0.5 after:rounded-full after:bg-red-600 after:transition-transform ${isActive(item.href)
                                     ? 'text-red-600 after:w-full'
-                                    : 'text-gray-500 after:w-0 hover:text-red-600 hover:after:w-full'
+                                    : 'text-gray-700 after:w-0 hover:text-red-600 hover:after:w-full'
                                     }`}
                             >
                                 {item.label}
@@ -54,17 +70,17 @@ export default function GuestNavbar() {
                 </ul>
                 <div className="hidden items-center gap-3 md:flex">
                     {isAuthenticated ? (
-                        <Button href="/dashboard">Buka Dashboard</Button>
+                            <Button href="/dashboard" className="!rounded-full !px-5">Buka Dashboard</Button>
                     ) : (
                         <>
                             <Button variant="ghost" href="/login">Masuk</Button>
-                            <Button href="/register">Daftar Gratis</Button>
+                            <Button href="/register" className="!rounded-full !px-5 !shadow-[0_8px_18px_rgba(220,38,38,0.22)]">Daftar Gratis</Button>
                         </>
                     )}
                 </div>
                 <button
                     type="button"
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-gray-600 transition-colors hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-600/30 md:hidden"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200/80 bg-white/80 text-gray-700 shadow-sm transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-600/30 md:hidden"
                     onClick={() => setIsMenuOpen((open) => !open)}
                     aria-expanded={isMenuOpen}
                     aria-controls="guest-mobile-menu"
@@ -75,7 +91,7 @@ export default function GuestNavbar() {
             </div>
 
             {isMenuOpen && (
-                <div id="guest-mobile-menu" className="border-t border-gray-100 bg-white px-6 py-4 shadow-lg md:hidden">
+                <div id="guest-mobile-menu" className="border-t border-gray-100 bg-white px-5 py-4 shadow-xl md:hidden">
                     <div className="flex flex-col gap-1">
                         {navigationItems.map((item) => (
                             <Link

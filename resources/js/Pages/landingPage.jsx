@@ -6,6 +6,7 @@ import Card from '@/Components/UI/Card';
 import Avatar from '@/Components/UI/Avatar';
 import GuestNavbar from '@/Components/Layout/GuestNavbar';
 import Footer from '@/Components/Layout/GuestFooter';
+import WhatsAppContact from '@/Components/Marketing/WhatsAppContact';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import BoltIcon from '@mui/icons-material/Bolt';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
@@ -64,7 +65,7 @@ const LandingPage = () => {
       <GuestNavbar />
 
       {/* Hero */}
-      <section className={`relative flex flex-col lg:flex-row items-center justify-between px-6 lg:px-24 py-16 lg:py-32 ${theme.heroBg} gap-12 lg:gap-16 overflow-hidden`}>
+      <section className={`relative flex flex-col lg:flex-row items-center justify-between px-6 pb-16 pt-28 sm:pt-32 lg:px-24 lg:pb-32 lg:pt-40 ${theme.heroBg} gap-12 lg:gap-16 overflow-hidden`}>
         <img
           src={heroStaticImage}
           alt="Gunung Fuji Japanlingo"
@@ -434,6 +435,7 @@ const LandingPage = () => {
         </div>
       </section>
 
+      <WhatsAppContact />
       <Footer />
     </>
   );

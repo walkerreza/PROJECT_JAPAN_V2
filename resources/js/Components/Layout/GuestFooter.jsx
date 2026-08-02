@@ -1,4 +1,5 @@
 import { Link } from '@inertiajs/react';
+import { WHATSAPP_URL } from '@/Components/Marketing/WhatsAppContact';
 
 const IconGlobe = () => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18">
@@ -37,7 +38,7 @@ const footerLinks = {
 const socials = [
     { href: '#', icon: <IconGlobe />, label: 'Website' },
     { href: 'mailto:japanlingo@email.com', icon: <IconMail />, label: 'Email' },
-    { href: 'https://wa.me/6283892614774', icon: <IconWhatsApp />, label: 'WhatsApp' },
+    { href: WHATSAPP_URL, icon: <IconWhatsApp />, label: 'WhatsApp' },
 ];
 
 export default function Footer() {
