@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Head, Link, router, useForm } from '@inertiajs/react';
+import { AnimatePresence, motion } from 'framer-motion';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import ConfirmActionDialog from '@/Components/UI/ConfirmActionDialog';
 
@@ -15,6 +16,7 @@ import SchoolIcon from '@mui/icons-material/School';
 import SlideshowIcon from '@mui/icons-material/Slideshow';
 import QuizOutlinedIcon from '@mui/icons-material/QuizOutlined';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
+import VideoCameraFrontIcon from '@mui/icons-material/VideoCameraFront';
 
 const emptyForm = {
     level_id: '',
@@ -44,6 +46,41 @@ function Field({ label, children, wide = false }) {
             <span className="mb-2 block text-xs font-black uppercase tracking-wider text-gray-400">{label}</span>
             {children}
         </label>
+    );
+}
+
+const optionCardTones = {
+    orange: {
+        card: 'hover:border-orange-300 hover:bg-orange-50 dark:hover:border-orange-800 dark:hover:bg-orange-950/20',
+        icon: 'bg-orange-600',
+    },
+    charcoal: {
+        card: 'hover:border-gray-400 hover:bg-gray-50 dark:hover:border-gray-600 dark:hover:bg-gray-800',
+        icon: 'bg-gray-900 dark:bg-gray-700',
+    },
+    sky: {
+        card: 'hover:border-sky-300 hover:bg-sky-50 dark:hover:border-sky-800 dark:hover:bg-sky-950/20',
+        icon: 'bg-sky-600',
+    },
+    teal: {
+        card: 'hover:border-teal-300 hover:bg-teal-50 dark:hover:border-teal-800 dark:hover:bg-teal-950/20',
+        icon: 'bg-teal-600',
+    },
+};
+
+function OptionCard({ href, icon, label, tone = 'orange' }) {
+    const colors = optionCardTones[tone] || optionCardTones.orange;
+
+    return (
+        <Link
+            href={href}
+            className={`flex min-h-14 w-full cursor-pointer items-center justify-start rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm transition duration-200 dark:border-gray-700 dark:bg-gray-900 sm:p-4 ${colors.card}`}
+        >
+            <span className={`mr-3 grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white shadow-sm ${colors.icon}`}>
+                {icon}
+            </span>
+            <span className="min-w-0 truncate text-sm font-bold text-gray-900 dark:text-white">{label}</span>
+        </Link>
     );
 }
 
@@ -219,22 +256,31 @@ export default function ManajemenKelas({ programs = {}, levels = [], filters = {
                 </main>
             </div>
 
-            {managingProgram && (
-                <div
-                    className="fixed inset-0 z-[75] flex items-end justify-center bg-gray-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+            <AnimatePresence>
+                {managingProgram && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="fixed inset-x-0 bottom-0 top-16 z-[75] flex items-stretch justify-end bg-gray-950/55 backdrop-blur-sm"
                     onMouseDown={(event) => {
                         if (event.target === event.currentTarget) {
                             setManagingProgram(null);
                         }
                     }}
                 >
-                    <section
+                    <motion.section
+                        initial={{ x: '100%' }}
+                        animate={{ x: 0 }}
+                        exit={{ x: '100%' }}
+                        transition={{ type: 'tween', duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                         role="dialog"
                         aria-modal="true"
                         aria-labelledby="manage-class-title"
-                        className="w-full max-w-lg rounded-t-[1.5rem] bg-white p-5 shadow-2xl dark:bg-gray-900 sm:rounded-[1.5rem] sm:p-6"
+                        className="flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-gray-200 bg-white p-5 shadow-2xl dark:border-gray-800 dark:bg-gray-900 sm:p-6"
                     >
-                        <div className="flex items-start justify-between gap-4">
+                        <div className="sticky top-0 z-10 -mx-5 -mt-5 flex items-start justify-between gap-4 border-b border-gray-100 bg-white/95 px-5 py-4 backdrop-blur dark:border-gray-800 dark:bg-gray-900/95 sm:-mx-6 sm:-mt-6 sm:px-6">
                             <div className="min-w-0">
                                 <p className="text-xs font-black uppercase tracking-[0.2em] text-[#E64A19]">Kelola Isi Kelas</p>
                                 <h2 id="manage-class-title" className="mt-1 truncate text-xl font-black text-gray-900 dark:text-white">
@@ -254,48 +300,41 @@ export default function ManajemenKelas({ programs = {}, levels = [], filters = {
                             </button>
                         </div>
 
-                        <div className="mt-5 grid gap-3">
-                            <Link
+                        <div className="mt-6 grid grid-cols-2 gap-3">
+                            <OptionCard
                                 href={route('admin.modules.index', { program_id: managingProgram.id, focus: 'roadmap' })}
-                                className="group flex min-h-[72px] items-center gap-4 rounded-2xl border border-orange-200 bg-orange-50 p-4 transition hover:border-[#E64A19] hover:bg-orange-100 dark:border-orange-900/40 dark:bg-orange-950/20 dark:hover:border-orange-700"
-                            >
-                                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#E64A19] text-white">
-                                    <AccountTreeIcon sx={{ fontSize: 22 }} />
-                                </span>
-                                <span className="min-w-0">
-                                    <span className="block text-sm font-black text-gray-900 dark:text-white">Roadmap</span>
-                                    <span className="mt-0.5 block text-xs font-semibold text-gray-500 dark:text-gray-400">Atur Week, Day, urutan belajar, dan ujian.</span>
-                                </span>
-                            </Link>
+                                icon={<AccountTreeIcon sx={{ fontSize: 20 }} />}
+                                label="Roadmap"
+                                tone="orange"
+                            />
 
-                            <Link
+                            <OptionCard
+                                href={route('admin.presentations.index', {
+                                    program_id: managingProgram.id,
+                                    classroom: 1,
+                                    program_title: managingProgram.title,
+                                })}
+                                icon={<VideoCameraFrontIcon sx={{ fontSize: 20 }} />}
+                                label="Ruang Kelas"
+                                tone="charcoal"
+                            />
+
+                            <OptionCard
                                 href={route('admin.modules.index', { program_id: managingProgram.id, focus: 'presentation' })}
-                                className="group flex min-h-[72px] items-center gap-4 rounded-2xl border border-sky-200 bg-sky-50 p-4 transition hover:border-sky-500 hover:bg-sky-100 dark:border-sky-900/40 dark:bg-sky-950/20 dark:hover:border-sky-700"
-                            >
-                                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-600 text-white">
-                                    <SlideshowIcon sx={{ fontSize: 22 }} />
-                                </span>
-                                <span className="min-w-0">
-                                    <span className="block text-sm font-black text-gray-900 dark:text-white">Presentasi Mingguan</span>
-                                    <span className="mt-0.5 block text-xs font-semibold text-gray-500 dark:text-gray-400">Kelola presentasi pembuka, antar Hari, dan penutup.</span>
-                                </span>
-                            </Link>
+                                icon={<SlideshowIcon sx={{ fontSize: 20 }} />}
+                                label="Presentasi Mingguan"
+                                tone="sky"
+                            />
 
-                            <Link
+                            <OptionCard
                                 href={route('admin.modules.index', { program_id: managingProgram.id, focus: 'flashcard' })}
-                                className="group flex min-h-[72px] items-center gap-4 rounded-2xl border border-teal-200 bg-teal-50 p-4 transition hover:border-teal-500 hover:bg-teal-100 dark:border-teal-900/40 dark:bg-teal-950/20 dark:hover:border-teal-700"
-                            >
-                                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-600 text-white">
-                                    <QuizOutlinedIcon sx={{ fontSize: 22 }} />
-                                </span>
-                                <span className="min-w-0">
-                                    <span className="block text-sm font-black text-gray-900 dark:text-white">Kuis &amp; Repetisi</span>
-                                    <span className="mt-0.5 block text-xs font-semibold text-gray-500 dark:text-gray-400">Kelola materi repetisi, soal, dan latihan menulis kanji.</span>
-                                </span>
-                            </Link>
+                                icon={<QuizOutlinedIcon sx={{ fontSize: 20 }} />}
+                                label="Kuis & Repetisi"
+                                tone="teal"
+                            />
                         </div>
 
-                        <div className="mt-5 grid grid-cols-2 gap-3 border-t border-gray-100 pt-4 dark:border-gray-800">
+                        <div className="sticky bottom-0 z-10 -mx-5 -mb-5 mt-auto grid grid-cols-2 gap-3 border-t border-gray-100 bg-white/95 px-5 pb-5 pt-4 backdrop-blur dark:border-gray-800 dark:bg-gray-900/95 sm:-mx-6 sm:-mb-6 sm:px-6 sm:pb-6">
                             <button
                                 type="button"
                                 onClick={() => {
@@ -321,9 +360,10 @@ export default function ManajemenKelas({ programs = {}, levels = [], filters = {
                                 Hapus Kelas
                             </button>
                         </div>
-                    </section>
-                </div>
-            )}
+                    </motion.section>
+                </motion.div>
+                )}
+            </AnimatePresence>
 
             {showForm && (
                 <div className="fixed inset-0 z-[70] overflow-y-auto bg-gray-950/60 p-4 backdrop-blur-sm">
