@@ -5,7 +5,9 @@ import { useEffect, useState } from 'react';
 import CloseIcon from '@mui/icons-material/Close';
 import MenuIcon from '@mui/icons-material/Menu';
 
-const seigaihaPattern = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 48'%3E%3Cg fill='none' stroke='%23fbbf24' stroke-opacity='.24' stroke-width='1.35'%3E%3Cpath d='M0 48A24 24 0 0 1 48 48M8 48A16 16 0 0 1 40 48M16 48A8 8 0 0 1 32 48M48 48A24 24 0 0 1 96 48M56 48A16 16 0 0 1 88 48M64 48A8 8 0 0 1 80 48M24 24A24 24 0 0 1 72 24M32 24A16 16 0 0 1 64 24M40 24A8 8 0 0 1 56 24'/%3E%3C/g%3E%3C/svg%3E")`;
+const makeSeigaihaPattern = (color, opacity) => `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 48'%3E%3Cg fill='none' stroke='%23${color}' stroke-opacity='${opacity}' stroke-width='1.35'%3E%3Cpath d='M0 48A24 24 0 0 1 48 48M8 48A16 16 0 0 1 40 48M16 48A8 8 0 0 1 32 48M48 48A24 24 0 0 1 96 48M56 48A16 16 0 0 1 88 48M64 48A8 8 0 0 1 80 48M24 24A24 24 0 0 1 72 24M32 24A16 16 0 0 1 64 24M40 24A8 8 0 0 1 56 24'/%3E%3C/g%3E%3C/svg%3E")`;
+const lightSeigaihaPattern = makeSeigaihaPattern('dc2626', '.16');
+const darkSeigaihaPattern = makeSeigaihaPattern('fbbf24', '.28');
 
 export default function GuestNavbar({ heroTone = 'light' }) {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -56,9 +58,9 @@ export default function GuestNavbar({ heroTone = 'light' }) {
         <nav className={`sticky top-0 z-50 border-b transition-[background-color,border-color,box-shadow] duration-300 ${usesDarkHero ? 'border-white/10 bg-slate-950/95 shadow-lg shadow-slate-950/20 backdrop-blur' : 'border-gray-200/90 bg-white/95 shadow-sm backdrop-blur'}`}>
             <div
                 aria-hidden="true"
-                className={`pointer-events-none absolute inset-0 bg-repeat transition-opacity duration-300 ${usesDarkHero ? 'opacity-100' : 'opacity-0'}`}
+                className="pointer-events-none absolute inset-0 bg-repeat"
                 style={{
-                    backgroundImage: seigaihaPattern,
+                    backgroundImage: usesDarkHero ? darkSeigaihaPattern : lightSeigaihaPattern,
                     backgroundSize: '96px 48px',
                 }}
             />
@@ -102,7 +104,13 @@ export default function GuestNavbar({ heroTone = 'light' }) {
             </div>
 
             {isMenuOpen && (
-                <div id="guest-mobile-menu" className="border-t border-gray-100 bg-white px-5 py-4 shadow-xl md:hidden">
+                <div id="guest-mobile-menu" className="relative overflow-hidden border-t border-gray-100 bg-white px-5 py-4 shadow-xl md:hidden">
+                    <div
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-0 bg-repeat"
+                        style={{ backgroundImage: lightSeigaihaPattern, backgroundSize: '96px 48px' }}
+                    />
+                    <div className="relative">
                     <div className="flex flex-col gap-1">
                         {navigationItems.map((item) => (
                             <Link
@@ -127,6 +135,7 @@ export default function GuestNavbar({ heroTone = 'light' }) {
                                 <Button href="/register" onClick={closeMenu} className="w-full">Daftar Gratis</Button>
                             </>
                         )}
+                    </div>
                     </div>
                 </div>
             )}
