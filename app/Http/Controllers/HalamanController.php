@@ -22,7 +22,9 @@ class HalamanController extends Controller
 {
     public function home()
     {
-        return Inertia::render('landingPage');
+        return Inertia::render('landingPage', [
+            'programs' => $this->publicPricingPrograms(),
+        ]);
     }
 
     public function about()
@@ -33,61 +35,7 @@ class HalamanController extends Controller
     public function pricing()
     {
         return Inertia::render('Pricing', [
-            'programs' => ProgramPembelajaran::query()
-                ->with('level:id,level_name')
-                ->with(['modules' => fn ($query) => $query
-                    ->where('status', 'published')
-                    ->withCount([
-                        'presentationDecks' => fn ($relation) => $relation->where('status', 'published'),
-                        'flashcardSets' => fn ($relation) => $relation->where('status', 'published'),
-                        'quizzes' => fn ($relation) => $relation->where('status', 'published'),
-                    ])
-                    ->orderBy('week_number')
-                    ->orderBy('id')])
-                ->with(['paymentPlans' => fn ($query) => $query
-                    ->where('is_active', true)
-                    ->where('price', '>', 0)
-                    ->whereIn('scope_type', [
-                        AksesLanggananService::SCOPE_PROGRAM,
-                        AksesLanggananService::SCOPE_KLOTER,
-                    ])
-                    ->orderBy('price')])
-                ->where('status', 'published')
-                ->orderBy('sort_order')
-                ->orderBy('id')
-                ->get()
-                ->map(fn (ProgramPembelajaran $program) => [
-                    'id' => $program->id,
-                    'title' => $program->title,
-                    'slug' => $program->slug,
-                    'description' => $program->description,
-                    'instructor_name' => $program->instructor_name,
-                    'thumbnail_url' => $this->thumbnailProgramUrl($program->thumbnail_url),
-                    'level' => $program->level?->level_name,
-                    'weeks_count' => $program->modules->count(),
-                    'preview_modules' => $program->modules->map(fn (Modul $module) => [
-                        'id' => $module->id,
-                        'week_number' => $module->week_number,
-                        'title' => $module->title,
-                        'description' => $module->description,
-                        'presentations_count' => $module->presentation_decks_count,
-                        'flashcards_count' => $module->flashcard_sets_count,
-                        'quizzes_count' => $module->quizzes_count,
-                    ])->values(),
-                    'payment_plans' => $program->paymentPlans->map(fn (PaketPembayaran $plan) => [
-                        'id' => $plan->id,
-                        'name' => $plan->name,
-                        'scope_type' => $plan->scope_type,
-                        'scope_label' => $plan->scope_type === AksesLanggananService::SCOPE_KLOTER
-                            ? 'Kelas Mentor'
-                            : 'Kelas Mandiri',
-                        'description' => $plan->description,
-                        'price' => $plan->price,
-                        'price_formatted' => 'Rp '.number_format($plan->price),
-                        'duration_days' => $plan->duration_days,
-                        'features' => $plan->features ?? [],
-                    ])->values(),
-                ]),
+            'programs' => $this->publicPricingPrograms(),
         ]);
     }
 
@@ -479,5 +427,64 @@ class HalamanController extends Controller
         }
 
         return $relativePath;
+    }
+
+    private function publicPricingPrograms()
+    {
+        return ProgramPembelajaran::query()
+            ->with('level:id,level_name')
+            ->with(['modules' => fn ($query) => $query
+                ->where('status', 'published')
+                ->withCount([
+                    'presentationDecks' => fn ($relation) => $relation->where('status', 'published'),
+                    'flashcardSets' => fn ($relation) => $relation->where('status', 'published'),
+                    'quizzes' => fn ($relation) => $relation->where('status', 'published'),
+                ])
+                ->orderBy('week_number')
+                ->orderBy('id')])
+            ->with(['paymentPlans' => fn ($query) => $query
+                ->where('is_active', true)
+                ->where('price', '>', 0)
+                ->whereIn('scope_type', [
+                    AksesLanggananService::SCOPE_PROGRAM,
+                    AksesLanggananService::SCOPE_KLOTER,
+                ])
+                ->orderBy('price')])
+            ->where('status', 'published')
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (ProgramPembelajaran $program) => [
+                'id' => $program->id,
+                'title' => $program->title,
+                'slug' => $program->slug,
+                'description' => $program->description,
+                'instructor_name' => $program->instructor_name,
+                'thumbnail_url' => $this->thumbnailProgramUrl($program->thumbnail_url),
+                'level' => $program->level?->level_name,
+                'weeks_count' => $program->modules->count(),
+                'preview_modules' => $program->modules->map(fn (Modul $module) => [
+                    'id' => $module->id,
+                    'week_number' => $module->week_number,
+                    'title' => $module->title,
+                    'description' => $module->description,
+                    'presentations_count' => $module->presentation_decks_count,
+                    'flashcards_count' => $module->flashcard_sets_count,
+                    'quizzes_count' => $module->quizzes_count,
+                ])->values(),
+                'payment_plans' => $program->paymentPlans->map(fn (PaketPembayaran $plan) => [
+                    'id' => $plan->id,
+                    'name' => $plan->name,
+                    'scope_type' => $plan->scope_type,
+                    'scope_label' => $plan->scope_type === AksesLanggananService::SCOPE_KLOTER
+                        ? 'Kelas Mentor'
+                        : 'Kelas Mandiri',
+                    'description' => $plan->description,
+                    'price' => $plan->price,
+                    'price_formatted' => 'Rp '.number_format($plan->price),
+                    'duration_days' => $plan->duration_days,
+                    'features' => $plan->features ?? [],
+                ])->values(),
+            ]);
     }
 }

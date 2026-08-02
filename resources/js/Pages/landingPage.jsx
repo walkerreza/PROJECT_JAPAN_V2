@@ -53,10 +53,22 @@ const testimonials = [
   { quote: 'Investasi terbaik untuk belajar bahasa Jepang. Jalur terstruktur membuat saya tidak merasa kewalahan.', name: 'Jessica Lee', role: 'Peserta N2' },
 ];
 
-const LandingPage = () => {
+const formatDuration = (days) => {
+  if (!days) return 'Mengikuti ketentuan kelas';
+  if (days >= 365) return `${Math.round(days / 365)} tahun`;
+  if (days >= 30) return `${Math.round(days / 30)} bulan`;
+  return `${days} hari`;
+};
+
+const LandingPage = ({ programs = [] }) => {
   const scrollToDemo = () => {
     document.getElementById('demo-belajar')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
+  const publicPlans = programs.flatMap((program) => (program.payment_plans || []).map((plan) => ({
+    ...plan,
+    programId: program.id,
+    programTitle: program.title,
+  })));
 
   return (
     <>
@@ -398,40 +410,33 @@ const LandingPage = () => {
       {/* CTA + Pricing */}
       <section className="px-4 sm:px-6 lg:px-20 py-12 sm:py-16 lg:py-20">
         <div className={`${theme.ctaBg} rounded-2xl sm:rounded-3xl px-5 sm:px-6 lg:px-16 py-10 sm:py-14 text-center text-white`}>
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold mb-3">Siap memulai perjalanan Anda?</h2>
-          <p className="text-sm sm:text-base text-gray-400 max-w-lg mx-auto mb-7 sm:mb-10">Bergabunglah secara gratis hari ini. Dapatkan akses ke materi, kuis, dan review kosakata terstruktur.</p>
-          <div className="grid sm:grid-cols-2 gap-4 sm:gap-6 max-w-2xl mx-auto">
-            <div className="bg-gray-800/50 border border-white/10 rounded-2xl p-5 sm:p-8 text-left">
-              <h3 className="text-lg font-bold text-white mb-2">Dasar Gratis</h3>
-              <div className="flex items-baseline gap-1 mb-4 sm:mb-5">
-                <span className="text-3xl sm:text-4xl font-black text-white">Gratis</span>
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold mb-3">Pilih paket kelas yang tersedia</h2>
+          <p className="text-sm sm:text-base text-gray-300 max-w-lg mx-auto mb-7 sm:mb-10">Harga, durasi, dan jenis akses di bawah mengikuti pengaturan kelas yang sama dengan halaman harga.</p>
+          <div className={`grid gap-4 sm:gap-6 ${publicPlans.length > 2 ? 'lg:grid-cols-3' : 'sm:grid-cols-2'} max-w-5xl mx-auto`}>
+            {publicPlans.length > 0 ? publicPlans.map((plan, index) => (
+              <article key={`${plan.programId}-${plan.id}`} className={`${index === 0 ? theme.ctaProBg : 'bg-gray-800/50'} relative rounded-2xl border border-white/10 p-5 text-left sm:p-6`}>
+                <p className="text-[11px] font-black uppercase tracking-[0.14em] text-amber-200">{plan.programTitle}</p>
+                <h3 className="mt-2 text-lg font-black text-white">{plan.name}</h3>
+                <div className="mt-4 flex items-end justify-between gap-3">
+                  <p className="text-3xl font-black text-white">{plan.price_formatted}</p>
+                  <span className="rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white">{plan.scope_label}</span>
+                </div>
+                <p className="mt-1 text-xs font-bold text-white/70">{formatDuration(plan.duration_days)}</p>
+                {plan.description && <p className="mt-4 line-clamp-2 text-sm leading-6 text-white/80">{plan.description}</p>}
+                <ul className="mt-4 space-y-2 list-none p-0">
+                  {(plan.features || []).slice(0, 3).map((feature) => (
+                    <li key={feature} className="flex items-start gap-2 text-sm text-white/85"><CheckIcon sx={{ fontSize: 16 }} className="mt-0.5 shrink-0 text-emerald-300" />{feature}</li>
+                  ))}
+                </ul>
+              </article>
+            )) : (
+              <div className="rounded-2xl border border-dashed border-white/30 bg-white/5 px-6 py-10 sm:col-span-2">
+                <p className="text-lg font-black text-white">Paket kelas sedang disiapkan</p>
+                <p className="mt-2 text-sm text-white/75">Silakan daftar untuk membuka preview kelas yang tersedia.</p>
               </div>
-              <ul className="space-y-2.5 sm:space-y-3 mb-5 sm:mb-6 list-none p-0">
-                <li className="flex items-center gap-2 text-sm text-white/80"><CheckIcon sx={{ fontSize: 16 }} className="text-green-400" /> Preview materi Week 1</li>
-                <li className="flex items-center gap-2 text-sm text-white/80"><CheckIcon sx={{ fontSize: 16 }} className="text-green-400" /> Kuis Dasar Week 1</li>
-                <li className="flex items-center gap-2 text-sm text-white/80"><CheckIcon sx={{ fontSize: 16 }} className="text-green-400" /> Progress Belajar</li>
-              </ul>
-              <Button variant="outline" href="/register" className="w-full !border-white/20 !text-white hover:!bg-black/20 hover:!text-white">
-                Mulai Preview Gratis
-              </Button>
-            </div>
-            <div className={`${theme.ctaProBg} rounded-2xl p-5 sm:p-8 text-left relative`}>
-              <Badge color="yellow" className="absolute -top-3 right-5">PREMIUM</Badge>
-              <h3 className="text-lg font-bold text-white mb-2">Akses Premium</h3>
-              <div className="flex items-baseline gap-1 mb-4 sm:mb-5">
-                <span className="text-3xl sm:text-4xl font-black text-white">Berlangganan</span>
-              </div>
-              <ul className="space-y-2.5 sm:space-y-3 mb-5 sm:mb-6 list-none p-0">
-                <li className="flex items-center gap-2 text-sm text-white/90"><CheckIcon sx={{ fontSize: 16 }} className="text-white" /> Akses materi premium</li>
-                <li className="flex items-center gap-2 text-sm text-white/90"><CheckIcon sx={{ fontSize: 16 }} className="text-white" /> Kuis premium &amp; XP</li>
-                <li className="flex items-center gap-2 text-sm text-white/90"><CheckIcon sx={{ fontSize: 16 }} className="text-white" /> Flashcard &amp; Kosakata</li>
-                <li className="flex items-center gap-2 text-sm text-white/90"><CheckIcon sx={{ fontSize: 16 }} className="text-white" /> Leaderboard &amp; Gamifikasi</li>
-              </ul>
-              <Button href="/pricing" className="w-full !bg-white !text-gray-900 hover:!bg-gray-100">
-                Lihat Paket Harga
-              </Button>
-            </div>
+            )}
           </div>
+          <Button href="/pricing" className="mt-7 !bg-white !text-gray-900 hover:!bg-gray-100">Lihat detail kelas dan harga</Button>
         </div>
       </section>
 
