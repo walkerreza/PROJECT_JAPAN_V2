@@ -119,7 +119,7 @@ export default function Roadmap() {
         <>
             <FallEffect />
             <Head title="Roadmap JLPT N3 - Japanlingo" />
-            <GuestNavbar />
+            <GuestNavbar heroTone="dark" />
 
             <main className="overflow-hidden bg-[#f7f8f8] text-slate-900 dark:bg-slate-950 dark:text-white">
                 <section className="relative min-h-[620px] overflow-hidden bg-slate-950">

@@ -51,7 +51,7 @@ export default function About() {
         <>
             <FallEffect />
             <Head title="Tentang Japanlingo" />
-            <GuestNavbar />
+            <GuestNavbar heroTone="dark" />
 
             <main className="overflow-hidden bg-[#f7f8f8] text-slate-900 dark:bg-slate-950 dark:text-white">
                 <section className="relative min-h-[570px] overflow-hidden bg-slate-950">

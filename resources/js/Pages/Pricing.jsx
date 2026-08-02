@@ -209,7 +209,7 @@ export default function Pricing({ programs = [] }) {
       <GuestNavbar />
 
       <main>
-        <section className="border-b border-gray-100 bg-white px-4 py-12 text-center sm:px-6 sm:py-16 lg:px-8">
+        <section className="border-b border-gray-100 bg-white px-4 pb-12 pt-28 text-center sm:px-6 sm:pb-16 sm:pt-32 lg:px-8">
           <Badge color="red" className="mb-4">Kelas Japanlingo</Badge>
           <h1 className="mx-auto max-w-3xl text-3xl font-black text-gray-950 sm:text-4xl lg:text-5xl">
             Pilih kelas dan cara belajar yang sesuai
