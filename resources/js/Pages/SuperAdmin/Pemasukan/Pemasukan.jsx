@@ -6,6 +6,8 @@ import StatCard from '@/Components/Features/Dashboard/StatCard';
 import ChartCard from '@/Components/Features/Dashboard/ChartCard';
 import ChartPeriodSelect from '@/Components/Features/Dashboard/ChartPeriodSelect';
 import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
+import AdminDialog from '@/Components/UI/AdminDialog';
+import SearchableSelect from '@/Components/UI/SearchableSelect';
 import { Area, AreaChart, CartesianGrid, Cell, Legend, Pie, PieChart, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartEmpty, ChartTooltip, ChartTooltipContent } from '@/Components/UI/Chart';
 
@@ -85,6 +87,8 @@ export default function Pemasukan({
     const items = transactions?.data || [];
     const availablePlans = plans.filter((plan) => plan.is_active && !plan.is_legacy);
     const accessKeyPlans = availablePlans.filter((plan) => plan.scope_type === 'program');
+    const selectedTransactionPlan = plans.find((plan) => String(plan.id) === String(transactionForm.data.payment_plan_id));
+    const selectedTransactionKloters = kloters.filter((kloter) => String(kloter.program_id) === String(selectedTransactionPlan?.program_pembelajaran_id));
 
     const submitFilters = (e) => {
         e.preventDefault();
@@ -394,7 +398,7 @@ export default function Pemasukan({
                     <div className="space-y-6">
                         <Card>
                             <h2 className="text-lg font-black text-gray-900 dark:text-white">Plan Aktif</h2>
-                            <div className="mt-4 space-y-3">
+                            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
                                 {plans.map((plan) => (
                                     <div key={plan.id} className="rounded-2xl border border-gray-100 dark:border-gray-800 p-4">
                                         <div className="flex items-start justify-between gap-3">
@@ -406,7 +410,7 @@ export default function Pemasukan({
                                                 {plan.is_active ? 'Active' : 'Inactive'}
                                             </span>
                                         </div>
-                                        <div className="mt-3 flex flex-wrap gap-2">
+                                        <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                                             <span className="rounded-full bg-red-50 dark:bg-red-900/20 px-3 py-1 text-xs font-black text-red-600 dark:text-red-400">{plan.price_formatted}</span>
                                             <span className="rounded-full bg-gray-100 dark:bg-gray-800 px-3 py-1 text-xs font-bold text-gray-600 dark:text-gray-400">{plan.duration_days} hari</span>
                                             <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-bold text-sky-700 dark:bg-sky-900/20 dark:text-sky-300">{plan.scope_label}</span>
@@ -479,15 +483,8 @@ export default function Pemasukan({
             </div>
 
             {showPlanForm && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                    <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-gray-900 shadow-2xl">
-                        <div className="border-b border-gray-100 dark:border-gray-800 p-6">
-                            <h3 className="text-lg font-black text-gray-900 dark:text-white">{editingPlan ? 'Edit Payment Plan' : 'Buat Payment Plan'}</h3>
-                            {editingPlan && (
-                                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Perubahan harga berlaku untuk checkout/transaksi baru.</p>
-                            )}
-                        </div>
-                        <form onSubmit={submitPlan} className="space-y-4 p-6">
+                <AdminDialog open onClose={closePlanForm} eyebrow="Harga dan Akses" title={editingPlan ? 'Edit Payment Plan' : 'Buat Payment Plan'} description={editingPlan ? 'Perubahan harga berlaku untuk checkout dan transaksi baru.' : 'Plan ini akan dipakai sebagai sumber harga pada halaman pricing.'} maxWidth="max-w-lg">
+                        <form onSubmit={submitPlan} className="space-y-4">
                             <input value={planForm.data.name} onChange={(e) => planForm.setData('name', e.target.value)} placeholder="Nama plan" className="h-11 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 text-sm" />
                             <input value={planForm.data.slug} onChange={(e) => planForm.setData('slug', e.target.value)} placeholder="Slug" className="h-11 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 text-sm" />
                             <input value={planForm.data.description} onChange={(e) => planForm.setData('description', e.target.value)} placeholder="Deskripsi" className="h-11 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 text-sm" />
@@ -510,15 +507,14 @@ export default function Pemasukan({
                                     <option value="program">Kelas Mandiri</option>
                                     <option value="kloter">Kelas Mentor</option>
                                 </select>
-                                <select
+                                <SearchableSelect
                                     value={planForm.data.program_pembelajaran_id}
-                                    onChange={(e) => planForm.setData('program_pembelajaran_id', e.target.value)}
+                                    onChange={(programId) => planForm.setData('program_pembelajaran_id', programId)}
                                     disabled={!['program', 'kloter'].includes(planForm.data.scope_type)}
-                                    className="h-11 rounded-xl border border-gray-200 bg-white px-4 text-sm disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900"
-                                >
-                                    <option value="">Pilih kelas</option>
-                                    {programs.map((program) => <option key={program.id} value={program.id}>{program.title}</option>)}
-                                </select>
+                                    placeholder="Pilih kelas"
+                                    searchPlaceholder="Cari kelas..."
+                                    options={programs.map((program) => ({ value: program.id, label: program.title }))}
+                                />
                             </div>
                             <textarea value={planForm.data.features} onChange={(e) => planForm.setData('features', e.target.value)} rows={4} placeholder="Satu fitur per baris" className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3 text-sm" />
                             <label className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-3 text-sm font-bold">
@@ -530,51 +526,39 @@ export default function Pemasukan({
                                 <button disabled={planForm.processing} className="rounded-xl bg-red-600 px-5 py-2.5 text-sm font-black text-white">{planForm.processing ? 'Menyimpan...' : editingPlan ? 'Update Plan' : 'Simpan Plan'}</button>
                             </div>
                         </form>
-                    </div>
-                </div>
+                </AdminDialog>
             )}
 
             {showTransactionForm && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                    <div className="w-full max-w-2xl rounded-2xl bg-white dark:bg-gray-900 shadow-2xl">
-                        <div className="border-b border-gray-100 dark:border-gray-800 p-6">
-                            <h3 className="text-lg font-black text-gray-900 dark:text-white">Buat Transaksi Manual</h3>
-                        </div>
-                        <form onSubmit={submitTransaction} className="space-y-4 p-6">
-                            <select value={transactionForm.data.user_id} onChange={(e) => transactionForm.setData('user_id', e.target.value)} className="h-11 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 text-sm">
-                                <option value="">Pilih user</option>
-                                {users.map((user) => <option key={user.id} value={user.id}>{user.label}</option>)}
-                            </select>
+                <AdminDialog open onClose={() => { setShowTransactionForm(false); transactionForm.reset(); }} eyebrow="Pemasukan" title="Buat Transaksi Manual" description="Simpan bukti pembayaran terlebih dahulu. Akses baru aktif setelah transaksi disetujui." maxWidth="max-w-2xl">
+                        <form onSubmit={submitTransaction} className="space-y-4">
+                            <SearchableSelect value={transactionForm.data.user_id} onChange={(userId) => transactionForm.setData('user_id', userId)} placeholder="Pilih siswa" searchPlaceholder="Cari nama atau email siswa..." options={users.map((user) => ({ value: user.id, label: user.label }))} />
                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                <select
+                                <SearchableSelect
                                     value={transactionForm.data.payment_plan_id}
-                                    onChange={(e) => {
-                                        const selectedPlan = plans.find((plan) => String(plan.id) === e.target.value);
+                                    onChange={(planId) => {
+                                        const selectedPlan = plans.find((plan) => String(plan.id) === String(planId));
                                         transactionForm.setData({
                                             ...transactionForm.data,
-                                            payment_plan_id: e.target.value,
+                                            payment_plan_id: planId,
                                             amount: selectedPlan ? selectedPlan.price : transactionForm.data.amount,
                                             kloter_belajar_id: '',
                                         });
                                     }}
-                                    className="h-11 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 text-sm"
-                                >
-                                    <option value="">Pilih plan</option>
-                                    {availablePlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} - {plan.scope_label}</option>)}
-                                </select>
+                                    placeholder="Pilih plan"
+                                    searchPlaceholder="Cari nama plan atau kelas..."
+                                    options={availablePlans.map((plan) => ({ value: plan.id, label: plan.name, description: `${plan.scope_label} - ${plan.price_formatted}` }))}
+                                />
                                 <input type="number" value={transactionForm.data.amount} onChange={(e) => transactionForm.setData('amount', e.target.value)} placeholder="Nominal" className="h-11 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 text-sm" />
                             </div>
-                            {plans.find((plan) => String(plan.id) === String(transactionForm.data.payment_plan_id))?.scope_type === 'kloter' && (
-                                <select
+                            {selectedTransactionPlan?.scope_type === 'kloter' && (
+                                <SearchableSelect
                                     value={transactionForm.data.kloter_belajar_id}
-                                    onChange={(e) => transactionForm.setData('kloter_belajar_id', e.target.value)}
-                                    className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm dark:border-gray-700 dark:bg-gray-900"
-                                >
-                                    <option value="">Pilih kloter mentor</option>
-                                    {kloters
-                                        .filter((kloter) => String(kloter.program_id) === String(plans.find((plan) => String(plan.id) === String(transactionForm.data.payment_plan_id))?.program_pembelajaran_id))
-                                        .map((kloter) => <option key={kloter.id} value={kloter.id}>{kloter.name} - {kloter.mentor_name}</option>)}
-                                </select>
+                                    onChange={(kloterId) => transactionForm.setData('kloter_belajar_id', kloterId)}
+                                    placeholder="Pilih kloter mentor"
+                                    searchPlaceholder="Cari kloter atau mentor..."
+                                    options={selectedTransactionKloters.map((kloter) => ({ value: kloter.id, label: kloter.name, description: kloter.mentor_name }))}
+                                />
                             )}
                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <select value={transactionForm.data.payment_method} onChange={(e) => transactionForm.setData('payment_method', e.target.value)} className="h-11 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 text-sm">
@@ -598,23 +582,14 @@ export default function Pemasukan({
                                 <button disabled={transactionForm.processing} className="rounded-xl bg-red-600 px-5 py-2.5 text-sm font-black text-white">{transactionForm.processing ? 'Menyimpan...' : 'Simpan Transaksi'}</button>
                             </div>
                         </form>
-                    </div>
-                </div>
+                </AdminDialog>
             )}
 
             {showAccessKeyForm && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                    <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl dark:bg-gray-900">
-                        <div className="border-b border-gray-100 p-6 dark:border-gray-800">
-                            <h3 className="text-lg font-black text-gray-900 dark:text-white">Buat Access Key</h3>
-                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Kode dibuat otomatis dan bisa dibagikan ke murid.</p>
-                        </div>
-                        <form onSubmit={submitAccessKey} className="space-y-4 p-6">
+                <AdminDialog open onClose={() => { setShowAccessKeyForm(false); accessKeyForm.reset(); }} eyebrow="Akses Manual" title="Buat Access Key" description="Kode dibuat otomatis untuk demo, promo, atau pemberian akses manual." maxWidth="max-w-lg">
+                        <form onSubmit={submitAccessKey} className="space-y-4">
                             <input value={accessKeyForm.data.name} onChange={(e) => accessKeyForm.setData('name', e.target.value)} placeholder="Nama campaign / kelas" className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm dark:border-gray-700 dark:bg-gray-900" />
-                            <select value={accessKeyForm.data.payment_plan_id} onChange={(e) => accessKeyForm.setData('payment_plan_id', e.target.value)} className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm dark:border-gray-700 dark:bg-gray-900">
-                                <option value="">Pakai plan Access Key Premium</option>
-                                {accessKeyPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} - {plan.scope_label}</option>)}
-                            </select>
+                            <SearchableSelect value={accessKeyForm.data.payment_plan_id} onChange={(planId) => accessKeyForm.setData('payment_plan_id', planId)} placeholder="Pakai plan Access Key Premium" searchPlaceholder="Cari plan..." allowClear clearLabel="Pakai plan Access Key Premium" options={accessKeyPlans.map((plan) => ({ value: plan.id, label: plan.name, description: plan.scope_label }))} />
                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <select
                                     value={accessKeyForm.data.scope_type}
@@ -630,15 +605,14 @@ export default function Pemasukan({
                                 >
                                     <option value="program">Per kelas</option>
                                 </select>
-                                <select
+                                <SearchableSelect
                                     value={accessKeyForm.data.program_pembelajaran_id}
-                                    onChange={(e) => accessKeyForm.setData('program_pembelajaran_id', e.target.value)}
+                                    onChange={(programId) => accessKeyForm.setData('program_pembelajaran_id', programId)}
                                     disabled={Boolean(accessKeyForm.data.payment_plan_id)}
-                                    className="h-11 rounded-xl border border-gray-200 bg-white px-4 text-sm disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900"
-                                >
-                                    <option value="">Pilih kelas</option>
-                                    {programs.map((program) => <option key={program.id} value={program.id}>{program.title}</option>)}
-                                </select>
+                                    placeholder="Pilih kelas"
+                                    searchPlaceholder="Cari kelas..."
+                                    options={programs.map((program) => ({ value: program.id, label: program.title }))}
+                                />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <input type="number" min="1" max="366" value={accessKeyForm.data.duration_days} onChange={(e) => accessKeyForm.setData('duration_days', e.target.value)} placeholder="Durasi hari" className="h-11 rounded-xl border border-gray-200 bg-white px-4 text-sm dark:border-gray-700 dark:bg-gray-900" />
@@ -651,8 +625,7 @@ export default function Pemasukan({
                                 <button disabled={accessKeyForm.processing} className="rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-black text-white disabled:opacity-50">{accessKeyForm.processing ? 'Membuat...' : 'Buat Key'}</button>
                             </div>
                         </form>
-                    </div>
-                </div>
+                </AdminDialog>
             )}
 
             {rejectTarget && (

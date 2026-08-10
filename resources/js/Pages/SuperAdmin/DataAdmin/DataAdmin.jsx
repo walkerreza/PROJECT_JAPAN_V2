@@ -4,6 +4,7 @@ import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import Card from '@/Components/UI/Card';
 import StatCard from '@/Components/Features/Dashboard/StatCard';
 import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
+import AdminDialog from '@/Components/UI/AdminDialog';
 
 const emptyAdmin = {
     username: '',
@@ -225,12 +226,8 @@ export default function DataAdmin({
             </div>
 
             {showForm && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                    <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-gray-900 shadow-2xl">
-                        <div className="border-b border-gray-100 dark:border-gray-800 p-6">
-                            <h3 className="text-lg font-black text-gray-900 dark:text-white">Tambah Admin</h3>
-                        </div>
-                        <form onSubmit={submitAdmin} className="space-y-4 p-6">
+                <AdminDialog open onClose={() => setShowForm(false)} eyebrow="Akun dan role" title="Tambah Admin" description="Buat akun admin lalu tentukan cakupan operasionalnya." maxWidth="max-w-lg">
+                        <form onSubmit={submitAdmin} className="space-y-4">
                             <div>
                                 <label className="mb-1.5 block text-sm font-bold text-gray-700 dark:text-gray-300">Username</label>
                                 <input value={data.username} onChange={(e) => setData('username', e.target.value)} className="h-11 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 text-sm text-gray-900 dark:text-white" />
@@ -271,8 +268,7 @@ export default function DataAdmin({
                                 <button disabled={processing} className="rounded-xl bg-red-600 px-5 py-2.5 text-sm font-black text-white disabled:opacity-60">{processing ? 'Menyimpan...' : 'Buat Admin'}</button>
                             </div>
                         </form>
-                    </div>
-                </div>
+                </AdminDialog>
             )}
 
             <ConfirmActionDialog

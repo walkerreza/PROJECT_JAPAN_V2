@@ -102,7 +102,6 @@ class SuperAdminKloterController extends SuperAdminDasarController
                 ->get(['id', 'title'])
                 ->map(fn (ProgramPembelajaran $program) => ['id' => $program->id, 'title' => $program->title]),
             'admins' => Pengguna::where('role', 'admin')
-                ->where('admin_scope', Pengguna::ADMIN_SCOPE_KLOTER)
                 ->where('status', 'active')
                 ->orderBy('username')
                 ->get(['id', 'username', 'email'])
@@ -265,7 +264,6 @@ class SuperAdminKloterController extends SuperAdminDasarController
                 'nullable',
                 Rule::exists('users', 'id')->where(fn ($query) => $query
                     ->where('role', 'admin')
-                    ->where('admin_scope', Pengguna::ADMIN_SCOPE_KLOTER)
                     ->where('status', 'active')),
             ],
             'nama' => ['required', 'string', 'max:255'],

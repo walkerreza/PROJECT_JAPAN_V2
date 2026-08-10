@@ -5,6 +5,8 @@ import Card from '@/Components/UI/Card';
 import Badge from '@/Components/UI/Badge';
 import Avatar from '@/Components/UI/Avatar';
 import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
+import SearchableSelect from '@/Components/UI/SearchableSelect';
+import AdminDialog from '@/Components/UI/AdminDialog';
 
 export default function Users({
     adminScope = 'global',
@@ -16,6 +18,7 @@ export default function Users({
     filters = {},
 }) {
     const [search, setSearch] = useState(filters.search || '');
+    const [activeTab, setActiveTab] = useState('students');
     const [rejectTarget, setRejectTarget] = useState(null);
     const items = students?.data || [];
     const { confirmState, openConfirm, closeConfirm } = useConfirmAction();
@@ -101,7 +104,7 @@ export default function Users({
             ],
             confirmLabel: 'Setujui Peserta',
             onConfirm: () => router.patch(
-                route('admin.kloters.enrollments.approve', [selectedKloter.id, enrollment.id]),
+                route('admin.kloters.enrollments.approve', [enrollment.kloter.id, enrollment.id]),
                 {},
                 { preserveScroll: true, onFinish: closeConfirm },
             ),
@@ -111,7 +114,7 @@ export default function Users({
     const submitRejection = (event) => {
         event.preventDefault();
         rejectForm.patch(
-            route('admin.kloters.enrollments.reject', [selectedKloter.id, rejectTarget.id]),
+            route('admin.kloters.enrollments.reject', [rejectTarget.kloter.id, rejectTarget.id]),
             {
                 preserveScroll: true,
                 onSuccess: () => {
@@ -144,13 +147,16 @@ export default function Users({
                     </span>
                 </div>
 
-                <div className="flex w-full gap-2 border-b border-gray-200 dark:border-gray-800">
-                    <Link
-                        href={route('admin.users', filters.kloter ? { kloter: filters.kloter } : {})}
-                        className="border-b-2 border-red-600 px-3 py-3 text-sm font-black text-red-600 dark:text-red-400"
-                    >
+                <div className="flex w-full gap-2 overflow-x-auto border-b border-gray-200 dark:border-gray-800">
+                    <button type="button" onClick={() => setActiveTab('students')} className={`border-b-2 px-3 py-3 text-sm font-black transition ${activeTab === 'students' ? 'border-red-600 text-red-600 dark:text-red-400' : 'border-transparent text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}`}>
                         Siswa
-                    </Link>
+                    </button>
+                    <button type="button" onClick={() => setActiveTab('pending')} className={`border-b-2 px-3 py-3 text-sm font-black transition ${activeTab === 'pending' ? 'border-red-600 text-red-600 dark:text-red-400' : 'border-transparent text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}`}>
+                        Persetujuan {pendingEnrollments.length > 0 && <span className="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">{pendingEnrollments.length}</span>}
+                    </button>
+                    <button type="button" onClick={() => setActiveTab('kloter')} className={`border-b-2 px-3 py-3 text-sm font-black transition ${activeTab === 'kloter' ? 'border-red-600 text-red-600 dark:text-red-400' : 'border-transparent text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}`}>
+                        Kelola Kloter
+                    </button>
                     <Link
                         href={route('admin.analytics', filters.kloter ? { kloter: filters.kloter } : {})}
                         className="border-b-2 border-transparent px-3 py-3 text-sm font-black text-gray-500 transition hover:border-gray-300 hover:text-gray-900 dark:text-gray-400 dark:hover:border-gray-600 dark:hover:text-white"
@@ -159,6 +165,7 @@ export default function Users({
                     </Link>
                 </div>
 
+                {activeTab === 'students' && <>
                 <Card className="!p-4 sm:!p-5">
                     <form onSubmit={submitSearch} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(220px,320px)_auto]">
                         <input
@@ -168,106 +175,18 @@ export default function Users({
                             onChange={(event) => setSearch(event.target.value)}
                             className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm text-gray-900 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
                         />
-                        <select
+                        <SearchableSelect
                             value={filters.kloter || ''}
-                            onChange={(event) => visitFilters({ kloter: event.target.value })}
-                            className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
-                        >
-                            <option value="">Semua kloter dalam cakupan</option>
-                            {kloters.map((kloter) => (
-                                <option key={kloter.id} value={kloter.id}>{kloter.name} - {kloter.program_name}</option>
-                            ))}
-                        </select>
+                            onChange={(kloter) => visitFilters({ kloter })}
+                            placeholder="Semua kloter dalam cakupan"
+                            searchPlaceholder="Cari nama kloter atau kelas..."
+                            allowClear
+                            clearLabel="Semua kloter dalam cakupan"
+                            options={kloters.map((kloter) => ({ value: kloter.id, label: kloter.name, description: kloter.program_name }))}
+                        />
                         <button className="h-11 rounded-xl bg-gray-900 px-5 text-sm font-black text-white dark:bg-white dark:text-gray-900">Cari</button>
                     </form>
                 </Card>
-
-                {selectedKloter && (
-                    <Card className="!p-4 sm:!p-5">
-                        <div className="flex items-start justify-between gap-3">
-                            <div>
-                                <h2 className="font-black text-gray-900 dark:text-white">Menunggu Persetujuan</h2>
-                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                    Peserta di bawah sudah membayar kelas mentor. Setujui untuk memulai masa akses.
-                                </p>
-                            </div>
-                            <Badge color={pendingEnrollments.length ? 'yellow' : 'gray'}>{pendingEnrollments.length} pending</Badge>
-                        </div>
-
-                        <div className="mt-4 divide-y divide-gray-100 border-t border-gray-100 dark:divide-gray-800 dark:border-gray-800">
-                            {pendingEnrollments.map((enrollment) => (
-                                <article key={enrollment.id} className="grid gap-3 py-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-                                    <div className="min-w-0">
-                                        <p className="truncate text-sm font-black text-gray-900 dark:text-white">{enrollment.user.username}</p>
-                                        <p className="truncate text-xs text-gray-500">{enrollment.user.email}</p>
-                                        <p className="mt-1 text-xs font-bold text-gray-600 dark:text-gray-300">
-                                            {enrollment.transaction_code} - {enrollment.amount_formatted} - {enrollment.paid_at || 'Baru dibayar'}
-                                        </p>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button onClick={() => confirmApproval(enrollment)} className="min-h-10 rounded-lg bg-emerald-600 px-4 text-xs font-black text-white">Setujui</button>
-                                        <button onClick={() => { setRejectTarget(enrollment); rejectForm.reset(); }} className="min-h-10 rounded-lg border border-red-200 px-4 text-xs font-black text-red-600">Tolak</button>
-                                    </div>
-                                </article>
-                            ))}
-                            {pendingEnrollments.length === 0 && (
-                                <p className="py-6 text-center text-sm text-gray-500 dark:text-gray-400">Tidak ada pembayaran yang menunggu persetujuan.</p>
-                            )}
-                        </div>
-                    </Card>
-                )}
-
-                {selectedKloter && (
-                    <Card className="!p-4 sm:!p-5">
-                        <div className="flex flex-col gap-1 border-b border-gray-100 pb-4 dark:border-gray-800 sm:flex-row sm:items-start sm:justify-between">
-                            <div>
-                                <h2 className="font-black text-gray-900 dark:text-white">{selectedKloter.name}</h2>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">{selectedKloter.program_name}</p>
-                            </div>
-                            <Badge color={selectedKloter.status === 'active' ? 'green' : 'gray'}>{selectedKloter.status}</Badge>
-                        </div>
-
-                        <div className="mt-4 grid gap-5 xl:grid-cols-2">
-                            <form onSubmit={submitSchedule} className="space-y-3">
-                                <div>
-                                    <h3 className="text-sm font-black text-gray-900 dark:text-white">Jadwal Kloter</h3>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">Tanggal mulai menentukan pembukaan roadmap mingguan.</p>
-                                </div>
-                                <div className="grid gap-3 sm:grid-cols-2">
-                                    <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
-                                        Tanggal mulai
-                                        <input type="date" value={scheduleForm.data.tanggal_mulai} onChange={(event) => scheduleForm.setData('tanggal_mulai', event.target.value)} disabled={selectedKloter.is_read_only} className="mt-1 h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-900" />
-                                    </label>
-                                    <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
-                                        Tanggal selesai
-                                        <input type="date" value={scheduleForm.data.tanggal_selesai} onChange={(event) => scheduleForm.setData('tanggal_selesai', event.target.value)} disabled={selectedKloter.is_read_only} className="mt-1 h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-900" />
-                                    </label>
-                                </div>
-                                {(scheduleForm.errors.tanggal_mulai || scheduleForm.errors.tanggal_selesai) && (
-                                    <p className="text-xs font-bold text-red-500">{scheduleForm.errors.tanggal_mulai || scheduleForm.errors.tanggal_selesai}</p>
-                                )}
-                                <button disabled={scheduleForm.processing || selectedKloter.is_read_only} className="h-10 rounded-xl bg-red-600 px-4 text-xs font-black text-white disabled:opacity-50">
-                                    {scheduleForm.processing ? 'Menyimpan...' : 'Simpan Jadwal'}
-                                </button>
-                            </form>
-
-                            <form onSubmit={submitAssignment} className="space-y-3">
-                                <div>
-                                    <h3 className="text-sm font-black text-gray-900 dark:text-white">Tambah Siswa</h3>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">Hanya siswa dengan akses aktif untuk program ini yang dapat dipilih.</p>
-                                </div>
-                                <select value={assignForm.data.user_id} onChange={(event) => assignForm.setData('user_id', event.target.value)} disabled={selectedKloter.status !== 'active'} className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-900">
-                                    <option value="">Pilih siswa</option>
-                                    {candidateStudents.map((student) => <option key={student.id} value={student.id}>{student.label}</option>)}
-                                </select>
-                                {assignForm.errors.user_id && <p className="text-xs font-bold text-red-500">{assignForm.errors.user_id}</p>}
-                                <button disabled={assignForm.processing || !assignForm.data.user_id || selectedKloter.status !== 'active'} className="h-10 rounded-xl bg-gray-900 px-4 text-xs font-black text-white disabled:opacity-50 dark:bg-white dark:text-gray-900">
-                                    {assignForm.processing ? 'Menambahkan...' : 'Tambah ke Kloter'}
-                                </button>
-                            </form>
-                        </div>
-                    </Card>
-                )}
 
                 <Card className="!overflow-hidden !p-0">
                     <div className="hidden overflow-x-auto md:block">
@@ -329,17 +248,47 @@ export default function Users({
                         </div>
                     )}
                 </Card>
+                </>}
+
+                {activeTab === 'pending' && (
+                    <Card className="!p-4 sm:!p-5">
+                        <div className="flex items-start justify-between gap-3">
+                            <div><h2 className="font-black text-gray-900 dark:text-white">Menunggu Persetujuan</h2><p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Siswa sudah membayar kelas mentor dan menunggu persetujuan admin kloter.</p></div>
+                            <Badge color={pendingEnrollments.length ? 'yellow' : 'gray'}>{pendingEnrollments.length} pending</Badge>
+                        </div>
+                        <div className="mt-4 divide-y divide-gray-100 border-t border-gray-100 dark:divide-gray-800 dark:border-gray-800">
+                            {pendingEnrollments.map((enrollment) => <article key={enrollment.id} className="grid gap-3 py-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"><div><p className="text-sm font-black text-gray-900 dark:text-white">{enrollment.user.username}</p><p className="text-xs text-gray-500 dark:text-gray-400">{enrollment.user.email}</p><p className="mt-1 text-xs font-bold text-gray-600 dark:text-gray-300">{enrollment.kloter.program_name} - {enrollment.kloter.name} - {enrollment.amount_formatted}</p><p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Jadwal: {enrollment.kloter.tanggal_mulai || '-'} sampai {enrollment.kloter.tanggal_selesai || 'belum ditentukan'} {enrollment.paid_at ? `| Dibayar ${enrollment.paid_at}` : ''}</p></div><div className="flex gap-2"><button onClick={() => confirmApproval(enrollment)} className="min-h-10 rounded-lg bg-emerald-600 px-4 text-xs font-black text-white">Setujui</button><button onClick={() => { setRejectTarget(enrollment); rejectForm.reset(); }} className="min-h-10 rounded-lg border border-red-200 px-4 text-xs font-black text-red-600 dark:border-red-900/40 dark:text-red-400">Tolak</button></div></article>)}
+                            {pendingEnrollments.length === 0 && <p className="py-8 text-center text-sm font-semibold text-gray-500 dark:text-gray-400">Tidak ada pembayaran yang menunggu persetujuan pada kloter Anda.</p>}
+                        </div>
+                    </Card>
+                )}
+
+                {activeTab === 'kloter' && !selectedKloter && <Card className="max-w-xl"><h2 className="font-black text-gray-900 dark:text-white">Pilih Kloter</h2><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Pilih kloter yang ingin diatur jadwal dan daftar siswanya.</p><SearchableSelect value="" onChange={(kloter) => visitFilters({ kloter })} placeholder="Pilih kloter untuk dikelola" searchPlaceholder="Cari nama kloter atau kelas..." className="mt-4" options={kloters.map((kloter) => ({ value: kloter.id, label: kloter.name, description: kloter.program_name }))} /></Card>}
+                {activeTab === 'kloter' && selectedKloter && (
+                    <Card className="!p-4 sm:!p-5">
+                        <div className="mb-4 max-w-md">
+                            <SearchableSelect
+                                value={filters.kloter || ''}
+                                onChange={(kloter) => visitFilters({ kloter })}
+                                placeholder="Pilih kloter untuk dikelola"
+                                searchPlaceholder="Cari nama kloter atau kelas..."
+                                options={kloters.map((kloter) => ({ value: kloter.id, label: kloter.name, description: kloter.program_name }))}
+                            />
+                        </div>
+                        <div className="flex flex-col gap-1 border-b border-gray-100 pb-4 dark:border-gray-800 sm:flex-row sm:items-start sm:justify-between"><div><h2 className="font-black text-gray-900 dark:text-white">{selectedKloter.name}</h2><p className="text-sm text-gray-500 dark:text-gray-400">{selectedKloter.program_name}</p></div><Badge color={selectedKloter.status === 'active' ? 'green' : 'gray'}>{selectedKloter.status}</Badge></div>
+                        <div className="mt-4 grid gap-5 xl:grid-cols-2">
+                            <form onSubmit={submitSchedule} className="space-y-3"><div><h3 className="text-sm font-black text-gray-900 dark:text-white">Jadwal Kloter</h3><p className="text-xs text-gray-500 dark:text-gray-400">Tanggal mulai menentukan pembukaan roadmap mingguan.</p></div><div className="grid gap-3 sm:grid-cols-2"><label className="text-xs font-bold text-gray-600 dark:text-gray-300">Tanggal mulai<input type="date" value={scheduleForm.data.tanggal_mulai} onChange={(event) => scheduleForm.setData('tanggal_mulai', event.target.value)} disabled={selectedKloter.is_read_only} className="mt-1 h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-900" /></label><label className="text-xs font-bold text-gray-600 dark:text-gray-300">Tanggal selesai<input type="date" value={scheduleForm.data.tanggal_selesai} onChange={(event) => scheduleForm.setData('tanggal_selesai', event.target.value)} disabled={selectedKloter.is_read_only} className="mt-1 h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-900" /></label></div>{(scheduleForm.errors.tanggal_mulai || scheduleForm.errors.tanggal_selesai) && <p className="text-xs font-bold text-red-500">{scheduleForm.errors.tanggal_mulai || scheduleForm.errors.tanggal_selesai}</p>}<button disabled={scheduleForm.processing || selectedKloter.is_read_only} className="h-10 rounded-xl bg-red-600 px-4 text-xs font-black text-white disabled:opacity-50">{scheduleForm.processing ? 'Menyimpan...' : 'Simpan Jadwal'}</button></form>
+                            <form onSubmit={submitAssignment} className="space-y-3"><div><h3 className="text-sm font-black text-gray-900 dark:text-white">Tambah Siswa</h3><p className="text-xs text-gray-500 dark:text-gray-400">Hanya siswa dengan akses aktif untuk program ini yang dapat dipilih.</p></div><SearchableSelect value={assignForm.data.user_id} onChange={(userId) => assignForm.setData('user_id', userId)} disabled={selectedKloter.status !== 'active'} placeholder="Cari siswa yang dapat ditambahkan" searchPlaceholder="Cari nama atau email siswa..." options={candidateStudents.map((student) => ({ value: student.id, label: student.label }))} />{assignForm.errors.user_id && <p className="text-xs font-bold text-red-500">{assignForm.errors.user_id}</p>}<button disabled={assignForm.processing || !assignForm.data.user_id || selectedKloter.status !== 'active'} className="h-10 rounded-xl bg-gray-900 px-4 text-xs font-black text-white disabled:opacity-50 dark:bg-white dark:text-gray-900">{assignForm.processing ? 'Menambahkan...' : 'Tambah ke Kloter'}</button></form>
+                        </div>
+                    </Card>
+                )}
             </div>
 
             <ConfirmActionDialog {...confirmState} onCancel={closeConfirm} />
 
-            {rejectTarget && (
-                <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-4">
-                    <form onSubmit={submitRejection} className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl dark:bg-gray-900">
-                        <h2 className="text-lg font-black text-gray-900 dark:text-white">Tolak Pendaftaran Mentor</h2>
-                        <p className="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-400">
-                            Transaksi tetap sukses dan superadmin akan menerima tugas refund manual untuk {rejectTarget.user.username}.
-                        </p>
+            <AdminDialog open={Boolean(rejectTarget)} onClose={() => { setRejectTarget(null); rejectForm.reset(); }} eyebrow="Persetujuan Kloter" title="Tolak Pendaftaran Mentor" description={rejectTarget ? `Transaksi ${rejectTarget.transaction_code} tetap sukses dan superadmin akan menerima tugas refund manual untuk ${rejectTarget.user.username}.` : ''} maxWidth="max-w-md">
+                {rejectTarget && (
+                    <form onSubmit={submitRejection} className="space-y-4">
                         <textarea
                             value={rejectForm.data.reason}
                             onChange={(event) => rejectForm.setData('reason', event.target.value)}
@@ -348,15 +297,15 @@ export default function Users({
                             className="mt-4 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white"
                         />
                         {rejectForm.errors.reason && <p className="mt-2 text-xs font-bold text-red-600">{rejectForm.errors.reason}</p>}
-                        <div className="mt-5 flex justify-end gap-2">
+                        <div className="flex justify-end gap-2">
                             <button type="button" onClick={() => { setRejectTarget(null); rejectForm.reset(); }} className="min-h-10 rounded-lg border border-gray-200 px-4 text-sm font-bold dark:border-gray-700">Batal</button>
                             <button disabled={rejectForm.processing || !rejectForm.data.reason.trim()} className="min-h-10 rounded-lg bg-red-600 px-4 text-sm font-black text-white disabled:opacity-50">
                                 {rejectForm.processing ? 'Memproses...' : 'Tolak dan Tandai Refund'}
                             </button>
                         </div>
                     </form>
-                </div>
-            )}
+                )}
+            </AdminDialog>
         </AuthenticatedLayout>
     );
 }

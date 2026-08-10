@@ -4,7 +4,12 @@ namespace App\Http\Controllers\SuperAdmin;
 
 use App\Models\Pengguna;
 use App\Models\Modul;
+use App\Models\LevelPembelajaran;
+use App\Models\LogReward;
+use App\Models\PengerjaanKuis;
+use App\Models\Progres;
 use App\Models\RiwayatStatusPengguna;
+use App\Services\ChartDataService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -94,6 +99,89 @@ class SuperAdminPenggunaController extends SuperAdminDasarController
         );
 
         return redirect()->back()->with('success', 'Status user berhasil diperbarui');
+    }
+
+    public function show(Request $request, Pengguna $user, ChartDataService $chartData)
+    {
+        abort_if($user->role !== 'user', 404);
+
+        $period = $chartData->resolvePeriod($request);
+        $fromDate = $chartData->fromDate($period);
+        $user->load([
+            'progress.module.level',
+            'attempts.quiz.module.level',
+            'certificates.level',
+            'kloterBelajar.programPembelajaran',
+            'subscriptions.paymentPlan',
+        ]);
+
+        $completedModuleIds = $user->progress->pluck('module_id')->all();
+        $levels = LevelPembelajaran::with(['modules' => fn ($query) => $query->where('status', 'published')])
+            ->orderBy('stage')
+            ->get();
+
+        $activity = $chartData->dailySeries($period, [
+            'progress' => Progres::query()->where('user_id', $user->id)->where('updated_at', '>=', $fromDate)
+                ->selectRaw('DATE(updated_at) as day, COUNT(*) as total')->groupBy('day')->pluck('total', 'day'),
+            'quiz_attempts' => PengerjaanKuis::query()->where('user_id', $user->id)->where('attempted_at', '>=', $fromDate)
+                ->selectRaw('DATE(attempted_at) as day, COUNT(*) as total')->groupBy('day')->pluck('total', 'day'),
+        ]);
+
+        return Inertia::render('Admin/DataUser/DetailUser', [
+            'backHref' => route('superadmin.users'),
+            'backLabel' => 'Kembali ke Data User',
+            'activityRouteName' => 'superadmin.users.show',
+            'filters' => ['period' => $period],
+            'studentActivitySeries' => $activity,
+            'student' => [
+                'id' => $user->id,
+                'username' => $user->username,
+                'email' => $user->email,
+                'avatar' => $user->avatar,
+                'status' => $user->status,
+                'subscription_status' => $user->subscription_status,
+                'xp' => (int) $user->xp,
+                'level' => (int) $user->level,
+                'streak_count' => (int) $user->streak_count,
+                'lessons_done' => $user->progress->count(),
+                'quizzes_done' => $user->attempts->count(),
+                'average_score' => round((float) $user->attempts->avg('score'), 1),
+                'kloters' => $user->kloterBelajar->map(fn ($kloter) => [
+                    'id' => $kloter->id,
+                    'name' => $kloter->nama,
+                    'program' => $kloter->programPembelajaran?->title,
+                    'status' => $kloter->pivot?->status,
+                    'joined_at' => $kloter->pivot?->joined_at
+                        ? \Illuminate\Support\Carbon::parse($kloter->pivot->joined_at)->format('d M Y')
+                        : null,
+                ])->values(),
+                'subscriptions' => $user->subscriptions->map(fn ($subscription) => [
+                    'id' => $subscription->id,
+                    'plan' => $subscription->paymentPlan?->name,
+                    'scope' => $subscription->scope_type,
+                    'status' => $subscription->status,
+                    'ends_at' => optional($subscription->end_date)->format('d M Y'),
+                ])->values(),
+            ],
+            'levelProgress' => $levels->map(function (LevelPembelajaran $level) use ($completedModuleIds) {
+                $total = $level->modules->count();
+                $completed = $level->modules->whereIn('id', $completedModuleIds)->count();
+
+                return ['id' => $level->id, 'name' => $level->level_name, 'total_lessons' => $total, 'completed_lessons' => $completed, 'percentage' => $total > 0 ? round(($completed / $total) * 100) : 0];
+            }),
+            'recentProgress' => $user->progress->sortByDesc('updated_at')->take(10)->values()->map(fn (Progres $progress) => [
+                'id' => $progress->id, 'lesson' => $progress->module?->title, 'completed_at' => optional($progress->completed_at ?? $progress->updated_at)->format('d M Y H:i'),
+            ]),
+            'recentAttempts' => $user->attempts->sortByDesc('attempted_at')->take(10)->values()->map(fn (PengerjaanKuis $attempt) => [
+                'id' => $attempt->id, 'quiz' => $attempt->quiz?->type, 'lesson' => $attempt->quiz?->module?->title, 'score' => $attempt->score, 'xp_earned' => $attempt->xp_earned,
+            ]),
+            'rewardHistory' => LogReward::query()->where('user_id', $user->id)->latest()->take(10)->get()->map(fn (LogReward $log) => [
+                'id' => $log->id, 'description' => $log->description, 'source_type' => $log->source_type, 'xp_amount' => $log->xp_amount, 'created_at' => $log->created_at->format('d M Y H:i'),
+            ]),
+            'certificates' => $user->certificates->map(fn ($certificate) => [
+                'id' => $certificate->id, 'level' => $certificate->level?->level_name, 'certificate_number' => $certificate->certificate_number, 'issued_at' => optional($certificate->issued_at)->format('d M Y'),
+            ]),
+        ]);
     }
 
     public function resetPassword(Request $request, Pengguna $user)

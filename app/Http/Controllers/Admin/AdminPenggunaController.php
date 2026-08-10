@@ -69,7 +69,7 @@ class AdminPenggunaController extends Controller
             'kloters' => $kloterService->pilihanKloterAdmin($admin),
             'selectedKloter' => $selectedKloter ? $this->selectedKloterPayload($selectedKloter) : null,
             'candidateStudents' => $selectedKloter ? $this->candidateStudents($selectedKloter) : [],
-            'pendingEnrollments' => $selectedKloter ? $this->pendingEnrollments($selectedKloter) : [],
+            'pendingEnrollments' => $this->pendingEnrollments($admin, $kloterService, $selectedKloter),
             'filters' => [
                 'search' => $search,
                 'kloter' => $selectedKloter?->id,
@@ -109,6 +109,8 @@ class AdminPenggunaController extends Controller
             'attempts.quiz.module.level',
             'certificates.level',
             'achievements',
+            'kloterBelajar.programPembelajaran',
+            'subscriptions.paymentPlan',
         ]);
 
         $completedModuleIds = $user->progress->pluck('module_id')->all();
@@ -157,6 +159,7 @@ class AdminPenggunaController extends Controller
                 'id' => $user->id,
                 'username' => $user->username,
                 'email' => $user->email,
+                'avatar' => $user->avatar,
                 'status' => $user->status,
                 'subscription_status' => $user->subscription_status,
                 'xp' => (int) $user->xp,
@@ -165,6 +168,22 @@ class AdminPenggunaController extends Controller
                 'lessons_done' => $user->progress->count(),
                 'quizzes_done' => $user->attempts->count(),
                 'average_score' => round((float) $user->attempts->avg('score'), 1),
+                'kloters' => $user->kloterBelajar->map(fn (KloterBelajar $kloter) => [
+                    'id' => $kloter->id,
+                    'name' => $kloter->nama,
+                    'program' => $kloter->programPembelajaran?->title,
+                    'status' => $kloter->pivot?->status,
+                    'joined_at' => $kloter->pivot?->joined_at
+                        ? \Illuminate\Support\Carbon::parse($kloter->pivot->joined_at)->format('d M Y')
+                        : null,
+                ])->values(),
+                'subscriptions' => $user->subscriptions->map(fn ($subscription) => [
+                    'id' => $subscription->id,
+                    'plan' => $subscription->paymentPlan?->name,
+                    'scope' => $subscription->scope_type,
+                    'status' => $subscription->status,
+                    'ends_at' => optional($subscription->end_date)->format('d M Y'),
+                ])->values(),
             ],
             'levelProgress' => $levelProgress,
             'recentProgress' => $user->progress
@@ -457,11 +476,20 @@ class AdminPenggunaController extends Controller
             ]);
     }
 
-    private function pendingEnrollments(KloterBelajar $kloter): Collection
+    private function pendingEnrollments(
+        Pengguna $admin,
+        KloterBelajarService $kloterService,
+        ?KloterBelajar $selectedKloter
+    ): Collection
     {
         return AnggotaKloter::query()
-            ->with(['user:id,username,email', 'transaction:id,transaction_code,amount,status,processed_at'])
-            ->where('kloter_belajar_id', $kloter->id)
+            ->with([
+                'user:id,username,email',
+                'transaction:id,transaction_code,amount,status,processed_at',
+                'kloterBelajar.programPembelajaran:id,title',
+            ])
+            ->whereIn('kloter_belajar_id', $kloterService->kloterDikelola($admin)->select('id'))
+            ->when($selectedKloter, fn (Builder $query) => $query->where('kloter_belajar_id', $selectedKloter->id))
             ->where('status', 'paid_pending_approval')
             ->oldest('updated_at')
             ->get()
@@ -471,6 +499,13 @@ class AdminPenggunaController extends Controller
                     'id' => $membership->user?->id,
                     'username' => $membership->user?->username,
                     'email' => $membership->user?->email,
+                ],
+                'kloter' => [
+                    'id' => $membership->kloterBelajar?->id,
+                    'name' => $membership->kloterBelajar?->nama,
+                    'program_name' => $membership->kloterBelajar?->programPembelajaran?->title,
+                    'tanggal_mulai' => optional($membership->kloterBelajar?->tanggal_mulai)->format('d M Y'),
+                    'tanggal_selesai' => optional($membership->kloterBelajar?->tanggal_selesai)->format('d M Y'),
                 ],
                 'transaction_code' => $membership->transaction?->transaction_code,
                 'amount_formatted' => 'Rp '.number_format((int) $membership->transaction?->amount),

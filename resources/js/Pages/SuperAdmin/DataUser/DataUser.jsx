@@ -146,6 +146,7 @@ export default function DataUser({
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex justify-end gap-2">
+                                                    <Link href={route('superadmin.users.show', item.id)} className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 text-xs font-black text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">Detail</Link>
                                                     <button onClick={() => setStatusTarget(item)} className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 text-xs font-black text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">
                                                         {item.raw_status === 'suspended' ? 'Activate' : 'Suspend'}
                                                     </button>

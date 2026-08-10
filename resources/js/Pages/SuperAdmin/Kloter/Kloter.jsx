@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Card from '@/Components/UI/Card';
+import SearchableSelect from '@/Components/UI/SearchableSelect';
 import StatCard from '@/Components/Features/Dashboard/StatCard';
 import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
 import ChartCard from '@/Components/Features/Dashboard/ChartCard';
@@ -219,10 +220,15 @@ export default function Kloter({
                                 <option value="archived">Arsip</option>
                                 <option value="all">Semua</option>
                             </select>
-                            <select value={filterForm.data.program} onChange={(event) => filterForm.setData('program', event.target.value)} className="h-11 rounded-xl border border-gray-200 bg-white px-4 text-sm font-bold dark:border-gray-700 dark:bg-gray-900">
-                                <option value="">Semua kelas</option>
-                                {programs.map((program) => <option key={program.id} value={program.id}>{program.title}</option>)}
-                            </select>
+                            <SearchableSelect
+                                value={filterForm.data.program}
+                                onChange={(programId) => filterForm.setData('program', programId)}
+                                placeholder="Semua kelas"
+                                searchPlaceholder="Cari kelas..."
+                                allowClear
+                                clearLabel="Semua kelas"
+                                options={programs.map((program) => ({ value: program.id, label: program.title }))}
+                            />
                             <button className="rounded-xl bg-gray-900 text-sm font-black text-white dark:bg-white dark:text-gray-900">Filter</button>
                         </form>
 
@@ -344,7 +350,47 @@ export default function Kloter({
 
                                 <section>
                                     <h3 className="text-sm font-black uppercase tracking-[0.18em] text-gray-400">Anggota</h3>
-                                    <div className="mt-3 overflow-x-auto">
+                                    <div className="mt-3 space-y-3 sm:hidden">
+                                        {(selectedKloter.anggota || []).length === 0 && (
+                                            <p className="rounded-2xl border border-dashed border-gray-200 p-5 text-center text-sm font-bold text-gray-400 dark:border-gray-700">Belum ada anggota.</p>
+                                        )}
+                                        {(selectedKloter.anggota || []).map((item) => (
+                                            <article key={item.id} className="rounded-2xl border border-gray-100 p-4 dark:border-gray-800">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="min-w-0">
+                                                        <p className="truncate text-sm font-black text-gray-900 dark:text-white">{item.user_name}</p>
+                                                        <p className="truncate text-xs text-gray-500 dark:text-gray-400">{item.user_email}</p>
+                                                    </div>
+                                                    <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">{item.status}</span>
+                                                </div>
+                                                <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                                                    <div><p className="font-bold uppercase tracking-wide text-gray-400">Masuk</p><p className="mt-1 font-semibold text-gray-700 dark:text-gray-300">{item.joined_at || '-'}</p></div>
+                                                    <div><p className="font-bold uppercase tracking-wide text-gray-400">Langganan</p><p className="mt-1 font-semibold text-gray-700 dark:text-gray-300">{item.subscription_until || '-'}</p></div>
+                                                </div>
+                                                <div className="mt-4">
+                                                    <div className="mb-1 flex justify-between text-[11px] font-black text-gray-400"><span>Progres</span><span>{item.progress_done}/{item.progress_total} · {item.progress_percent}%</span></div>
+                                                    <div className="h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800"><div className="h-full rounded-full bg-red-600" style={{ width: `${item.progress_percent || 0}%` }} /></div>
+                                                </div>
+                                                {item.status === 'active' && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openConfirm({
+                                                            variant: 'warning',
+                                                            title: 'Keluarkan User?',
+                                                            message: 'User akan keluar dari daftar anggota kloter, tetapi akun dan langganannya tidak dihapus.',
+                                                            confirmLabel: 'Iya, Keluarkan',
+                                                            details: [{ label: 'User', value: item.user_name }, { label: 'Kloter', value: selectedKloter.nama }],
+                                                            onConfirm: () => router.delete(route('superadmin.kloters.users.destroy', [selectedKloter.id, item.user_id]), { preserveScroll: true, onFinish: closeConfirm }),
+                                                        })}
+                                                        className="mt-4 w-full rounded-xl border border-red-100 px-3 py-2 text-xs font-black text-red-600 dark:border-red-900/40 dark:text-red-400"
+                                                    >
+                                                        Keluarkan dari Kloter
+                                                    </button>
+                                                )}
+                                            </article>
+                                        ))}
+                                    </div>
+                                    <div className="mt-3 hidden overflow-x-auto sm:block">
                                         <table className="min-w-[640px] w-full text-sm">
                                             <thead className="bg-gray-50 text-left text-[11px] font-black uppercase tracking-[0.18em] text-gray-400 dark:bg-gray-800/50">
                                                 <tr>
@@ -477,16 +523,10 @@ export default function Kloter({
                         </Field>
                         <div className="grid gap-4 sm:grid-cols-2">
                             <Field label="Kelas/program" help="Payment dan roadmap user akan mengikuti kelas ini.">
-                                <select value={kloterForm.data.program_pembelajaran_id} onChange={(event) => kloterForm.setData('program_pembelajaran_id', event.target.value)} className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm dark:border-gray-700 dark:bg-gray-900">
-                                    <option value="">Pilih kelas</option>
-                                    {programs.map((program) => <option key={program.id} value={program.id}>{program.title}</option>)}
-                                </select>
+                                <SearchableSelect value={kloterForm.data.program_pembelajaran_id} onChange={(programId) => kloterForm.setData('program_pembelajaran_id', programId)} placeholder="Pilih kelas" searchPlaceholder="Cari kelas atau program..." options={programs.map((program) => ({ value: program.id, label: program.title }))} />
                             </Field>
                             <Field label="Admin pengampu" help="Admin/sensei yang bertanggung jawab pada batch ini.">
-                                <select value={kloterForm.data.admin_id} onChange={(event) => kloterForm.setData('admin_id', event.target.value)} className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm dark:border-gray-700 dark:bg-gray-900">
-                                    <option value="">Pilih admin pengampu</option>
-                                    {admins.map((admin) => <option key={admin.id} value={admin.id}>{admin.label}</option>)}
-                                </select>
+                                <SearchableSelect value={kloterForm.data.admin_id} onChange={(adminId) => kloterForm.setData('admin_id', adminId)} placeholder="Pilih admin pengampu" searchPlaceholder="Cari nama atau email admin..." options={admins.map((admin) => ({ value: admin.id, label: admin.label }))} />
                             </Field>
                         </div>
                         <div className="grid gap-4 sm:grid-cols-2">
@@ -652,13 +692,14 @@ function Field({ label, help, children }) {
 
 function Modal({ title, onClose, children }) {
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl dark:bg-gray-900">
-                <div className="flex items-center justify-between border-b border-gray-100 p-6 dark:border-gray-800">
+        <div className="fixed inset-0 z-[110] flex items-end overflow-y-auto p-0 sm:items-center sm:p-5">
+            <button type="button" aria-label="Tutup dialog" className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+            <div className="relative flex max-h-[calc(100dvh-0.75rem)] w-full max-w-2xl flex-col overflow-hidden rounded-t-[1.5rem] bg-white shadow-2xl dark:bg-gray-900 sm:max-h-[calc(100dvh-2.5rem)] sm:rounded-[1.5rem]">
+                <div className="flex shrink-0 items-center justify-between border-b border-gray-100 p-4 sm:p-6 dark:border-gray-800">
                     <h3 className="text-lg font-black text-gray-900 dark:text-white">{title}</h3>
                     <button type="button" onClick={onClose} className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-black text-gray-500 dark:border-gray-700 dark:text-gray-300">Tutup</button>
                 </div>
-                <div className="p-6">{children}</div>
+                <div className="min-h-0 overflow-y-auto p-4 sm:p-6">{children}</div>
             </div>
         </div>
     );
