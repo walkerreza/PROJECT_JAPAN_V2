@@ -70,17 +70,18 @@ const optionCardTones = {
 
 function OptionCard({ href, icon, label, tone = 'orange' }) {
     const colors = optionCardTones[tone] || optionCardTones.orange;
-
-    return (
-        <Link
-            href={href}
-            className={`flex min-h-14 w-full cursor-pointer items-center justify-start rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm transition duration-200 dark:border-gray-700 dark:bg-gray-900 sm:p-4 ${colors.card}`}
-        >
+    const className = `flex min-h-14 w-full cursor-pointer items-center justify-start rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm transition duration-200 dark:border-gray-700 dark:bg-gray-900 sm:p-4 ${colors.card}`;
+    const content = (
+        <>
             <span className={`mr-3 grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white shadow-sm ${colors.icon}`}>
                 {icon}
             </span>
             <span className="min-w-0 truncate text-sm font-bold text-gray-900 dark:text-white">{label}</span>
-        </Link>
+        </>
+    );
+
+    return (
+        <Link href={href} className={className}>{content}</Link>
     );
 }
 
@@ -309,11 +310,7 @@ export default function ManajemenKelas({ programs = {}, levels = [], filters = {
                             />
 
                             <OptionCard
-                                href={route('admin.presentations.index', {
-                                    program_id: managingProgram.id,
-                                    classroom: 1,
-                                    program_title: managingProgram.title,
-                                })}
+                                href={route('admin.live-classes.create', { program_id: managingProgram.id })}
                                 icon={<VideoCameraFrontIcon sx={{ fontSize: 20 }} />}
                                 label="Ruang Kelas"
                                 tone="charcoal"
@@ -366,7 +363,7 @@ export default function ManajemenKelas({ programs = {}, levels = [], filters = {
             </AnimatePresence>
 
             {showForm && (
-                <div className="fixed inset-0 z-[70] overflow-y-auto bg-gray-950/60 p-4 backdrop-blur-sm">
+                <div className="fixed inset-0 z-[110] overflow-y-auto bg-gray-950/60 p-3 backdrop-blur-sm sm:p-5">
                     <div className="mx-auto my-6 max-w-6xl overflow-hidden rounded-[1.6rem] bg-white shadow-2xl dark:bg-gray-900">
                         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-gray-800">
                             <div>

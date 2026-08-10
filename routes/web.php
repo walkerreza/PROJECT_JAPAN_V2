@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\AdminLevelController;
 use App\Http\Controllers\Admin\AdminModulController;
 use App\Http\Controllers\Admin\AdminPenggunaController;
 use App\Http\Controllers\Admin\AdminPresentasiController;
+use App\Http\Controllers\Admin\RuangKelasLiveController as AdminRuangKelasLiveController;
 use App\Http\Controllers\Admin\AdminUnggahController;
 use App\Http\Controllers\HalamanController;
 use App\Http\Controllers\NotifikasiController;
@@ -29,6 +30,7 @@ use App\Http\Controllers\User\BerandaController as UserDashboardController;
 use App\Http\Controllers\User\BeritaController;
 use App\Http\Controllers\User\FlashcardController;
 use App\Http\Controllers\User\ModulController;
+use App\Http\Controllers\User\RuangKelasLiveController as UserRuangKelasLiveController;
 use App\Http\Controllers\User\PapanPeringkatController;
 use App\Http\Controllers\User\PembelajaranController;
 use App\Http\Controllers\User\ProgresController;
@@ -82,6 +84,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('role:superadmin')->prefix('superadmin')->name('superadmin.')->group(function () {
         Route::get('/dashboard', SuperAdminBerandaController::class)->name('dashboard');
         Route::get('/users', SuperAdminPenggunaController::class)->name('users');
+        Route::get('/users/{user}', [SuperAdminPenggunaController::class, 'show'])->name('users.show');
         Route::patch('/users/{user}/status', [SuperAdminPenggunaController::class, 'updateStatus'])->name('users.status');
         Route::post('/users/{user}/reset-password', [SuperAdminPenggunaController::class, 'resetPassword'])->name('users.reset-password');
         Route::get('/admins', SuperAdminPengelolaAdminController::class)->name('admins');
@@ -144,7 +147,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/vocabulary/{vocabulary}', [AdminKosakataController::class, 'destroy'])->name('vocabulary.destroy');
         Route::post('/vocabulary/import', [AdminKosakataController::class, 'import'])->middleware('throttle:admin-imports')->name('vocabulary.import');
         Route::get('/vocabulary/template/{format?}', [AdminKosakataController::class, 'template'])->name('vocabulary.template');
-        Route::get('/flashcards', [AdminFlashcardController::class, 'index'])->name('flashcards.index');
+        Route::get('/flashcards', static fn () => redirect()->route('admin.programs.index'))->name('flashcards.index');
         Route::post('/flashcards', [AdminFlashcardController::class, 'store'])->name('flashcards.store');
         Route::put('/flashcards/{flashcardSet}', [AdminFlashcardController::class, 'update'])->name('flashcards.update');
         Route::delete('/flashcards/{flashcardSet}', [AdminFlashcardController::class, 'destroy'])->name('flashcards.destroy');
@@ -153,7 +156,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/flashcards/{flashcardSet}/template/{format?}', [AdminFlashcardController::class, 'downloadImportTemplate'])->name('flashcards.template');
         Route::post('/flashcards/{flashcardSet}/import', [AdminFlashcardController::class, 'importCards'])->middleware('throttle:admin-imports')->name('flashcards.import');
         Route::post('/flashcards/{flashcardSet}/generate-quiz', [AdminFlashcardController::class, 'generateQuiz'])->name('flashcards.generate-quiz');
-        Route::get('/presentations', [AdminPresentasiController::class, 'index'])->name('presentations.index');
+        Route::get('/presentations', static fn () => redirect()->route('admin.programs.index'))->name('presentations.index');
         Route::post('/presentations', [AdminPresentasiController::class, 'store'])->name('presentations.store');
         Route::put('/presentations/{presentationDeck}', [AdminPresentasiController::class, 'update'])->name('presentations.update');
         Route::delete('/presentations/{presentationDeck}', [AdminPresentasiController::class, 'destroy'])->name('presentations.destroy');
@@ -167,7 +170,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/presentations/{presentationDeck}/media', [AdminPresentasiController::class, 'uploadMedia'])->middleware('throttle:admin-uploads')->name('presentations.media.upload');
         Route::post('/presentations/{presentationDeck}/slides/{presentationSlide}/jamboard', [AdminPresentasiController::class, 'saveSlideBoard'])->name('presentations.slides.jamboard.save');
         Route::get('/presentations/{presentationDeck}/presenter', [AdminPresentasiController::class, 'presenter'])->name('presentations.presenter');
-        Route::redirect('/boards', '/admin/presentations')->name('boards.index');
+        Route::get('/live-classes/create', [AdminRuangKelasLiveController::class, 'create'])->name('live-classes.create');
+        Route::post('/live-classes', [AdminRuangKelasLiveController::class, 'store'])->middleware('throttle:live-room-create')->name('live-classes.store');
+        Route::get('/live-classes/{liveClassSession}', [AdminRuangKelasLiveController::class, 'show'])->name('live-classes.show');
+        Route::post('/live-classes/{liveClassSession}/token', [AdminRuangKelasLiveController::class, 'token'])->middleware('throttle:live-room-token')->name('live-classes.token');
+        Route::patch('/live-classes/{liveClassSession}/state', [AdminRuangKelasLiveController::class, 'state'])->middleware('throttle:live-room-state')->name('live-classes.state');
+        Route::patch('/live-classes/{liveClassSession}/participants/{user}', [AdminRuangKelasLiveController::class, 'updateParticipant'])->middleware('throttle:live-room-control')->name('live-classes.participants.update');
+        Route::delete('/live-classes/{liveClassSession}/participants/{user}', [AdminRuangKelasLiveController::class, 'kick'])->middleware('throttle:live-room-control')->name('live-classes.participants.kick');
+        Route::post('/live-classes/{liveClassSession}/mute-all', [AdminRuangKelasLiveController::class, 'muteAll'])->middleware('throttle:live-room-control')->name('live-classes.mute-all');
+        Route::post('/live-classes/{liveClassSession}/end', [AdminRuangKelasLiveController::class, 'end'])->middleware('throttle:live-room-control')->name('live-classes.end');
+        Route::get('/boards', static fn () => redirect()->route('admin.programs.index'))->name('boards.index');
         Route::any('/gamification/{path?}', static fn () => abort(403))->where('path', '.*')->name('gamification.legacy');
         Route::any('/achievements/{path?}', static fn () => abort(403))->where('path', '.*')->name('achievements.legacy');
         Route::redirect('/subscriptions', '/admin/dashboard')->name('subscriptions.index');
@@ -187,7 +199,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/upload', [AdminUnggahController::class, 'store'])->middleware('throttle:admin-uploads')->name('upload');
 
         // Quizzes CRUD (home/index untuk daftar kuis)
-        Route::get('/quizzes', [AdminKuisController::class, 'index'])->name('quizzes.index');
+        Route::get('/quizzes', static fn () => redirect()->route('admin.programs.index'))->name('quizzes.index');
         Route::post('/quizzes', [AdminKuisController::class, 'store'])->name('quizzes.store');
         Route::put('/quizzes/{quiz}', [AdminKuisController::class, 'update'])->name('quizzes.update');
         Route::patch('/quizzes/{quiz}/status', [AdminKuisController::class, 'updateStatus'])->name('quizzes.status');
@@ -240,6 +252,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/access-keys/redeem', [UserDashboardController::class, 'redeemAccessKey'])->middleware('throttle:access-keys')->name('access-keys.redeem');
         Route::get('/news', [BeritaController::class, 'index'])->name('news.index');
         Route::get('/news/{news}', [BeritaController::class, 'show'])->name('news.show');
+        Route::get('/live-classes/{session:join_code}', [UserRuangKelasLiveController::class, 'show'])->name('live-classes.show');
+        Route::post('/live-classes/{session:join_code}/token', [UserRuangKelasLiveController::class, 'token'])->middleware('throttle:live-room-token')->name('live-classes.token');
+        Route::post('/live-classes/{session:join_code}/leave', [UserRuangKelasLiveController::class, 'leave'])->middleware('throttle:live-room-control')->name('live-classes.leave');
 
         Route::get('/quizzes', [PembelajaranController::class, 'quizLobby'])->name('quizzes.index');
         Route::get('/quizzes/{quiz}', [PembelajaranController::class, 'showQuiz'])->name('quizzes.show');

@@ -14,3 +14,4 @@ Schedule::command('logs:prune --days=90')->dailyAt('00:45');
 Schedule::command('payments:reconcile-pending --hours=48')->everyTenMinutes()->withoutOverlapping();
 Schedule::command('news:publish-scheduled')->everyMinute()->withoutOverlapping();
 Schedule::command('auth:clear-resets')->everyFifteenMinutes()->withoutOverlapping();
+Schedule::command('live-classes:cleanup-snapshots --days=30')->dailyAt('01:00')->withoutOverlapping();

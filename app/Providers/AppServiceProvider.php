@@ -35,6 +35,14 @@ class AppServiceProvider extends ServiceProvider
             ->by((string) ($request->user()?->id ?? $request->ip())));
         RateLimiter::for('learning-actions', fn (Request $request) => Limit::perMinute(60)
             ->by(($request->user()?->id ?? 'guest').':'.$request->ip()));
+        RateLimiter::for('live-room-create', fn (Request $request) => Limit::perMinute(5)
+            ->by(($request->user()?->id ?? 'guest').':'.$request->ip()));
+        RateLimiter::for('live-room-token', fn (Request $request) => Limit::perMinute(15)
+            ->by(($request->user()?->id ?? 'guest').':'.$request->ip()));
+        RateLimiter::for('live-room-state', fn (Request $request) => Limit::perMinute(30)
+            ->by(($request->user()?->id ?? 'guest').':'.$request->ip()));
+        RateLimiter::for('live-room-control', fn (Request $request) => Limit::perMinute(30)
+            ->by(($request->user()?->id ?? 'guest').':'.$request->ip()));
         RateLimiter::for('admin-imports', fn (Request $request) => Limit::perMinutes(10, 3)
             ->by(($request->user()?->id ?? 'guest').':'.$request->ip()));
         RateLimiter::for('admin-uploads', fn (Request $request) => Limit::perMinutes(10, 20)

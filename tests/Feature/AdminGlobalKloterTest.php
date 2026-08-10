@@ -220,6 +220,47 @@ it('shows every student to global admin and only assigned students to kloter adm
             ->has('kloters', 1));
 });
 
+it('shows pending approvals from every managed cohort without requiring a cohort filter', function () {
+    $fixture = createAdminGlobalKloterFixture();
+    $student = Pengguna::factory()->create(['role' => 'user', 'status' => 'active']);
+    $plan = PaketPembayaran::create([
+        'name' => 'Mentor Approval Scope A',
+        'slug' => 'mentor-approval-scope-a',
+        'scope_type' => 'kloter',
+        'program_pembelajaran_id' => $fixture['programA']->id,
+        'price' => 99000,
+        'duration_days' => 30,
+        'is_active' => true,
+    ]);
+    $transaction = Transaksi::create([
+        'transaction_code' => 'TRX-PENDING-APPROVAL-SCOPE-A',
+        'user_id' => $student->id,
+        'payment_plan_id' => $plan->id,
+        'scope_type' => 'kloter',
+        'program_pembelajaran_id' => $fixture['programA']->id,
+        'kloter_belajar_id' => $fixture['kloterA']->id,
+        'amount' => 99000,
+        'payment_method' => 'midtrans',
+        'status' => 'success',
+        'processed_at' => now(),
+    ]);
+    AnggotaKloter::create([
+        'kloter_belajar_id' => $fixture['kloterA']->id,
+        'user_id' => $student->id,
+        'transaction_id' => $transaction->id,
+        'joined_at' => now(),
+        'status' => 'paid_pending_approval',
+    ]);
+
+    $this->actingAs($fixture['globalAdmin'])
+        ->get(route('admin.users'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Admin/DataUser/DataUser')
+            ->has('pendingEnrollments', 1)
+            ->where('pendingEnrollments.0.kloter.id', $fixture['kloterA']->id)
+            ->where('pendingEnrollments.0.user.id', $student->id));
+});
+
 it('rejects student and cohort access outside a kloter admin assignment', function () {
     $fixture = createAdminGlobalKloterFixture();
 
@@ -331,7 +372,7 @@ it('lets an assigned admin update schedule and manage roster without deleting ac
         ->and($subscription->fresh()->status)->toBe('active');
 });
 
-it('allows superadmin to provision scoped admins and lists only kloter admins as instructors', function () {
+it('allows superadmin to provision scoped admins and lists active admins as instructors', function () {
     $fixture = createAdminGlobalKloterFixture();
     $superadmin = Pengguna::factory()->create([
         'role' => 'superadmin',
@@ -360,8 +401,29 @@ it('allows superadmin to provision scoped admins and lists only kloter admins as
         ->get(route('superadmin.kloters'))
         ->assertInertia(fn (Assert $page) => $page
             ->component('SuperAdmin/Kloter/Kloter')
-            ->has('admins', 3)
-            ->where('admins.0.id', $newKloterAdmin->id));
+            ->has('admins', 4)
+            ->where('admins.0.id', $newKloterAdmin->id)
+            ->where('admins.1.id', $fixture['globalAdmin']->id));
+});
+
+it('opens live classroom setup with cohorts assigned to the selected instructor', function () {
+    $fixture = createAdminGlobalKloterFixture();
+
+    $this->actingAs($fixture['kloterAdmin'])
+        ->get(route('admin.live-classes.create', ['program_id' => $fixture['programA']->id]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Admin/RuangKelas/Show')
+            ->where('setup.program.id', $fixture['programA']->id)
+            ->has('setup.kloters', 1)
+            ->where('setup.kloters.0.id', $fixture['kloterA']->id));
+
+    $this->actingAs($fixture['globalAdmin'])
+        ->get(route('admin.live-classes.create', ['program_id' => $fixture['programA']->id]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Admin/RuangKelas/Show')
+            ->has('setup.kloters', 0));
 });
 
 it('prevents removing kloter scope while an admin still owns a cohort', function () {

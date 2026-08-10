@@ -1,0 +1,24 @@
+[Unit]
+Description=JapanLingo Laravel Reverb WebSocket Server
+Documentation=https://laravel.com/docs/reverb
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=webtest
+Group=www-data
+WorkingDirectory=/var/www/project_japan_v2
+ExecStart=/usr/bin/php artisan reverb:start --host=127.0.0.1 --port=8080
+ExecReload=/usr/bin/php artisan reverb:restart
+Restart=always
+RestartSec=3
+KillSignal=SIGTERM
+TimeoutStopSec=30
+LimitNOFILE=10000
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=japanlingo-reverb
+
+[Install]
+WantedBy=multi-user.target
