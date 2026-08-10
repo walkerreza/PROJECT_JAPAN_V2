@@ -22,66 +22,6 @@ use Inertia\Inertia;
 
 class AdminKuisController extends Controller
 {
-    public function index(Request $request)
-    {
-        $query = Kuis::with([
-            'module:id,program_pembelajaran_id,title,week_number',
-            'day:id,module_id,day_number,title',
-            'questions:id,quiz_id,type',
-        ])
-            ->withCount(['questions', 'attempts'])
-            ->latest();
-
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function ($query) use ($search) {
-                $query->whereHas('module', fn ($moduleQuery) => $moduleQuery->where('title', 'like', '%'.$search.'%'))
-                    ->orWhere('type', 'like', '%'.$search.'%');
-            });
-        }
-
-        if ($request->filled('module_id')) {
-            $query->where('module_id', $request->module_id);
-        }
-
-        if ($request->filled('module_day_id')) {
-            $query->where('module_day_id', $request->integer('module_day_id'));
-        }
-
-        if ($request->filled('program_id')) {
-            $query->whereHas('module', fn ($moduleQuery) => $moduleQuery
-                ->where('program_pembelajaran_id', $request->integer('program_id')));
-        }
-
-        $quizzes = $query->paginate(10)->through(fn ($quiz) => [
-            'id' => $quiz->id,
-            'exam_order' => $quiz->exam_order,
-            'is_weekly_exam' => $quiz->isWeeklyExam(),
-            'type' => $quiz->type,
-            'question_types' => $quiz->questions->pluck('type')->filter()->unique()->values(),
-            'time_limit' => $quiz->time_limit,
-            'passing_score' => $quiz->passing_score ?? 70,
-            'available_at' => $quiz->available_at?->toISOString(),
-            'status' => $quiz->status ?? 'published',
-            'question_count' => $quiz->questions_count,
-            'attempt_count' => $quiz->attempts_count,
-            'module' => $quiz->module,
-            'day' => $quiz->day,
-            'lesson' => null,
-        ]);
-
-        return Inertia::render('Admin/Kuis/ManajemenKuis', [
-            'quizzes' => $quizzes,
-            'modules' => Modul::with('days:id,module_id,day_number,title,status')
-                ->when($request->filled('program_id'), fn ($moduleQuery) => $moduleQuery
-                    ->where('program_pembelajaran_id', $request->integer('program_id')))
-                ->orderBy('week_number')
-                ->orderBy('id')
-                ->get(['id', 'program_pembelajaran_id', 'title', 'week_number']),
-            'filters' => $request->only('search', 'program_id', 'module_id', 'module_day_id'),
-        ]);
-    }
-
     public function store(
         KuisRequest $request,
         NotifikasiPenggunaService $notifikasi
@@ -127,6 +67,12 @@ class AdminKuisController extends Controller
         $validated['available_at'] = filled($validated['module_day_id'] ?? null)
             ? null
             : ($validated['available_at'] ?? null);
+
+        if (($validated['status'] ?? $quiz->status) === 'published' && ! $quiz->questions()->exists()) {
+            throw ValidationException::withMessages([
+                'status' => 'Kuis tanpa soal tidak dapat dipublikasikan.',
+            ]);
+        }
 
         DB::transaction(function () use ($quiz, $validated) {
             $oldModuleId = $quiz->module_id;
@@ -181,6 +127,9 @@ class AdminKuisController extends Controller
 
     public function destroy(Kuis $quiz)
     {
+        $module = $quiz->module()->first(['id', 'program_pembelajaran_id']);
+        $dayId = $quiz->module_day_id;
+
         DB::transaction(function () use ($quiz) {
             $moduleId = (int) $quiz->module_id;
             $wasWeeklyExam = $quiz->isWeeklyExam();
@@ -192,12 +141,19 @@ class AdminKuisController extends Controller
             }
         });
 
-        return redirect()->back()->with('success', 'Kuis berhasil dihapus');
+        return $module
+            ? redirect()->route('admin.modules.index', [
+                'program_id' => $module->program_pembelajaran_id,
+                'week_id' => $module->id,
+                'day_id' => $dayId,
+                'focus' => 'roadmap',
+            ])->with('success', 'Kuis berhasil dihapus')
+            : redirect()->route('admin.programs.index')->with('success', 'Kuis berhasil dihapus');
     }
 
     public function legacyQuestionsIndex()
     {
-        return redirect()->route('admin.quizzes.index');
+        return redirect()->route('admin.programs.index');
     }
 
     public function legacyQuestionEdit(Soal $question)

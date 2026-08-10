@@ -46,7 +46,7 @@ export default function QuizBuilder({
             day_id: quiz.day?.id,
             focus: 'roadmap',
         })
-        : route('admin.quizzes.index');
+        : route('admin.programs.index');
     const [activeIndex, setActiveIndex] = useState(0);
     const [activeTab, setActiveTab] = useState(
         flashcardWorkspace?.sets?.length ? 'flashcards' : 'questions',
@@ -206,6 +206,46 @@ export default function QuizBuilder({
             onSuccess: () => {
                 cleanSnapshotRef.current = JSON.stringify(data);
             },
+        });
+    };
+
+    const toggleQuizStatus = () => {
+        const nextStatus = quiz?.status === 'published' ? 'draft' : 'published';
+        requestUnsavedAction(() => openConfirm({
+            variant: nextStatus === 'published' ? 'success' : 'warning',
+            title: nextStatus === 'published' ? 'Publish Kuis?' : 'Ubah ke Draft?',
+            message: nextStatus === 'published'
+                ? 'Kuis akan tersedia mengikuti aturan akses dan progres Day.'
+                : 'Kuis akan disembunyikan sementara dari user.',
+            confirmLabel: nextStatus === 'published' ? 'Publish' : 'Ubah ke Draft',
+            onConfirm: () => router.patch(route('admin.quizzes.status', quiz.id), {
+                status: nextStatus,
+            }, {
+                preserveScroll: true,
+                onFinish: closeConfirm,
+            }),
+        }), {
+            title: 'Simpan Soal Terlebih Dahulu',
+            message: 'Status tidak dapat diubah sebelum perubahan soal disimpan.',
+        });
+    };
+
+    const deleteQuiz = () => {
+        requestUnsavedAction(() => openConfirm({
+            variant: 'danger',
+            title: 'Hapus Kuis Day?',
+            message: 'Kuis, soal, dan data terkait akan dihapus. Aksi ini tidak dapat dibatalkan.',
+            confirmLabel: 'Hapus Kuis',
+            details: [
+                { label: 'Day', value: quiz?.day?.title || '-' },
+                { label: 'Soal', value: `${data.questions.length} soal` },
+            ],
+            onConfirm: () => router.delete(route('admin.quizzes.destroy', quiz.id), {
+                onFinish: closeConfirm,
+            }),
+        }), {
+            title: 'Perubahan Belum Disimpan',
+            message: 'Simpan atau batalkan perubahan soal sebelum menghapus kuis.',
         });
     };
 
@@ -610,6 +650,27 @@ export default function QuizBuilder({
                                 <p className="mt-1 text-xs font-semibold text-amber-700/80 dark:text-amber-200/80">
                                     Pengacakan soal, pengacakan opsi, batas percobaan, dan aturan tampilan pembahasan belum disimpan di backend. Untuk saat ini user memakai urutan soal dan feedback dari flow kuis yang sudah aktif.
                                 </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="border-t border-gray-100 pt-6 dark:border-gray-800">
+                    <div className="rounded-2xl border border-gray-200 p-4 dark:border-gray-700">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Lokasi latihan</p>
+                        <p className="mt-1 text-sm font-black text-gray-900 dark:text-white">Week {quiz?.module?.week_number || '-'} - {quiz?.module?.title || 'Modul'}</p>
+                        <p className="mt-1 text-xs font-bold text-gray-500 dark:text-gray-400">Hari {quiz?.day?.day_number || '-'} - {quiz?.day?.title || 'Day'}</p>
+                        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <span className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-black ${quiz?.status === 'published' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'}`}>
+                                {quiz?.status === 'published' ? 'Published' : 'Draft'}
+                            </span>
+                            <div className="flex flex-wrap gap-2">
+                                <button type="button" onClick={toggleQuizStatus} className="h-10 rounded-xl border border-gray-200 px-4 text-xs font-black text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">
+                                    {quiz?.status === 'published' ? 'Ubah ke Draft' : 'Publish Kuis'}
+                                </button>
+                                <button type="button" onClick={deleteQuiz} className="h-10 rounded-xl border border-red-200 px-4 text-xs font-black text-red-600 hover:bg-red-50 dark:border-red-900/50 dark:hover:bg-red-950/20">
+                                    Hapus Kuis
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -1091,8 +1152,8 @@ export default function QuizBuilder({
                 </div>
             )}
             {showVocabularyGenerate && (
-                <div className="fixed inset-0 z-[70] flex items-center justify-center bg-gray-950/50 p-4 backdrop-blur-sm">
-                    <form onSubmit={handleGenerateVocabularyQuestions} className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl dark:bg-gray-900">
+                <div className="fixed inset-0 z-[110] flex items-end overflow-y-auto bg-gray-950/50 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4">
+                    <form onSubmit={handleGenerateVocabularyQuestions} className="w-full max-w-lg rounded-t-3xl bg-white p-4 shadow-2xl dark:bg-gray-900 sm:rounded-3xl sm:p-6">
                         <div className="mb-5">
                             <p className="text-xs font-black uppercase tracking-[0.25em] text-orange-600">Bank Konten N3</p>
                             <h2 className="text-xl font-black text-gray-900 dark:text-white">Generate Soal dari Konten N3</h2>
@@ -1178,7 +1239,7 @@ export default function QuizBuilder({
                 </div>
             )}
             {importPreview && (
-                <div className="fixed inset-0 z-[75] flex items-center justify-center bg-gray-950/60 p-4 backdrop-blur-sm">
+                <div className="fixed inset-0 z-[110] flex items-end overflow-y-auto bg-gray-950/60 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4">
                     <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-gray-900">
                         <div className="border-b border-gray-100 p-5 dark:border-gray-800 sm:p-6">
                             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

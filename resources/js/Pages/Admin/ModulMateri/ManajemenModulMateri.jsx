@@ -4,6 +4,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
 import LearningResourceCreateDialog from '@/Components/Admin/LearningResourceCreateDialog';
 import ModuleDayDialog from '@/Components/Admin/ModuleDayDialog';
+import SearchableSelect from '@/Components/UI/SearchableSelect';
 
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -463,10 +464,13 @@ export default function ModulesIndex({ modules, levels = [], programs = [], filt
                             </div>
 
                             <div className="grid w-full gap-2 sm:grid-cols-[minmax(0,260px)_auto] lg:w-auto">
-                                <select value={selectedProgramId} onChange={(event) => chooseProgram(event.target.value)} className="h-11 rounded-xl border border-gray-200 bg-gray-50 px-4 text-sm font-bold text-gray-700 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-200">
-                                    <option value="">Pilih kelas</option>
-                                    {programs.map((program) => <option key={program.id} value={program.id}>{program.title}</option>)}
-                                </select>
+                                <SearchableSelect
+                                    value={selectedProgramId}
+                                    onChange={chooseProgram}
+                                    placeholder="Pilih kelas"
+                                    searchPlaceholder="Cari kelas..."
+                                    options={programs.map((program) => ({ value: program.id, label: program.title }))}
+                                />
                                 <button type="button" onClick={openCreateModule} disabled={!selectedProgramId} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-orange-600 px-4 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-40">
                                     <AddIcon sx={{ fontSize: 18 }} />
                                     Tambah Minggu

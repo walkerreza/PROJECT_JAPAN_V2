@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Card from '@/Components/UI/Card';
+import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
@@ -10,6 +11,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 
 const emptyCard = {
@@ -80,7 +82,7 @@ export function FlashcardEditorWorkspace({
             day_id: set.day?.id,
             focus: 'flashcard',
         })
-        : route('admin.flashcards.index');
+        : route('admin.programs.index');
     const rows = vocabulary.data || [];
     const importInputRef = useRef(null);
     const [cards, setCards] = useState(() => (set.flashcards || []).map((card) => normalizeCard(card)));
@@ -91,7 +93,17 @@ export function FlashcardEditorWorkspace({
     const [activeIndex, setActiveIndex] = useState(0);
     const [showImportMenu, setShowImportMenu] = useState(false);
     const [showLibrary, setShowLibrary] = useState(false);
+    const [showSetSettings, setShowSetSettings] = useState(false);
     const generateForm = useForm({ quiz_id: '', mode: 'word_to_meaning', count: 10 });
+    const settingsForm = useForm({
+        title: set.title || '',
+        description: set.description || '',
+        level_id: set.level_id || null,
+        module_id: set.module_id,
+        module_day_id: set.module_day_id,
+        status: set.status || 'draft',
+    });
+    const { confirmState, openConfirm, closeConfirm } = useConfirmAction();
     const activeCard = cards[activeIndex] || null;
 
     useEffect(() => {
@@ -201,6 +213,33 @@ export function FlashcardEditorWorkspace({
         });
     };
 
+    const updateSet = (event) => {
+        event.preventDefault();
+        settingsForm.put(route('admin.flashcards.update', set.id), {
+            preserveScroll: true,
+            onSuccess: () => {
+                setSetRecordStatus(settingsForm.data.status);
+                setShowSetSettings(false);
+            },
+        });
+    };
+
+    const deleteSet = () => {
+        openConfirm({
+            variant: 'danger',
+            title: 'Hapus Flashcard Day?',
+            message: 'Set dan seluruh kartu di dalamnya akan dihapus. Aksi ini tidak dapat dibatalkan.',
+            confirmLabel: 'Hapus Flashcard',
+            details: [
+                { label: 'Set', value: set.title },
+                { label: 'Kartu', value: `${cards.length} kartu` },
+            ],
+            onConfirm: () => router.delete(route('admin.flashcards.destroy', set.id), {
+                onFinish: closeConfirm,
+            }),
+        });
+    };
+
     const workspace = (
             <div className={`space-y-6 ${embedded ? 'py-5' : 'px-4 py-6 sm:px-6 lg:px-8'}`}>
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
@@ -221,6 +260,14 @@ export function FlashcardEditorWorkspace({
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setShowSetSettings(true)}
+                            className="flex h-11 items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-sm font-bold text-gray-700 shadow-sm transition-colors hover:border-gray-400 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+                        >
+                            <SettingsOutlinedIcon sx={{ fontSize: 18 }} />
+                            Pengaturan
+                        </button>
                         <div className="relative">
                             <button
                                 type="button"
@@ -419,7 +466,7 @@ export function FlashcardEditorWorkspace({
                         })()}
                     </div>
 
-                    <aside className={`${showLibrary ? 'fixed inset-0 z-[80] flex justify-end bg-gray-950/60' : 'hidden'} xl:sticky xl:top-6 xl:block xl:self-start xl:bg-transparent`}>
+                    <aside className={`${showLibrary ? 'fixed inset-0 z-[110] flex justify-end bg-gray-950/60' : 'hidden'} xl:sticky xl:top-6 xl:block xl:self-start xl:bg-transparent`}>
                         <div className={`${showLibrary ? 'h-full w-full max-w-md space-y-4 overflow-y-auto bg-[#F8F9FB] p-4 dark:bg-gray-950' : 'space-y-4'}`}>
                             <div className="flex items-center justify-between xl:hidden">
                                 <div>
@@ -490,6 +537,52 @@ export function FlashcardEditorWorkspace({
                         </div>
                     </aside>
                 </div>
+                {showSetSettings && (
+                    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-gray-950/60 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+                        <form onSubmit={updateSet} className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl dark:bg-gray-900 sm:rounded-3xl sm:p-6">
+                            <div className="flex items-start justify-between gap-4">
+                                <div>
+                                    <p className="text-xs font-black uppercase tracking-[0.22em] text-teal-600">Pengaturan Flashcard</p>
+                                    <h2 className="mt-1 text-xl font-black text-gray-900 dark:text-white">Informasi set</h2>
+                                </div>
+                                <button type="button" onClick={() => setShowSetSettings(false)} className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300" title="Tutup">
+                                    <CloseIcon sx={{ fontSize: 19 }} />
+                                </button>
+                            </div>
+                            <div className="mt-5 rounded-2xl bg-gray-50 p-4 dark:bg-gray-800/60">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Lokasi materi</p>
+                                <p className="mt-1 text-sm font-black text-gray-900 dark:text-white">Week {set.module?.week_number || '-'} - {set.module?.title || 'Modul'}</p>
+                                <p className="mt-1 text-xs font-bold text-gray-500 dark:text-gray-400">Hari {set.day?.day_number || '-'} - {set.day?.title || 'Day'}</p>
+                            </div>
+                            <div className="mt-5 space-y-4">
+                                <label className="block">
+                                    <span className="mb-1.5 block text-xs font-black text-gray-600 dark:text-gray-300">Judul set</span>
+                                    <input value={settingsForm.data.title} onChange={(event) => settingsForm.setData('title', event.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white" required />
+                                </label>
+                                <label className="block">
+                                    <span className="mb-1.5 block text-xs font-black text-gray-600 dark:text-gray-300">Deskripsi</span>
+                                    <textarea value={settingsForm.data.description || ''} onChange={(event) => settingsForm.setData('description', event.target.value)} className="min-h-24 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
+                                </label>
+                                <label className="block">
+                                    <span className="mb-1.5 block text-xs font-black text-gray-600 dark:text-gray-300">Status</span>
+                                    <select value={settingsForm.data.status} onChange={(event) => settingsForm.setData('status', event.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
+                                        <option value="draft">Draft</option>
+                                        <option value="published">Published</option>
+                                    </select>
+                                </label>
+                                {Object.keys(settingsForm.errors).length > 0 && <p className="text-sm font-bold text-red-600">{Object.values(settingsForm.errors)[0]}</p>}
+                            </div>
+                            <div className="mt-6 flex flex-col-reverse gap-3 border-t border-gray-100 pt-5 dark:border-gray-800 sm:flex-row sm:justify-between">
+                                <button type="button" onClick={deleteSet} className="h-11 rounded-xl border border-red-200 px-4 text-sm font-black text-red-600 hover:bg-red-50 dark:border-red-900/50 dark:hover:bg-red-950/20">Hapus set</button>
+                                <div className="flex gap-3">
+                                    <button type="button" onClick={() => setShowSetSettings(false)} className="h-11 flex-1 rounded-xl border border-gray-200 px-4 text-sm font-black text-gray-600 dark:border-gray-700 dark:text-gray-300 sm:flex-none">Batal</button>
+                                    <button disabled={settingsForm.processing} className="h-11 flex-1 rounded-xl bg-teal-600 px-5 text-sm font-black text-white disabled:opacity-50 sm:flex-none">{settingsForm.processing ? 'Menyimpan...' : 'Simpan'}</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                )}
+                <ConfirmActionDialog {...confirmState} onCancel={closeConfirm} />
             </div>
     );
 

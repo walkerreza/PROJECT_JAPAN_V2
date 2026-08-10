@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Head, router, useForm } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CloseIcon from '@mui/icons-material/Close';
@@ -306,7 +307,7 @@ export default function BuilderUjian({ quiz, questions: initialQuestions = [] })
             week_id: quiz.module.id,
             focus: 'roadmap',
         })
-        : route('admin.quizzes.index');
+        : route('admin.programs.index');
     const initialForm = {
         time_limit: quiz?.time_limit ?? '',
         passing_score: quiz?.passing_score ?? 70,
@@ -328,6 +329,7 @@ export default function BuilderUjian({ quiz, questions: initialQuestions = [] })
         mode: 'word_to_meaning',
         status: 'published',
     });
+    const { confirmState, openConfirm, closeConfirm } = useConfirmAction();
     const questionErrors = useMemo(() => data.questions.map(getQuestionError), [data.questions]);
     const firstErrorIndex = questionErrors.findIndex(Boolean);
     const totalPoints = data.questions.reduce((sum, question) => sum + Math.max(1, Number(question.points || 1)), 0);
@@ -434,6 +436,52 @@ export default function BuilderUjian({ quiz, questions: initialQuestions = [] })
         });
     };
 
+    const requireSavedExam = (action) => {
+        if (!hasUnsavedChanges) {
+            action();
+            return;
+        }
+
+        openConfirm({
+            variant: 'warning',
+            title: 'Perubahan Belum Disimpan',
+            message: 'Simpan atau reset perubahan soal sebelum mengubah status atau menghapus ujian.',
+            confirmLabel: 'Tutup',
+            cancelLabel: 'Batal',
+            onConfirm: closeConfirm,
+        });
+    };
+
+    const toggleExamStatus = () => requireSavedExam(() => {
+        const nextStatus = quiz.status === 'published' ? 'draft' : 'published';
+        openConfirm({
+            variant: nextStatus === 'published' ? 'success' : 'warning',
+            title: nextStatus === 'published' ? 'Publish Ujian?' : 'Ubah ke Draft?',
+            message: nextStatus === 'published' ? 'Ujian akan tersedia mengikuti jadwal Week.' : 'Ujian akan disembunyikan sementara dari user.',
+            confirmLabel: nextStatus === 'published' ? 'Publish' : 'Ubah ke Draft',
+            onConfirm: () => router.patch(route('admin.quizzes.status', quiz.id), {
+                status: nextStatus,
+            }, {
+                preserveScroll: true,
+                onFinish: closeConfirm,
+            }),
+        });
+    });
+
+    const deleteExam = () => requireSavedExam(() => openConfirm({
+        variant: 'danger',
+        title: 'Hapus Ujian Mingguan?',
+        message: 'Ujian dan seluruh soalnya akan dihapus. Urutan ujian lain pada Week ini akan dirapikan otomatis.',
+        confirmLabel: 'Hapus Ujian',
+        details: [
+            { label: 'Ujian', value: quiz.title || `Ujian ${quiz.exam_order || 1}` },
+            { label: 'Soal', value: `${data.questions.length} soal` },
+        ],
+        onConfirm: () => router.delete(route('admin.quizzes.destroy', quiz.id), {
+            onFinish: closeConfirm,
+        }),
+    }));
+
     const importQuestions = (file) => {
         if (!file) return;
         setImporting(true);
@@ -481,6 +529,12 @@ export default function BuilderUjian({ quiz, questions: initialQuestions = [] })
                         <span className={`rounded-full px-3 py-1 text-xs font-bold ${quiz.status === 'published' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'}`}>
                             {quiz.status === 'published' ? 'Terbit' : 'Draf'}
                         </span>
+                        <button type="button" onClick={toggleExamStatus} className="h-10 rounded-md border border-gray-300 px-3 text-xs font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">
+                            {quiz.status === 'published' ? 'Jadikan Draft' : 'Publish'}
+                        </button>
+                        <button type="button" onClick={deleteExam} className="flex h-10 w-10 items-center justify-center rounded-md border border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900/50 dark:hover:bg-red-950/20" title="Hapus ujian">
+                            <DeleteOutlineIcon sx={{ fontSize: 19 }} />
+                        </button>
                         <button type="button" onClick={() => setShowPreview(true)} className="flex h-10 items-center gap-2 rounded-md border border-gray-300 px-3 text-xs font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">
                             <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
                             <span className="hidden sm:inline">Pratinjau siswa</span>
@@ -616,6 +670,7 @@ export default function BuilderUjian({ quiz, questions: initialQuestions = [] })
                 </main>
             </div>
             {showPreview && <StudentExamPreview quiz={{ ...quiz, time_limit: data.time_limit, passing_score: data.passing_score }} questions={data.questions} onClose={() => setShowPreview(false)} />}
+            <ConfirmActionDialog {...confirmState} onCancel={closeConfirm} />
         </AuthenticatedLayout>
     );
 }

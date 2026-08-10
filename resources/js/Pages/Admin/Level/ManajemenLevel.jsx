@@ -142,7 +142,7 @@ export default function ManajemenLevel({ levels = [] }) {
             </div>
 
             {showLevelModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                <div className="fixed inset-0 z-[110] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
                     <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
                         <div className="border-b border-gray-100 p-6">
                             <h3 className="text-lg font-black text-gray-900">

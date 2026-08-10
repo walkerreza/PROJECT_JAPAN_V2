@@ -3,6 +3,8 @@ import { Head, Link, router, useForm } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Card from '@/Components/UI/Card';
 import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
+import SearchableSelect from '@/Components/UI/SearchableSelect';
+import SearchableMultiSelect from '@/Components/UI/SearchableMultiSelect';
 import StrokeCharacterPreview from '@/Components/Features/Handwriting/StrokeCharacterPreview';
 import { resolveAvailableCharacters, writingCharacters } from '@/Components/Features/Handwriting/strokeData';
 
@@ -283,21 +285,8 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
                             <option value="N4">N4</option>
                             <option value="N5">N5</option>
                         </select>
-                        <select value={moduleId} onChange={(event) => {
-                            setModuleId(event.target.value);
-                            setModuleDayId('all');
-                        }} className="h-11 rounded-2xl border border-gray-200 bg-gray-50 px-4 text-sm font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
-                            <option value="all">Semua Modul</option>
-                            {modules.map((module) => (
-                                <option key={module.id} value={module.id}>W{module.week_number ?? '-'} - {module.title}</option>
-                            ))}
-                        </select>
-                        <select value={moduleDayId} onChange={(event) => setModuleDayId(event.target.value)} className="h-11 rounded-2xl border border-gray-200 bg-gray-50 px-4 text-sm font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
-                            <option value="all">Semua Day</option>
-                            {(modules.find((module) => String(module.id) === String(moduleId))?.days || []).map((day) => (
-                                <option key={day.id} value={day.id}>Day {day.day_number} - {day.title}</option>
-                            ))}
-                        </select>
+                        <SearchableSelect value={moduleId === 'all' ? '' : moduleId} onChange={(value) => { setModuleId(value || 'all'); setModuleDayId('all'); }} placeholder="Semua Modul" searchPlaceholder="Cari week atau judul modul..." allowClear clearLabel="Semua modul" options={modules.map((module) => ({ value: module.id, label: `Week ${module.week_number ?? '-'} - ${module.title}` }))} />
+                        <SearchableSelect value={moduleDayId === 'all' ? '' : moduleDayId} onChange={(value) => setModuleDayId(value || 'all')} placeholder="Semua Hari" searchPlaceholder="Cari hari modul..." allowClear clearLabel="Semua hari" options={(modules.find((module) => String(module.id) === String(moduleId))?.days || []).map((day) => ({ value: day.id, label: `Hari ${day.day_number} - ${day.title}` }))} />
                         <select value={status} onChange={(event) => setStatus(event.target.value)} className="h-11 rounded-2xl border border-gray-200 bg-gray-50 px-4 text-sm font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
                             <option value="all">Semua Status</option>
                             <option value="draft">Draft</option>
@@ -360,7 +349,7 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
                 )}
 
                 {showForm && (
-                    <div className="fixed inset-0 z-[70] overflow-y-auto bg-gray-950/60 p-4 backdrop-blur-sm">
+                    <div className="fixed inset-0 z-[110] overflow-y-auto bg-gray-950/60 p-3 backdrop-blur-sm sm:p-5">
                         <div className="mx-auto my-6 max-w-6xl overflow-hidden rounded-[1.6rem] bg-white shadow-2xl dark:bg-gray-900">
                             <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-gray-800">
                                 <div>
@@ -399,25 +388,32 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
                                             </select>
                                         </Field>
                                         <Field label="Modul Mingguan">
-                                            <select value={form.data.module_id} onChange={(event) => form.setData((data) => ({ ...data, module_id: event.target.value, module_day_ids: [] }))} className={inputClass}>
-                                                <option value="">Global / belum dikunci modul</option>
-                                                {modules.map((module) => (
-                                                    <option key={module.id} value={module.id}>Week {module.week_number ?? '-'} - {module.title}</option>
-                                                ))}
-                                            </select>
+                                            <SearchableSelect
+                                                value={form.data.module_id}
+                                                onChange={(moduleId) => form.setData((data) => ({ ...data, module_id: moduleId, module_day_ids: [] }))}
+                                                options={modules.map((module) => ({
+                                                    value: module.id,
+                                                    label: `Week ${module.week_number ?? '-'} - ${module.title}`,
+                                                }))}
+                                                placeholder="Global / belum dikunci modul"
+                                                searchPlaceholder="Cari week atau modul..."
+                                                allowClear
+                                                clearLabel="Global / belum dikunci modul"
+                                            />
                                         </Field>
                                         <Field label="Dipakai pada Day" wide>
-                                            <select
-                                                multiple
-                                                value={(form.data.module_day_ids || []).map(String)}
-                                                onChange={(event) => form.setData('module_day_ids', Array.from(event.target.selectedOptions, (option) => Number(option.value)))}
-                                                className={`${inputClass} min-h-28`}
-                                            >
-                                                {(modules.find((module) => String(module.id) === String(form.data.module_id))?.days || []).map((day) => (
-                                                    <option key={day.id} value={day.id}>Day {day.day_number} - {day.title}</option>
-                                                ))}
-                                            </select>
-                                            <span className="mt-1.5 block text-xs font-medium text-gray-500">Gunakan Ctrl/Command untuk memilih lebih dari satu Day.</span>
+                                            <SearchableMultiSelect
+                                                value={form.data.module_day_ids || []}
+                                                onChange={(moduleDayIds) => form.setData('module_day_ids', moduleDayIds)}
+                                                placeholder="Pilih satu atau beberapa Day"
+                                                searchPlaceholder="Cari Day..."
+                                                options={(modules.find((module) => String(module.id) === String(form.data.module_id))?.days || []).map((day) => ({
+                                                    value: day.id,
+                                                    label: `Day ${day.day_number} - ${day.title}`,
+                                                    description: `Week ${modules.find((module) => String(module.id) === String(form.data.module_id))?.week_number || '-'}`,
+                                                }))}
+                                            />
+                                            <span className="mt-1.5 block text-xs font-medium text-gray-500">Pilih lebih dari satu Day bila kosakata dipakai pada beberapa sesi.</span>
                                         </Field>
                                         <Field label="Konten Utama">
                                             <input value={form.data.word} onChange={(event) => form.setData('word', event.target.value)} placeholder="会議 / 割 / 〜ように" className={inputClass} />

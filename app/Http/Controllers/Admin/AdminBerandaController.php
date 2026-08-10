@@ -257,8 +257,8 @@ class AdminBerandaController extends Controller
             ],
             'actionItems' => [
                 $this->actionItem('Modul belum lengkap', $incompleteModules, 'Lengkapi komponen belajar sebelum status publish.', 'warning', route('admin.modules.index')),
-                $this->actionItem('Kuis tanpa soal', (clone Kuis::query())->whereHas('module', fn (Builder $query) => $this->scopePrograms($query, $programIds))->whereDoesntHave('questions')->count(), 'Masuk ke builder kuis untuk menambahkan soal.', 'danger', route('admin.quizzes.index')),
-                $this->actionItem('Presentasi belum publish', (clone $modulesQuery)->whereDoesntHave('presentationDecks', fn (Builder $query) => $query->where('status', 'published'))->count(), 'Buat atau publish deck untuk modul terkait.', 'info', route('admin.presentations.index')),
+                $this->actionItem('Kuis tanpa soal', (clone Kuis::query())->whereHas('module', fn (Builder $query) => $this->scopePrograms($query, $programIds))->whereDoesntHave('questions')->count(), 'Masuk ke roadmap kelas untuk menambahkan soal.', 'danger', route('admin.programs.index')),
+                $this->actionItem('Presentasi belum publish', (clone $modulesQuery)->whereDoesntHave('presentationDecks', fn (Builder $query) => $query->where('status', 'published'))->count(), 'Buka kelas dan lengkapi presentasi pada Week terkait.', 'info', route('admin.programs.index')),
             ],
             'coverage' => $coverage,
         ];

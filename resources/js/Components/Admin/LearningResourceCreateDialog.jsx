@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useForm } from '@inertiajs/react';
-
-import CloseIcon from '@mui/icons-material/Close';
+import AdminDialog from '@/Components/UI/AdminDialog';
+import SearchableSelect from '@/Components/UI/SearchableSelect';
 
 const RESOURCE_CONFIG = {
     flashcard: {
@@ -108,25 +108,15 @@ export default function LearningResourceCreateDialog({
     };
 
     return (
-        <div className="fixed inset-0 z-[90] overflow-y-auto bg-gray-950/60 p-3 backdrop-blur-sm sm:p-5">
-            <div className="mx-auto my-4 w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-gray-900 sm:my-8">
-                <div className="flex items-start justify-between gap-4 border-b border-gray-100 p-5 dark:border-gray-800">
-                    <div>
-                        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-orange-600">
-                            {selectedModule ? `Minggu ${selectedModule.week_number}` : 'Resource kelas'}
-                            {selectedDay ? ` / Hari ${selectedDay.day_number}` : ''}
-                        </p>
-                        <h2 className="mt-1 text-xl font-black text-gray-900 dark:text-white">Buat {displayLabel}</h2>
-                        <p className="mt-1 text-sm font-medium text-gray-500 dark:text-gray-400">
-                            Setelah dibuat, lanjutkan isinya melalui editor {displayLabel.toLowerCase()}.
-                        </p>
-                    </div>
-                    <button type="button" onClick={onClose} title="Tutup" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-300">
-                        <CloseIcon sx={{ fontSize: 19 }} />
-                    </button>
-                </div>
-
-                <form onSubmit={submit} className="space-y-4 p-5">
+        <AdminDialog
+            open={open}
+            onClose={onClose}
+            eyebrow={`${selectedModule ? `Week ${selectedModule.week_number}` : 'Resource kelas'}${selectedDay ? ` / Day ${selectedDay.day_number}` : ''}`}
+            title={`Buat ${displayLabel}`}
+            description={`Setelah dibuat, lanjutkan isinya melalui editor ${displayLabel.toLowerCase()}.`}
+            maxWidth="max-w-xl"
+        >
+                <form onSubmit={submit} className="space-y-4">
                     {lockContext ? (
                         <div className="rounded-xl border border-orange-100 bg-orange-50 px-4 py-3 dark:border-orange-900/30 dark:bg-orange-900/10">
                             <p className="text-xs font-black text-orange-700 dark:text-orange-300">{module?.program?.title || 'Kelas'}</p>
@@ -139,6 +129,13 @@ export default function LearningResourceCreateDialog({
                         <div className="grid gap-4 sm:grid-cols-2">
                             <label>
                                 <span className="mb-1.5 block text-xs font-black uppercase tracking-wider text-gray-400">Minggu</span>
+                                <SearchableSelect
+                                    value={form.data.module_id}
+                                    onChange={(moduleId) => form.setData((data) => ({ ...data, module_id: moduleId, module_day_id: '' }))}
+                                    placeholder="Pilih Week"
+                                    searchPlaceholder="Cari week atau judul modul..."
+                                    options={modules.map((item) => ({ value: item.id, label: `Week ${item.week_number} - ${item.title}`, description: item.program?.title }))}
+                                />
                                 <select
                                     value={form.data.module_id}
                                     onChange={(event) => form.setData((data) => ({
@@ -146,7 +143,7 @@ export default function LearningResourceCreateDialog({
                                         module_id: event.target.value,
                                         module_day_id: '',
                                     }))}
-                                    className={inputClass}
+                                    className="hidden"
                                     required
                                 >
                                     <option value="">Pilih Minggu</option>
@@ -157,10 +154,19 @@ export default function LearningResourceCreateDialog({
                             </label>
                             {(resourceType !== 'presentation' || form.data.week_slot === 'after_day') && <label>
                                 <span className="mb-1.5 block text-xs font-black uppercase tracking-wider text-gray-400">Hari</span>
+                                <SearchableSelect
+                                    value={form.data.module_day_id}
+                                    onChange={(moduleDayId) => form.setData('module_day_id', moduleDayId)}
+                                    placeholder={resourceType === 'quiz' ? 'Ujian Mingguan (setelah semua Hari)' : resourceType === 'presentation' ? 'Presentasi Mingguan' : 'Pilih Day'}
+                                    searchPlaceholder="Cari day..."
+                                    allowClear={resourceType === 'quiz' || resourceType === 'presentation'}
+                                    clearLabel={resourceType === 'quiz' ? 'Ujian Mingguan (setelah semua Hari)' : 'Presentasi Mingguan'}
+                                    options={(selectedModule?.days || []).map((item) => ({ value: item.id, label: `Day ${item.day_number} - ${item.title}`, description: `Week ${selectedModule?.week_number || '-'}` }))}
+                                />
                                 <select
                                     value={form.data.module_day_id}
                                     onChange={(event) => form.setData('module_day_id', event.target.value)}
-                                    className={inputClass}
+                                    className="hidden"
                                     required={resourceType === 'flashcard' || (resourceType === 'presentation' && form.data.week_slot === 'after_day')}
                                 >
                                     <option value="">
@@ -270,7 +276,6 @@ export default function LearningResourceCreateDialog({
                         </button>
                     </div>
                 </form>
-            </div>
-        </div>
+        </AdminDialog>
     );
 }

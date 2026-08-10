@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Kosakata;
 use App\Models\Kuis;
-use App\Models\LevelPembelajaran;
 use App\Models\Modul;
 use App\Models\SetFlashcard;
 use App\Models\Soal;
@@ -20,51 +19,6 @@ use Inertia\Inertia;
 
 class AdminFlashcardController extends Controller
 {
-    public function index(Request $request)
-    {
-        $query = SetFlashcard::with([
-            'level:id,level_name',
-            'module:id,program_pembelajaran_id,title,week_number',
-            'day:id,module_id,day_number,title',
-        ])
-            ->withCount('flashcards')
-            ->latest();
-
-        if ($request->filled('search')) {
-            $search = $request->string('search')->toString();
-            $query->where('title', 'like', "%{$search}%");
-        }
-
-        if ($request->filled('status') && $request->status !== 'all') {
-            $query->where('status', $request->status);
-        }
-
-        if ($request->filled('module_id')) {
-            $query->where('module_id', $request->integer('module_id'));
-        }
-
-        if ($request->filled('module_day_id')) {
-            $query->where('module_day_id', $request->integer('module_day_id'));
-        }
-
-        if ($request->filled('program_id')) {
-            $query->whereHas('module', fn ($moduleQuery) => $moduleQuery
-                ->where('program_pembelajaran_id', $request->integer('program_id')));
-        }
-
-        return Inertia::render('Admin/Flashcard/ManajemenFlashcard', [
-            'sets' => $query->paginate(10)->withQueryString(),
-            'filters' => $request->only('search', 'status', 'program_id', 'module_id', 'module_day_id'),
-            'levels' => LevelPembelajaran::orderBy('stage')->get(['id', 'level_name']),
-            'modules' => Modul::with('days:id,module_id,day_number,title,status')
-                ->when($request->filled('program_id'), fn ($moduleQuery) => $moduleQuery
-                    ->where('program_pembelajaran_id', $request->integer('program_id')))
-                ->orderBy('week_number')
-                ->orderBy('id')
-                ->get(['id', 'program_pembelajaran_id', 'title', 'week_number']),
-        ]);
-    }
-
     public function store(Request $request, NotifikasiPenggunaService $notifikasi)
     {
         $validated = $this->validateSet($request);
@@ -91,9 +45,18 @@ class AdminFlashcardController extends Controller
 
     public function destroy(SetFlashcard $flashcardSet)
     {
+        $module = $flashcardSet->module()->first(['id', 'program_pembelajaran_id']);
+        $dayId = $flashcardSet->module_day_id;
         $flashcardSet->delete();
 
-        return redirect()->back()->with('success', 'Flashcard set berhasil dihapus.');
+        return $module
+            ? redirect()->route('admin.modules.index', [
+                'program_id' => $module->program_pembelajaran_id,
+                'week_id' => $module->id,
+                'day_id' => $dayId,
+                'focus' => 'roadmap',
+            ])->with('success', 'Flashcard set berhasil dihapus.')
+            : redirect()->route('admin.programs.index')->with('success', 'Flashcard set berhasil dihapus.');
     }
 
     public function builder(SetFlashcard $flashcardSet, Request $request)

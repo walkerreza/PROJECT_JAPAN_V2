@@ -6,6 +6,17 @@ import FabricSlideCanvas from '@/Components/Features/Presentation/FabricSlideCan
 import PdfCarousel from '@/Components/Features/Presentation/PdfCarousel';
 import EmbedFrame from '@/Components/Features/Presentation/EmbedFrame';
 import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
+import SearchableSelect from '@/Components/UI/SearchableSelect';
+
+import AddIcon from '@mui/icons-material/Add';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined';
+import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
+import SlideshowIcon from '@mui/icons-material/Slideshow';
+import TuneIcon from '@mui/icons-material/Tune';
 
 const createSlideKey = () => `slide-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const canvasText = (text, left, top, width, fontSize, options = {}) => ({
@@ -328,7 +339,7 @@ export default function BuilderPresentasi({
             week_id: moduleContext.id || deck.module.id,
             focus: 'presentation',
         })
-        : route('admin.presentations.index');
+        : route('admin.programs.index');
     const [slides, setSlides] = useState(mapDeckSlides(deck?.slides || []));
     const [activeIndex, setActiveIndex] = useState(0);
     const [status, setStatus] = useState(deck?.status || 'draft');
@@ -340,6 +351,8 @@ export default function BuilderPresentasi({
     const [selectedDayId, setSelectedDayId] = useState('');
     const [sortOrder, setSortOrder] = useState(0);
     const [showImportMenu, setShowImportMenu] = useState(false);
+    const [showDeckSettings, setShowDeckSettings] = useState(false);
+    const [showDeckActions, setShowDeckActions] = useState(false);
     const [pptxFile, setPptxFile] = useState(null);
     const [pdfFile, setPdfFile] = useState(null);
     const [imageFiles, setImageFiles] = useState([]);
@@ -782,7 +795,7 @@ export default function BuilderPresentasi({
 
             <div className="min-h-screen bg-[#F8F9FB] dark:bg-gray-950">
                 {deck && isImporting && (
-                    <div className="fixed inset-0 z-[80] grid place-items-center bg-gray-950/45 px-4 backdrop-blur-sm">
+                <div className="fixed inset-0 z-[110] grid place-items-center bg-gray-950/45 px-4 backdrop-blur-sm">
                         <div className="w-full max-w-xs rounded-2xl border border-white/20 bg-white p-5 text-center shadow-2xl dark:bg-gray-900">
                             <div className="mx-auto mb-3 h-10 w-10 animate-spin rounded-full border-4 border-orange-100 border-t-orange-600" />
                             <h2 className="text-base font-black text-gray-900 dark:text-white">Mengolah file import</h2>
@@ -794,48 +807,55 @@ export default function BuilderPresentasi({
                 )}
 
                 <header className="sticky top-16 z-30 border-b border-gray-200 bg-white px-3 py-2 dark:border-gray-800 dark:bg-gray-900 lg:top-0 lg:px-4">
-                    <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-                        <div className="min-w-0">
-                            <button type="button" onClick={leaveWorkspace} className="text-[11px] font-black uppercase tracking-[0.22em] text-orange-600">Kembali ke Roadmap</button>
-                            <h1 className="mt-0.5 truncate text-lg font-black text-gray-900 dark:text-white">
-                                Presentasi Minggu {moduleContext.week_number || '-'}
-                            </h1>
-                            <p className="truncate text-[11px] font-bold text-gray-400">
-                                {moduleContext.program?.title || 'Kelas'} / {moduleContext.title || 'Roadmap Mingguan'}
-                            </p>
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                        <div className="flex min-w-0 items-center gap-3">
+                            <button type="button" onClick={leaveWorkspace} title="Kembali ke Roadmap" aria-label="Kembali ke Roadmap" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-gray-200 text-gray-600 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-orange-950/30">
+                                <ArrowBackIcon sx={{ fontSize: 19 }} />
+                            </button>
+                            <span className="hidden h-10 w-10 shrink-0 place-items-center rounded-xl bg-orange-600 text-white sm:grid">
+                                <SlideshowIcon sx={{ fontSize: 20 }} />
+                            </span>
+                            <div className="min-w-0">
+                                <h1 className="truncate text-base font-black text-gray-900 dark:text-white sm:text-lg">
+                                    Presentasi <span className="text-gray-400">/</span> Minggu {moduleContext.week_number || '-'}
+                                </h1>
+                                <p className="truncate text-[11px] font-bold text-gray-400">
+                                    {moduleContext.program?.title || 'Kelas'} - {moduleContext.title || 'Roadmap Mingguan'}
+                                </p>
+                            </div>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex items-center justify-end gap-1.5 overflow-x-auto pb-1 md:overflow-visible md:pb-0">
                             {deck && (
                                 <>
-                            <select
-                                value={deckPlacement}
-                                onChange={(event) => {
-                                    setDeckPlacement(event.target.value);
-                                    if (event.target.value !== 'after_day') setDeckDayId('');
-                                }}
-                                className="h-9 rounded-xl border border-gray-200 bg-white px-3 text-xs font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white"
-                            >
-                                <option value="opening">Awal minggu</option>
-                                <option value="after_day">Setelah Day</option>
-                                <option value="closing">Akhir minggu</option>
-                            </select>
-                            {deckPlacement === 'after_day' && (
-                                <select value={deckDayId} onChange={(event) => setDeckDayId(event.target.value)} className="h-9 max-w-44 rounded-xl border border-gray-200 bg-white px-3 text-xs font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
-                                    <option value="">Pilih Day</option>
-                                    {days.map((day) => <option key={day.id} value={day.id}>Day {day.day_number} - {day.title}</option>)}
-                                </select>
-                            )}
-                            <label className="flex h-9 items-center gap-1 rounded-xl border border-gray-200 bg-white px-2 text-[10px] font-black uppercase text-gray-400 dark:border-gray-700 dark:bg-gray-950">
-                                Urut
-                                <input type="number" min="0" value={deckSortOrder} onChange={(event) => setDeckSortOrder(event.target.value)} className="w-12 border-0 bg-transparent p-0 text-xs font-bold text-gray-800 outline-none dark:text-white" />
-                            </label>
-                            <select value={status} onChange={(event) => setStatus(event.target.value)} className="h-9 rounded-xl border border-gray-200 bg-white px-3 text-xs font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
-                                <option value="draft">Draft</option>
-                                <option value="published">Published</option>
-                            </select>
                             <div className="relative">
-                                <button type="button" onClick={() => setShowImportMenu((value) => !value)} className="h-9 rounded-xl border border-orange-200 px-3 text-xs font-black text-orange-700 dark:border-orange-900/50 dark:text-orange-300">
-                                    {isImporting ? 'Import...' : 'Import'}
+                                <button type="button" onClick={() => { setShowDeckSettings((value) => !value); setShowDeckActions(false); setShowImportMenu(false); }} title="Pengaturan presentasi" className={`flex h-9 shrink-0 items-center gap-2 rounded-xl border px-2.5 text-xs font-black transition sm:px-3 ${showDeckSettings ? 'border-orange-300 bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-300' : 'border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800'}`}>
+                                    <TuneIcon sx={{ fontSize: 17 }} /><span className="hidden sm:inline">Pengaturan</span>
+                                </button>
+                                {showDeckSettings && (
+                                    <div className="absolute right-0 top-10 z-50 w-72 space-y-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-2xl dark:border-gray-800 dark:bg-gray-900">
+                                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">Posisi dan publikasi</p>
+                                        <label className="block">
+                                            <span className="mb-1.5 block text-xs font-bold text-gray-500">Posisi</span>
+                                            <select value={deckPlacement} onChange={(event) => { setDeckPlacement(event.target.value); if (event.target.value !== 'after_day') setDeckDayId(''); }} className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
+                                                <option value="opening">Awal minggu</option><option value="after_day">Setelah Day</option><option value="closing">Akhir minggu</option>
+                                            </select>
+                                        </label>
+                                        {deckPlacement === 'after_day' && (
+                                            <label className="block">
+                                                <span className="mb-1.5 block text-xs font-bold text-gray-500">Day patokan</span>
+                                                <SearchableSelect value={deckDayId} onChange={setDeckDayId} placeholder="Pilih Day" searchPlaceholder="Cari Day..." options={days.map((day) => ({ value: day.id, label: `Day ${day.day_number} - ${day.title}` }))} />
+                                            </label>
+                                        )}
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <label><span className="mb-1.5 block text-xs font-bold text-gray-500">Urutan</span><input type="number" min="0" value={deckSortOrder} onChange={(event) => setDeckSortOrder(event.target.value)} className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white" /></label>
+                                            <label><span className="mb-1.5 block text-xs font-bold text-gray-500">Status</span><select value={status} onChange={(event) => setStatus(event.target.value)} className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white"><option value="draft">Draft</option><option value="published">Published</option></select></label>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="relative">
+                                <button type="button" onClick={() => { setShowImportMenu((value) => !value); setShowDeckSettings(false); setShowDeckActions(false); }} title="Import presentasi" className="flex h-9 shrink-0 items-center gap-2 rounded-xl border border-orange-200 px-2.5 text-xs font-black text-orange-700 dark:border-orange-900/50 dark:text-orange-300 sm:px-3">
+                                    <FileUploadOutlinedIcon sx={{ fontSize: 17 }} /><span className="hidden sm:inline">{isImporting ? 'Import...' : 'Import'}</span>
                                 </button>
                                 {showImportMenu && (
                                     <div className="absolute right-0 top-10 z-50 w-[300px] space-y-3 rounded-2xl border border-gray-200 bg-white p-3 shadow-2xl dark:border-gray-800 dark:bg-gray-900">
@@ -901,14 +921,21 @@ export default function BuilderPresentasi({
                                     </div>
                                 )}
                             </div>
-                            <button type="button" onClick={openPresenter} className="flex h-9 items-center rounded-xl bg-gray-950 px-3 text-xs font-black text-white dark:bg-white dark:text-gray-950">Present</button>
-                            <button type="button" onClick={deleteDeck} className="h-9 rounded-xl border border-red-200 px-3 text-xs font-black text-red-600 hover:bg-red-50 dark:border-red-900/50 dark:hover:bg-red-950/20">Hapus</button>
-                            <button onClick={saveSlides} className="h-9 rounded-xl bg-[#E64A19] px-4 text-xs font-black text-white">Simpan</button>
+                            <button type="button" onClick={openPresenter} title="Pratinjau presentasi" className="flex h-9 shrink-0 items-center gap-2 rounded-xl border border-gray-200 px-2.5 text-xs font-black text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 sm:px-3"><PlayArrowIcon sx={{ fontSize: 18 }} /><span className="hidden sm:inline">Present</span></button>
+                            <div className="relative">
+                                <button type="button" onClick={() => { setShowDeckActions((value) => !value); setShowDeckSettings(false); setShowImportMenu(false); }} title="Aksi lainnya" aria-label="Aksi lainnya" className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"><MoreVertIcon sx={{ fontSize: 19 }} /></button>
+                                {showDeckActions && (
+                                    <div className="absolute right-0 top-10 z-50 w-48 rounded-xl border border-gray-200 bg-white p-1.5 shadow-2xl dark:border-gray-800 dark:bg-gray-900">
+                                        <button type="button" onClick={() => { setShowDeckActions(false); deleteDeck(); }} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-black text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/20"><DeleteOutlineIcon sx={{ fontSize: 17 }} /> Hapus presentasi</button>
+                                    </div>
+                                )}
+                            </div>
+                            <button onClick={saveSlides} className="flex h-9 shrink-0 items-center gap-2 rounded-xl bg-[#E64A19] px-3 text-xs font-black text-white shadow-sm shadow-orange-500/20"><SaveOutlinedIcon sx={{ fontSize: 17 }} /><span className="hidden sm:inline">Simpan</span></button>
                                 </>
                             )}
                         </div>
                     </div>
-                    <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                    <div className="mt-2 flex items-center gap-2 overflow-x-auto pb-1">
                         {(decks || []).map((summary) => {
                             const selected = deck?.id === summary.id;
                             const placementLabel = summary.week_slot === 'closing'
@@ -922,25 +949,29 @@ export default function BuilderPresentasi({
                                     key={summary.id}
                                     type="button"
                                     onClick={() => visitDeck(summary.id)}
-                                    className={`min-w-44 rounded-xl border px-3 py-2 text-left transition ${
+                                    className={`flex min-w-48 max-w-64 items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition ${
                                         selected
                                             ? 'border-orange-400 bg-orange-50 text-orange-800 dark:bg-orange-900/20 dark:text-orange-200'
                                             : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-orange-200 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-300'
                                     }`}
                                 >
-                                    <span className="block truncate text-xs font-black">{summary.title}</span>
-                                    <span className="mt-0.5 block text-[10px] font-semibold opacity-70">
-                                        {placementLabel} / {selected ? slides.length : summary.slides_count || 0} slide / {selected && hasUnsavedChanges ? 'belum disimpan' : summary.status}
+                                    <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${selected ? 'bg-orange-600 text-white' : 'bg-white text-gray-400 dark:bg-gray-800'}`}><SlideshowIcon sx={{ fontSize: 16 }} /></span>
+                                    <span className="min-w-0 flex-1">
+                                        <span className="block truncate text-xs font-black">{summary.title}</span>
+                                        <span className="mt-0.5 block truncate text-[10px] font-semibold opacity-70">{placementLabel} - {selected ? slides.length : summary.slides_count || 0} slide</span>
                                     </span>
+                                    <span title={selected && hasUnsavedChanges ? 'Belum disimpan' : summary.status} className={`h-2 w-2 shrink-0 rounded-full ${selected && hasUnsavedChanges ? 'bg-amber-500' : summary.status === 'published' ? 'bg-emerald-500' : 'bg-gray-400'}`} />
                                 </button>
                             );
                         })}
                         <button
                             type="button"
                             onClick={() => openCreateDeck('opening')}
-                            className="min-w-36 rounded-xl border border-dashed border-orange-300 px-3 py-2 text-xs font-black text-orange-700 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-300 dark:hover:bg-orange-950/20"
+                            title="Tambah presentasi"
+                            aria-label="Tambah presentasi"
+                            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-dashed border-orange-300 text-orange-700 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-300 dark:hover:bg-orange-950/20"
                         >
-                            + Tambah Presentasi
+                            <AddIcon sx={{ fontSize: 19 }} />
                         </button>
                     </div>
                 </header>
@@ -975,10 +1006,7 @@ export default function BuilderPresentasi({
                             {placement === 'after_day' ? (
                                 <label>
                                     <span className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-gray-500">Day patokan</span>
-                                    <select value={selectedDayId} onChange={(event) => setSelectedDayId(event.target.value)} className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
-                                        <option value="">Pilih Day</option>
-                                        {days.map((day) => <option key={day.id} value={day.id}>Day {day.day_number} - {day.title}</option>)}
-                                    </select>
+                                    <SearchableSelect value={selectedDayId} onChange={setSelectedDayId} placeholder="Pilih Day" searchPlaceholder="Cari Day..." options={days.map((day) => ({ value: day.id, label: `Day ${day.day_number} - ${day.title}` }))} />
                                 </label>
                             ) : (
                                 <label>
@@ -1005,19 +1033,17 @@ export default function BuilderPresentasi({
                     </main>
                 ) : (
                     <>
-                {(deck.source_type || deck.import_status) && (
-                    <div className="border-b border-gray-200 bg-white/80 px-3 py-2 backdrop-blur dark:border-gray-800 dark:bg-gray-900/80 lg:px-4">
-                        <div className={`rounded-xl border px-3 py-2 text-xs font-bold ${
+                {(['pdf', 'pptx'].includes(deck.source_type) || deck.import_summary?.note) && (
+                    <div className="border-b border-gray-200 bg-white/80 px-3 py-1.5 backdrop-blur dark:border-gray-800 dark:bg-gray-900/80 lg:px-4">
+                        <div className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-bold ${
                             deck.source_type === 'pdf'
                                 ? 'border-emerald-100 bg-emerald-50 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200'
                                 : deck.source_type === 'pptx'
                                     ? 'border-orange-100 bg-orange-50 text-orange-800 dark:border-orange-900/40 dark:bg-orange-950/30 dark:text-orange-200'
                                     : 'border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-200'
                         }`}>
-                            {deck.source_type === 'pdf' ? 'Mode PDF Final: user melihat file ini lewat viewer browser.' : null}
-                            {deck.source_type === 'pptx' ? 'Mode PPTX Draft: hasil import berupa canvas editable, bukan convert PDF otomatis.' : null}
-                            {!['pdf', 'pptx'].includes(deck.source_type) ? 'Mode manual: slide dibuat langsung dari builder.' : null}
-                            {deck.import_summary?.note && <span className="ml-2 opacity-75">{deck.import_summary.note}</span>}
+                            <span>{deck.source_type === 'pdf' ? 'PDF final' : deck.source_type === 'pptx' ? 'PPTX editable' : 'Import'}</span>
+                            {deck.import_summary?.note && <span className="truncate opacity-70">{deck.import_summary.note}</span>}
                         </div>
                     </div>
                 )}
