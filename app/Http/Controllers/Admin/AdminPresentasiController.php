@@ -27,15 +27,23 @@ class AdminPresentasiController extends Controller
 
         $deck = DB::transaction(function () use ($validated) {
             Modul::query()->lockForUpdate()->findOrFail($validated['module_id']);
-            $validated['sort_order'] ??= ((int) DeckPresentasi::query()
+            $slotQuery = DeckPresentasi::query()
                 ->where('module_id', $validated['module_id'])
                 ->where('week_slot', $validated['week_slot'])
                 ->when(
                     $validated['week_slot'] === 'after_day',
                     fn ($query) => $query->where('module_day_id', $validated['module_day_id']),
                     fn ($query) => $query->whereNull('module_day_id')
-                )
-                ->max('sort_order')) + 1;
+                );
+
+            if (array_key_exists('sort_order', $validated) && $validated['sort_order'] !== null) {
+                $validated['sort_order'] = max(0, (int) $validated['sort_order']);
+                (clone $slotQuery)
+                    ->where('sort_order', '>=', $validated['sort_order'])
+                    ->increment('sort_order');
+            } else {
+                $validated['sort_order'] = ((int) (clone $slotQuery)->max('sort_order')) + 1;
+            }
 
             $deck = DeckPresentasi::create($validated);
             $deck->slides()->create([
@@ -115,6 +123,75 @@ class AdminPresentasiController extends Controller
             $presentationDeck->module()->firstOrFail(),
             $presentationDeck->id
         );
+    }
+
+    public function reorder(Request $request, Modul $module)
+    {
+        $validated = $request->validate([
+            'positions' => ['required', 'array', 'max:500'],
+            'positions.*.deck_id' => [
+                'required',
+                'integer',
+                'distinct',
+                Rule::exists('presentation_decks', 'id')->where('module_id', $module->id),
+            ],
+            'positions.*.week_slot' => ['required', Rule::in(['opening', 'after_day', 'closing'])],
+            'positions.*.module_day_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('module_days', 'id')->where('module_id', $module->id),
+            ],
+            'positions.*.sort_order' => ['required', 'integer', 'min:0', 'max:65535'],
+        ]);
+
+        foreach ($validated['positions'] as $index => $position) {
+            if ($position['week_slot'] === 'after_day' && empty($position['module_day_id'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    "positions.{$index}.module_day_id" => 'Day tujuan wajib dipilih.',
+                ]);
+            }
+        }
+
+        $expectedDeckIds = DeckPresentasi::query()
+            ->where('module_id', $module->id)
+            ->whereIn('week_slot', ['opening', 'after_day', 'closing'])
+            ->pluck('id')
+            ->sort()
+            ->values();
+        $providedDeckIds = collect($validated['positions'])
+            ->pluck('deck_id')
+            ->sort()
+            ->values();
+
+        if ($expectedDeckIds->all() !== $providedDeckIds->all()) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'positions' => 'Daftar presentasi tidak lengkap. Muat ulang halaman lalu coba kembali.',
+            ]);
+        }
+
+        DB::transaction(function () use ($module, $validated) {
+            $module->newQuery()->lockForUpdate()->findOrFail($module->id);
+            $decks = DeckPresentasi::query()
+                ->where('module_id', $module->id)
+                ->whereIn('id', collect($validated['positions'])->pluck('deck_id'))
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+
+            foreach ($validated['positions'] as $position) {
+                $decks->get($position['deck_id'])->update([
+                    'week_slot' => $position['week_slot'],
+                    'module_day_id' => $position['week_slot'] === 'after_day'
+                        ? $position['module_day_id']
+                        : null,
+                    'sort_order' => $position['sort_order'],
+                ]);
+            }
+        });
+
+        return response()->json([
+            'message' => 'Urutan presentasi berhasil disimpan.',
+        ]);
     }
 
     public function updateSlides(Request $request, DeckPresentasi $presentationDeck, NotifikasiPenggunaService $notifikasi, PresentasiStorageService $storage)
@@ -404,6 +481,7 @@ class AdminPresentasiController extends Controller
             'level:id,level_name',
             'programPembelajaran:id,title,slug',
             'days:id,module_id,day_number,title',
+            'weeklyExams:id,module_id,exam_order,status',
         ]);
 
         $decks = DeckPresentasi::query()
@@ -445,10 +523,16 @@ class AdminPresentasiController extends Controller
                 'status' => $deck->status,
                 'slides_count' => $deck->slides_count,
                 'week_slot' => $deck->week_slot,
+                'module_day_id' => $deck->module_day_id,
                 'sort_order' => $deck->sort_order,
                 'day' => $deck->day,
             ]),
             'days' => $module->days->sortBy('day_number')->values(),
+            'weeklyExams' => $module->weeklyExams->map(fn ($exam) => [
+                'id' => $exam->id,
+                'exam_order' => $exam->exam_order,
+                'status' => $exam->status,
+            ])->values(),
             'createMode' => $createMode || $decks->isEmpty(),
             'activePlacement' => $createMode ? $placement : ($activeDeck?->week_slot ?? $placement),
         ]);

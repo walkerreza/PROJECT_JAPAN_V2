@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from '@inertiajs/react';
 import { Dialog, DialogPanel, DialogTitle, Transition, TransitionChild } from '@headlessui/react';
 import axios from 'axios';
-import { ConnectionState, Room, RoomEvent, Track, VideoQuality } from 'livekit-client';
+import { ConnectionState, DisconnectReason, LogLevel, Room, RoomEvent, setLogLevel, Track, VideoQuality } from 'livekit-client';
 import PresentationStage from '@/Components/Features/Presentation/PresentationStage';
 import { getEcho, leaveLiveClassChannel } from '@/lib/echo';
 
@@ -37,6 +37,8 @@ import StopScreenShareIcon from '@mui/icons-material/StopScreenShare';
 import UndoIcon from '@mui/icons-material/Undo';
 import WifiIcon from '@mui/icons-material/Wifi';
 
+setLogLevel(LogLevel.warn);
+
 const initialParticipants = [
     { id: 'student-1', name: 'Aiko S.', initials: 'AS', handRaised: false, canSpeak: false, micBlocked: false, canWrite: false },
     { id: 'student-2', name: 'Bima R.', initials: 'BR', handRaised: true, canSpeak: false, micBlocked: false, canWrite: false },
@@ -46,9 +48,47 @@ const initialParticipants = [
 
 const connectionLabels = {
     connected: 'Terhubung',
-    reconnecting: 'Menghubungkan ulang',
-    slow: 'Jaringan lambat',
+    reconnecting: 'Menyambungkan kembali',
+    slow: 'Koneksi kurang stabil',
 };
+
+function mediaIssueMessage(error, feature = 'Perangkat') {
+    const name = String(error?.name || '').toLowerCase();
+    const message = String(error?.message || '').toLowerCase();
+
+    if (name.includes('notallowed') || message.includes('permission') || message.includes('denied')) {
+        return `${feature} belum diizinkan. Izinkan akses melalui ikon gembok di browser, lalu coba lagi.`;
+    }
+
+    if (name.includes('notfound') || message.includes('not found')) {
+        return `${feature} tidak ditemukan. Pastikan perangkat sudah terpasang.`;
+    }
+
+    if (name.includes('notreadable') || message.includes('could not start')) {
+        return `${feature} sedang digunakan aplikasi lain. Tutup aplikasi tersebut, lalu coba lagi.`;
+    }
+
+    if (name.includes('overconstrained') || message.includes('constraint')) {
+        return `${feature} tidak mendukung pengaturan yang dipilih. Coba perangkat lain.`;
+    }
+
+    if (message.includes('engine not connected') || message.includes('disconnected') || message.includes('timeout')) {
+        return 'Koneksi kelas belum siap. Tunggu hingga tersambung, lalu coba lagi.';
+    }
+
+    return `${feature} belum dapat digunakan. Periksa perangkat dan koneksi, lalu coba lagi.`;
+}
+
+function joinIssueMessage(error) {
+    const status = error?.response?.status;
+
+    if (status === 403) return 'Akun Anda tidak memiliki akses ke ruang kelas ini.';
+    if (status === 409) return 'Kelas belum dimulai atau sudah berakhir.';
+    if (status === 429) return 'Terlalu banyak percobaan. Tunggu sebentar, lalu coba lagi.';
+    if (status === 503) return 'Ruang kelas sedang disiapkan. Tunggu sebentar, lalu coba lagi.';
+
+    return 'Belum dapat masuk ke ruang kelas. Periksa koneksi internet, lalu coba lagi.';
+}
 
 const MAX_BOARD_STROKES = 500;
 const MAX_STROKE_POINTS = 300;
@@ -182,8 +222,8 @@ function Lobby({ deck, session, role, joining = false, lowDataMode = false, onTo
                 if (!cancelled) {
                     const denied = error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError';
                     setDeviceError(denied
-                        ? 'Izin kamera atau mikrofon ditolak. Izinkan akses melalui pengaturan browser.'
-                        : `Perangkat media tidak dapat dibuka: ${error?.message || 'perangkat tidak tersedia'}`);
+                        ? 'Kamera dan mikrofon belum diizinkan. Izinkan akses melalui ikon gembok di browser.'
+                        : mediaIssueMessage(error, 'Kamera atau mikrofon'));
                 }
             } finally {
                 if (!cancelled) setCheckingDevices(false);
@@ -269,7 +309,7 @@ function Lobby({ deck, session, role, joining = false, lowDataMode = false, onTo
                                     <option className="bg-gray-900" value="">Kamera default</option>
                                     {cameras.map((device, deviceIndex) => <option className="bg-gray-900" key={device.deviceId} value={device.deviceId}>{device.label || `Kamera ${deviceIndex + 1}`}</option>)}
                                 </select>
-                                <span className="mt-4 block text-[10px] font-bold text-gray-500">{cameraEnabled ? 'Gambar tampil pada pratinjau di atas' : 'Kamera tidak akan dipublikasikan'}</span>
+                                <span className="mt-4 block text-[10px] font-bold text-gray-500">{cameraEnabled ? 'Gambar tampil pada pratinjau di atas' : 'Kamera tetap mati saat masuk'}</span>
                             </label>
                         </div>
                     </section>
@@ -278,23 +318,25 @@ function Lobby({ deck, session, role, joining = false, lowDataMode = false, onTo
                         <p className="text-xs font-black uppercase tracking-[0.24em] text-gray-500">Konteks kelas</p>
                         <h2 className="mt-3 text-xl font-black">{deck.title}</h2>
                         <dl className="mt-5 space-y-4 text-sm">
-                            <div><dt className="font-bold text-gray-500">Kelas / Week</dt><dd className="mt-1 font-black text-gray-100">{deck.module?.title || 'Belum ditentukan'}</dd></div>
+                            <div><dt className="font-bold text-gray-500">Kelas / Minggu</dt><dd className="mt-1 font-black text-gray-100">{deck.module?.title || 'Belum ditentukan'}</dd></div>
                             <div><dt className="font-bold text-gray-500">Kloter</dt><dd className="mt-1 font-black text-gray-100">{session?.kloter?.nama || 'Kloter aktif'}</dd></div>
                             <div><dt className="font-bold text-gray-500">Materi</dt><dd className="mt-1 font-black text-gray-100">{deck.slides?.length || 0} slide siap</dd></div>
                         </dl>
                         <div className="mt-6 rounded-xl bg-gray-950/70 p-4">
                             <div className="flex items-center gap-3">
                                 <GroupsIcon className="text-orange-400" />
-                                <div><p className="text-sm font-black">Ruang kelas siap</p><p className="text-xs font-semibold text-gray-500">Koneksi media dibuat setelah tombol ditekan</p></div>
+                                <div><p className="text-sm font-black">Ruang kelas siap</p><p className="text-xs font-semibold text-gray-500">Tekan tombol masuk saat kamu sudah siap</p></div>
                             </div>
                         </div>
                         <button type="button" onClick={onToggleLowData} className={`mt-3 flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-xs font-black transition ${lowDataMode ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200' : 'border-white/10 bg-white/[0.04] text-gray-300'}`}>
                             <span><WifiIcon sx={{ fontSize: 17 }} className="mr-2 align-middle" />Mode hemat data</span>
                             <span>{lowDataMode ? 'Aktif' : 'Nonaktif'}</span>
                         </button>
-                        <button type="button" disabled={joining} onClick={enterRoom} className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-orange-600 px-5 text-sm font-black text-white shadow-lg shadow-orange-950/30 hover:bg-orange-500 disabled:cursor-wait disabled:opacity-60">
-                            <PlayArrowIcon /> {joining ? 'Menghubungkan...' : role === 'mentor' ? 'Masuk sebagai Mentor' : 'Masuk Ruang Kelas'}
+                        <button type="button" disabled={joining} onClick={enterRoom} aria-busy={joining} className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-orange-600 px-5 text-sm font-black text-white shadow-lg shadow-orange-950/30 transition-colors hover:bg-orange-500 disabled:cursor-wait disabled:bg-orange-700">
+                            {joining ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/35 border-t-white" aria-hidden="true" /> : <PlayArrowIcon />}
+                            {joining ? 'Menyiapkan ruang kelas...' : role === 'mentor' ? 'Masuk sebagai Mentor' : 'Masuk Ruang Kelas'}
                         </button>
+                        {joining && <p className="mt-2 text-center text-[11px] font-semibold text-gray-400">Mohon tunggu, materi dan perangkat sedang disambungkan.</p>}
                     </aside>
                 </div>
             </div>
@@ -417,7 +459,12 @@ export default function LiveClassRoom({
     initialStageMode = 'slides',
     exitUrl: customExitUrl = null,
 }) {
-    const slides = deck?.slides || [];
+    const resolvedDeck = deck || {
+        title: session?.program?.title || 'Papan Tulis',
+        module: null,
+        slides: [],
+    };
+    const slides = resolvedDeck.slides || [];
     const hasSlides = slides.length > 0;
     const stageRef = useRef(null);
     const cameraContainerRef = useRef(null);
@@ -428,6 +475,15 @@ export default function LiveClassRoom({
     const cameraDragRef = useRef(null);
     const previousCanDrawRef = useRef(false);
     const copyFeedbackTimerRef = useRef(null);
+    const reconnectTimerRef = useRef(null);
+    const reconnectAttemptRef = useRef(0);
+    const reconnectRoomRef = useRef(null);
+    const joiningRef = useRef(false);
+    const intentionalDisconnectRef = useRef(false);
+    const sessionUnavailableRef = useRef(false);
+    const mediaPreferencesRef = useRef({ micEnabled: true, cameraEnabled: true, microphoneId: '', cameraId: '' });
+    const raiseHandControlRef = useRef(null);
+    const raiseHandNoticeTimerRef = useRef(null);
     const snapshotTimerRef = useRef(null);
     const boardVersionRef = useRef(Number(session?.board_snapshot?.version || 0));
     const seenBoardEventsRef = useRef(new Set());
@@ -450,6 +506,7 @@ export default function LiveClassRoom({
     const [micEnabled, setMicEnabled] = useState(true);
     const [cameraEnabled, setCameraEnabled] = useState(true);
     const [screenSharing, setScreenSharing] = useState(false);
+    const [screenShareBusy, setScreenShareBusy] = useState(false);
     const [connection, setConnection] = useState('reconnecting');
     const [studentSpeaking, setStudentSpeaking] = useState(false);
     const [kicked, setKicked] = useState(false);
@@ -476,6 +533,8 @@ export default function LiveClassRoom({
     const [copyStatus, setCopyStatus] = useState('idle');
     const [joining, setJoining] = useState(false);
     const [devicePreferences, setDevicePreferences] = useState({ microphoneId: '', cameraId: '' });
+    const [raiseHandPromptOpen, setRaiseHandPromptOpen] = useState(false);
+    const [raiseHandNotice, setRaiseHandNotice] = useState('');
     const currentStudent = role === 'student' ? (selfParticipant || participants[0] || initialParticipants[0]) : (participants[0] || initialParticipants[0]);
     const canDraw = role === 'mentor' || currentStudent?.canWrite;
     const activeSlide = slides[index] || null;
@@ -727,10 +786,33 @@ export default function LiveClassRoom({
         };
     }, [applyBoardEvent, mergeParticipant, replaceBoardStrokes, role, scheduleBoardSnapshot, session?.id]);
 
+    const clearReconnectTimer = useCallback(() => {
+        if (!reconnectTimerRef.current) return;
+        window.clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+    }, []);
+
+    const scheduleRoomReconnect = useCallback((minimumDelayMs = 0) => {
+        if (intentionalDisconnectRef.current || sessionUnavailableRef.current || reconnectTimerRef.current) return;
+
+        const attempt = reconnectAttemptRef.current;
+        const delay = Math.max(minimumDelayMs, Math.min(1000 * (2 ** attempt), 10000));
+        reconnectAttemptRef.current += 1;
+        setConnection('reconnecting');
+        reconnectTimerRef.current = window.setTimeout(() => {
+            reconnectTimerRef.current = null;
+            reconnectRoomRef.current?.();
+        }, delay);
+    }, []);
+
     useEffect(() => () => {
+        intentionalDisconnectRef.current = true;
+        sessionUnavailableRef.current = true;
+        clearReconnectTimer();
         roomRef.current?.disconnect();
         if (copyFeedbackTimerRef.current) window.clearTimeout(copyFeedbackTimerRef.current);
-    }, []);
+        if (raiseHandNoticeTimerRef.current) window.clearTimeout(raiseHandNoticeTimerRef.current);
+    }, [clearReconnectTimer]);
 
     const copyJoinLink = useCallback(async () => {
         if (!resolvedJoinUrl) return;
@@ -760,28 +842,39 @@ export default function LiveClassRoom({
         copyFeedbackTimerRef.current = window.setTimeout(() => setCopyStatus('idle'), 2500);
     }, [resolvedJoinUrl]);
 
-    const startRoom = async ({ micEnabled: startMic, cameraEnabled: startCamera, microphoneId = '', cameraId = '' }) => {
-        if (joining) return false;
+    const startRoom = async ({ micEnabled: startMic, cameraEnabled: startCamera, microphoneId = '', cameraId = '' }, { reconnect = false } = {}) => {
+        if (joiningRef.current) return false;
 
+        joiningRef.current = true;
         setJoining(true);
-        setDevicePreferences({ microphoneId, cameraId });
+        intentionalDisconnectRef.current = false;
+        if (!reconnect) {
+            const preferences = { micEnabled: startMic, cameraEnabled: startCamera, microphoneId, cameraId };
+            mediaPreferencesRef.current = preferences;
+            setDevicePreferences({ microphoneId, cameraId });
+        }
 
         if (!tokenEndpoint) {
             setMicEnabled(startMic);
             setCameraEnabled(startCamera);
             setConnection('connected');
             setPhase('live');
+            joiningRef.current = false;
             setJoining(false);
             return true;
         }
 
-        setJoinError('');
-        setMediaError('');
+        if (!reconnect) {
+            setJoinError('');
+            setMediaError('');
+        }
         setConnection('reconnecting');
 
+        let allowReconnectAfterDisconnect = true;
+        let room = null;
         try {
             const { data } = await axios.post(tokenEndpoint);
-            const room = new Room({ adaptiveStream: true, dynacast: true });
+            room = new Room({ adaptiveStream: true, dynacast: true });
             roomRef.current = room;
 
             room.on(RoomEvent.Reconnecting, () => setConnection('reconnecting'));
@@ -838,7 +931,30 @@ export default function LiveClassRoom({
                 if (publication.source === Track.Source.Camera) setCameraTrack(null);
             });
             room.on(RoomEvent.Disconnected, (reason) => {
-                if (String(reason).toLowerCase().includes('removed')) setKicked(true);
+                if (roomRef.current && roomRef.current !== room) return;
+                if (roomRef.current === room) roomRef.current = null;
+                setRemoteAudioTracks([]);
+                setCameraTrack(null);
+                setScreenTrack(null);
+                setScreenSharing(false);
+
+                if (reason === DisconnectReason.PARTICIPANT_REMOVED) {
+                    sessionUnavailableRef.current = true;
+                    clearReconnectTimer();
+                    setKicked(true);
+                    return;
+                }
+
+                if (reason === DisconnectReason.ROOM_DELETED || reason === DisconnectReason.ROOM_CLOSED) {
+                    sessionUnavailableRef.current = true;
+                    clearReconnectTimer();
+                    setPhase('ended');
+                    return;
+                }
+
+                if (allowReconnectAfterDisconnect && !intentionalDisconnectRef.current && !sessionUnavailableRef.current) {
+                    scheduleRoomReconnect();
+                }
             });
 
             await room.connect(data.server_url, data.participant_token);
@@ -866,7 +982,7 @@ export default function LiveClassRoom({
                         });
                         microphoneActive = true;
                     } catch (error) {
-                        setMediaError(`Mikrofon tidak dapat diaktifkan: ${error?.message || 'periksa izin browser'}`);
+                        setMediaError(mediaIssueMessage(error, 'Mikrofon'));
                     }
                 }
 
@@ -882,7 +998,7 @@ export default function LiveClassRoom({
                         setCameraTrack(publication?.track || room.localParticipant.getTrackPublication(Track.Source.Camera)?.track || null);
                         cameraActive = true;
                     } catch (error) {
-                        setMediaError((current) => [current, `Kamera tidak dapat diaktifkan: ${error?.message || 'periksa izin browser'}`].filter(Boolean).join(' '));
+                        setMediaError((current) => [current, mediaIssueMessage(error, 'Kamera')].filter(Boolean).join(' '));
                     }
                 }
 
@@ -890,22 +1006,46 @@ export default function LiveClassRoom({
                 setCameraEnabled(cameraActive);
             } else {
                 await room.localParticipant.setMicrophoneEnabled(false);
+                setStudentSpeaking(false);
                 setMicEnabled(false);
                 setCameraEnabled(false);
             }
 
+            clearReconnectTimer();
+            reconnectAttemptRef.current = 0;
+            setConnection('connected');
             setPhase('live');
             return true;
         } catch (error) {
-            setJoinError(error.response?.data?.message || error.message || 'Tidak dapat terhubung ke ruang kelas.');
-            setConnection('slow');
-            roomRef.current?.disconnect();
-            roomRef.current = null;
+            allowReconnectAfterDisconnect = false;
+            if (roomRef.current === room) roomRef.current = null;
+            room?.disconnect();
+
+            const status = Number(error?.response?.status || 0);
+            if (reconnect && status === 409) {
+                sessionUnavailableRef.current = true;
+                clearReconnectTimer();
+                setPhase('ended');
+            } else if (reconnect && (status === 401 || status === 403)) {
+                sessionUnavailableRef.current = true;
+                clearReconnectTimer();
+                setKicked(true);
+            } else if (reconnect) {
+                setConnection('reconnecting');
+                const retryAfterSeconds = Number(error?.response?.headers?.['retry-after'] || 0);
+                scheduleRoomReconnect(Number.isFinite(retryAfterSeconds) ? retryAfterSeconds * 1000 : 0);
+            } else {
+                setJoinError(joinIssueMessage(error));
+                setConnection('slow');
+            }
             return false;
         } finally {
+            joiningRef.current = false;
             setJoining(false);
         }
     };
+
+    reconnectRoomRef.current = () => startRoom(mediaPreferencesRef.current, { reconnect: true });
 
     const updateParticipant = (id, changes) => {
         setParticipants((rows) => rows.map((participant) => participant.id === id ? { ...participant, ...changes } : participant));
@@ -970,7 +1110,7 @@ export default function LiveClassRoom({
 
         if (tool === 'pen' && canDraw) {
             if (strokesRef.current.length >= MAX_BOARD_STROKES) {
-                setMediaError('Papan sudah mencapai batas 500 garis. Bersihkan sebagian coretan untuk melanjutkan.');
+                setMediaError('Papan sudah penuh. Hapus beberapa coretan untuk melanjutkan.');
                 return;
             }
             const id = `${role}-${Date.now()}`;
@@ -1009,10 +1149,23 @@ export default function LiveClassRoom({
         : customExitUrl || route('admin.programs.index');
     const selectStageMode = async (mode) => {
         if (mode === 'slides' && !hasSlides) return;
+        if (screenShareBusy) return;
+
         const room = roomRef.current;
         const fallbackMode = hasSlides ? 'slides' : 'board';
 
         setMediaError('');
+
+        if (
+            role === 'mentor'
+            && mode === 'screen'
+            && (!room || room.state !== ConnectionState.Connected)
+        ) {
+            setMediaError('Koneksi kelas belum siap. Tunggu hingga tersambung, lalu coba lagi.');
+            return;
+        }
+
+        setScreenShareBusy(true);
 
         try {
             if (role === 'mentor' && room) {
@@ -1033,14 +1186,16 @@ export default function LiveClassRoom({
             setStageMenuOpen(false);
             flushBoardSnapshot({ stage_mode: mode });
         } catch (error) {
-            const cancelled = error?.name === 'NotAllowedError' || String(error?.message || '').toLowerCase().includes('permission');
+            const cancelled = error?.name === 'NotAllowedError';
             setMediaError(cancelled
-                ? 'Berbagi layar dibatalkan atau izin browser ditolak.'
-                : `Layar tidak dapat dibagikan: ${error?.message || 'fitur tidak tersedia'}`);
+                ? 'Berbagi layar dibatalkan. Pilih layar atau jendela saat ingin mencoba lagi.'
+                : mediaIssueMessage(error, 'Berbagi layar'));
             setScreenSharing(false);
             setScreenTrack(null);
             setStageMode(fallbackMode);
             setStageMenuOpen(false);
+        } finally {
+            setScreenShareBusy(false);
         }
     };
 
@@ -1060,9 +1215,10 @@ export default function LiveClassRoom({
                 noiseSuppression: true,
                 autoGainControl: true,
             } : undefined);
+            mediaPreferencesRef.current = { ...mediaPreferencesRef.current, micEnabled: next };
             setMicEnabled(next);
         } catch (error) {
-            setMediaError(`Mikrofon tidak dapat diubah: ${error?.message || 'periksa izin browser'}`);
+            setMediaError(mediaIssueMessage(error, 'Mikrofon'));
             setConnection('slow');
         }
     };
@@ -1079,9 +1235,10 @@ export default function LiveClassRoom({
                     : { width: 1280, height: 720, frameRate: 24 },
             } : undefined);
             setCameraTrack(next ? publication?.track || roomRef.current?.localParticipant.getTrackPublication(Track.Source.Camera)?.track || null : null);
+            mediaPreferencesRef.current = { ...mediaPreferencesRef.current, cameraEnabled: next };
             setCameraEnabled(next);
         } catch (error) {
-            setMediaError(`Kamera tidak dapat diubah: ${error?.message || 'periksa izin browser'}`);
+            setMediaError(mediaIssueMessage(error, 'Kamera'));
             setConnection('slow');
         }
     };
@@ -1107,13 +1264,11 @@ export default function LiveClassRoom({
             setAudioPlaybackBlocked(false);
             setMediaError('');
         } catch (error) {
-            setMediaError(`Suara belum dapat diputar: ${error?.message || 'periksa izin audio browser'}`);
+            setMediaError('Suara belum dapat diputar. Ketuk tombol suara sekali lagi atau periksa volume perangkat.');
         }
     };
 
-    const toggleRaiseHand = async () => {
-        const raised = !currentStudent?.handRaised;
-
+    const applyRaiseHandState = async (raised) => {
         if (raised) {
             await setStudentMic(true);
         } else {
@@ -1125,6 +1280,47 @@ export default function LiveClassRoom({
         setParticipants((rows) => rows.map((participant) => Number(participant.id) === Number(currentStudent?.id) ? { ...participant, handRaised: raised, handRaisedAt: raisedAt } : participant));
         echoChannelRef.current?.whisper('raise-hand', { userId: currentStudent?.id, raised, raisedAt });
     };
+
+    const showRaiseHandNotice = (message) => {
+        if (raiseHandNoticeTimerRef.current) window.clearTimeout(raiseHandNoticeTimerRef.current);
+        setRaiseHandNotice(message);
+        raiseHandNoticeTimerRef.current = window.setTimeout(() => setRaiseHandNotice(''), 2600);
+    };
+
+    const handleRaiseHandButton = async () => {
+        if (!currentStudent?.handRaised) {
+            setRaiseHandNotice('');
+            setRaiseHandPromptOpen(true);
+            return;
+        }
+
+        await applyRaiseHandState(false);
+        showRaiseHandNotice('Tangan diturunkan. Gunakan tahan bicara jika ingin berbicara lagi.');
+    };
+
+    const confirmRaiseHand = async () => {
+        setRaiseHandPromptOpen(false);
+        await applyRaiseHandState(true);
+        showRaiseHandNotice('Tangan terangkat. Mentor dapat melihat permintaanmu.');
+    };
+
+    useEffect(() => {
+        if (!raiseHandPromptOpen) return undefined;
+
+        const closeOnOutside = (event) => {
+            if (!raiseHandControlRef.current?.contains(event.target)) setRaiseHandPromptOpen(false);
+        };
+        const closeOnEscape = (event) => {
+            if (event.key === 'Escape') setRaiseHandPromptOpen(false);
+        };
+
+        document.addEventListener('pointerdown', closeOnOutside);
+        document.addEventListener('keydown', closeOnEscape);
+        return () => {
+            document.removeEventListener('pointerdown', closeOnOutside);
+            document.removeEventListener('keydown', closeOnEscape);
+        };
+    }, [raiseHandPromptOpen]);
 
     useEffect(() => {
         if (role !== 'student' || phase !== 'live' || currentStudent?.handRaised || currentStudent?.micBlocked || !currentStudent?.canSpeak) return undefined;
@@ -1242,9 +1438,16 @@ export default function LiveClassRoom({
         if (role === 'mentor' && endEndpoint) {
             await flushBoardSnapshot();
             await axios.post(endEndpoint);
+            intentionalDisconnectRef.current = true;
+            sessionUnavailableRef.current = true;
+            clearReconnectTimer();
+            roomRef.current?.disconnect();
             setPhase('ended');
         } else {
             if (leaveEndpoint) await axios.post(leaveEndpoint).catch(() => null);
+            intentionalDisconnectRef.current = true;
+            sessionUnavailableRef.current = true;
+            clearReconnectTimer();
             roomRef.current?.disconnect();
             window.location.assign(exitUrl);
         }
@@ -1253,7 +1456,7 @@ export default function LiveClassRoom({
     if (phase === 'lobby') {
         return (
             <div className="relative">
-                <Lobby deck={deck || { title: session?.program?.title, module: null, slides: [] }} session={session} role={role} joining={joining} lowDataMode={lowDataMode} onToggleLowData={() => setLowDataMode((value) => !value)} onExit={() => window.location.assign(exitUrl)} onStart={startRoom} />
+                <Lobby deck={resolvedDeck} session={session} role={role} joining={joining} lowDataMode={lowDataMode} onToggleLowData={() => setLowDataMode((value) => !value)} onExit={() => window.location.assign(exitUrl)} onStart={startRoom} />
                 {joinError && <div className="fixed bottom-5 left-1/2 z-[100] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 rounded-xl border border-red-400/30 bg-red-950 px-4 py-3 text-center text-sm font-bold text-red-100 shadow-2xl">{joinError}</div>}
             </div>
         );
@@ -1265,8 +1468,8 @@ export default function LiveClassRoom({
                 <section className="w-full max-w-lg text-center">
                     <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-orange-500/15 text-orange-300"><CallEndIcon /></div>
                     <h1 className="mt-5 text-3xl font-black">{kicked ? 'Anda dikeluarkan dari sesi' : 'Ruang kelas telah berakhir'}</h1>
-                    <p className="mt-3 text-sm font-semibold leading-6 text-gray-400">{kicked ? 'Status blokir hanya berlaku pada sesi prototype ini.' : 'Tidak ada rekaman atau perubahan data yang disimpan.'}</p>
-                    <Link href={exitUrl} className="mt-6 inline-flex h-11 items-center justify-center rounded-xl bg-orange-600 px-5 text-sm font-black text-white">Kembali ke Presentasi</Link>
+                    <p className="mt-3 text-sm font-semibold leading-6 text-gray-400">{kicked ? 'Mentor telah menutup akses Anda ke kelas ini.' : 'Terima kasih sudah mengikuti kelas.'}</p>
+                    <Link href={exitUrl} className="mt-6 inline-flex h-11 items-center justify-center rounded-xl bg-orange-600 px-5 text-sm font-black text-white">Kembali ke Roadmap</Link>
                 </section>
             </main>
         );
@@ -1275,7 +1478,7 @@ export default function LiveClassRoom({
     return (
         <main className="flex h-dvh min-h-0 flex-col overflow-hidden bg-[#070b14] text-white">
             <header className="relative z-30 flex h-12 shrink-0 items-center gap-2 border-b border-white/10 bg-[#0b111d] px-2.5 sm:h-14 sm:gap-3 sm:px-4">
-                <div className="min-w-0 flex-1"><p className="truncate text-xs font-black sm:text-sm">{deck.title}</p><p className="hidden truncate text-[11px] font-bold text-gray-500 sm:block">{deck.module?.title || 'Ruang kelas'}</p></div>
+                <div className="min-w-0 flex-1"><p className="truncate text-xs font-black sm:text-sm">{resolvedDeck.title}</p><p className="hidden truncate text-[11px] font-bold text-gray-500 sm:block">{resolvedDeck.module?.title || 'Ruang kelas'}</p></div>
                 <span className="hidden items-center gap-2 text-[11px] font-bold text-gray-400 md:inline-flex">
                     <span className={`h-2 w-2 rounded-full ${connection === 'connected' ? 'bg-emerald-400' : connection === 'slow' ? 'bg-amber-400' : 'animate-pulse bg-blue-400'}`} />
                     {connectionLabels[connection]}
@@ -1290,7 +1493,7 @@ export default function LiveClassRoom({
                         aria-label={copyStatus === 'success' ? 'Link siswa berhasil disalin' : 'Salin link siswa'}
                     >
                         {copyStatus === 'success' ? <CheckIcon sx={{ fontSize: 17 }} /> : <ContentCopyIcon sx={{ fontSize: 16 }} />}
-                        <span className="hidden sm:inline">{copyStatus === 'success' ? 'Tersalin' : copyStatus === 'error' ? 'Gagal menyalin' : 'Salin link siswa'}</span>
+                        <span className="hidden sm:inline">{copyStatus === 'success' ? 'Link tersalin' : copyStatus === 'error' ? 'Belum tersalin' : 'Salin link siswa'}</span>
                     </button>
                 )}
                 {!session && <button type="button" onClick={() => setPreviewMenuOpen((value) => !value)} className="grid h-9 w-9 place-items-center rounded-lg bg-white/5 text-gray-300 hover:bg-white/10" aria-label="Opsi pratinjau" title="Opsi pratinjau"><MoreVertIcon sx={{ fontSize: 19 }} /></button>}
@@ -1301,9 +1504,9 @@ export default function LiveClassRoom({
                             {role === 'mentor' ? 'Lihat sebagai siswa' : 'Kembali sebagai mentor'}
                         </button>
                         <label className="mt-1 block rounded-lg px-3 py-2 text-xs font-bold text-gray-400">
-                            Simulasi koneksi
+                            Pratinjau kondisi jaringan
                             <select value={connection} onChange={(event) => setConnection(event.target.value)} className="mt-1.5 w-full rounded-lg border-white/10 bg-gray-900 py-1.5 text-xs font-black text-white focus:border-orange-400 focus:ring-orange-400">
-                                <option value="connected">Terhubung</option><option value="reconnecting">Menghubungkan ulang</option><option value="slow">Jaringan lambat</option>
+                                <option value="connected">Terhubung</option><option value="reconnecting">Menyambungkan kembali</option><option value="slow">Koneksi kurang stabil</option>
                             </select>
                         </label>
                     </div>
@@ -1312,7 +1515,9 @@ export default function LiveClassRoom({
 
             {connection !== 'connected' && (
                 <div className={`z-20 flex min-h-8 shrink-0 items-center justify-center gap-2 px-3 py-1 text-center text-[11px] font-black sm:text-xs ${connection === 'slow' ? 'bg-amber-500 text-gray-950' : 'bg-blue-600 text-white'}`}>
-                    <WifiIcon sx={{ fontSize: 15 }} /> {connectionLabels[connection]}. Tampilan menggunakan state terakhir.
+                    <WifiIcon sx={{ fontSize: 15 }} /> {connection === 'slow'
+                        ? 'Koneksi sedang kurang stabil. Materi terakhir tetap ditampilkan.'
+                        : 'Koneksi terputus sementara. Kami sedang menyambungkan kembali.'}
                 </div>
             )}
 
@@ -1389,13 +1594,13 @@ export default function LiveClassRoom({
                 </section>
             </div>
 
-            <footer className={`relative z-30 flex min-h-14 shrink-0 items-center justify-start gap-2 border-t border-white/10 bg-[#0b111d] px-2 py-2 [scrollbar-width:none] sm:min-h-16 sm:px-3 md:justify-center [&::-webkit-scrollbar]:hidden ${toolsOpen || stageMenuOpen ? 'overflow-visible' : 'overflow-x-auto overflow-y-hidden'}`}>
+            <footer className={`relative z-30 flex min-h-14 shrink-0 items-center justify-start gap-2 border-t border-white/10 bg-[#0b111d] px-2 py-2 [scrollbar-width:none] sm:min-h-16 sm:px-3 md:justify-center [&::-webkit-scrollbar]:hidden ${toolsOpen || stageMenuOpen || raiseHandPromptOpen || raiseHandNotice ? 'overflow-visible' : 'overflow-x-auto overflow-y-hidden'}`}>
                 {role === 'mentor' && stageMenuOpen && (
                     <div className="absolute bottom-full left-2 mb-2 w-56 overflow-hidden rounded-xl border border-white/10 bg-[#111a2b] p-2 shadow-2xl lg:hidden">
                         <p className="px-2 pb-2 pt-1 text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">Tampilan kelas</p>
                         <button type="button" disabled={!hasSlides} onClick={() => selectStageMode('slides')} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-black disabled:cursor-not-allowed disabled:opacity-35 ${stageMode === 'slides' ? 'bg-orange-500 text-white' : 'text-gray-200 hover:bg-white/5'}`}><PresentToAllIcon sx={{ fontSize: 18 }} /> Presentasi</button>
                         <button type="button" onClick={() => selectStageMode('board')} className={`mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-black ${stageMode === 'board' ? 'bg-orange-500 text-white' : 'text-gray-200 hover:bg-white/5'}`}><DrawIcon sx={{ fontSize: 18 }} /> Papan tulis</button>
-                        <button type="button" onClick={() => selectStageMode('screen')} className={`mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-black ${stageMode === 'screen' ? 'bg-orange-500 text-white' : 'text-gray-200 hover:bg-white/5'}`}><ScreenShareIcon sx={{ fontSize: 18 }} /> Bagikan layar</button>
+                        <button type="button" disabled={screenShareBusy || connection !== 'connected'} onClick={() => selectStageMode(stageMode === 'screen' ? (hasSlides ? 'slides' : 'board') : 'screen')} className={`mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-black disabled:cursor-not-allowed disabled:opacity-40 ${stageMode === 'screen' ? 'bg-orange-500 text-white' : 'text-gray-200 hover:bg-white/5'}`}>{screenSharing ? <StopScreenShareIcon sx={{ fontSize: 18 }} /> : <ScreenShareIcon sx={{ fontSize: 18 }} />} {screenShareBusy ? 'Menyiapkan...' : screenSharing ? 'Hentikan berbagi' : 'Bagikan layar'}</button>
                         <button type="button" onClick={() => { setThumbnailsOpen(true); setStageMenuOpen(false); }} className="mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-black text-gray-200 hover:bg-white/5 sm:hidden"><SlideshowIcon sx={{ fontSize: 18 }} /> Daftar slide</button>
                     </div>
                 )}
@@ -1428,7 +1633,7 @@ export default function LiveClassRoom({
                         <div className="hidden items-center gap-2 lg:flex">
                             <IconButton label="Mode presentasi" disabled={!hasSlides} active={stageMode === 'slides'} onClick={() => selectStageMode('slides')}><PresentToAllIcon sx={{ fontSize: 19 }} /></IconButton>
                             <IconButton label="Papan tulis" active={stageMode === 'board'} onClick={() => selectStageMode('board')}><DrawIcon sx={{ fontSize: 19 }} /></IconButton>
-                            <IconButton label={screenSharing ? 'Hentikan berbagi layar' : 'Bagikan layar'} active={stageMode === 'screen'} onClick={() => selectStageMode(stageMode === 'screen' ? 'slides' : 'screen')}>{screenSharing ? <StopScreenShareIcon sx={{ fontSize: 19 }} /> : <ScreenShareIcon sx={{ fontSize: 19 }} />}</IconButton>
+                            <IconButton label={screenShareBusy ? 'Menyiapkan berbagi layar' : screenSharing ? 'Hentikan berbagi layar' : 'Bagikan layar'} disabled={screenShareBusy || connection !== 'connected'} active={stageMode === 'screen'} onClick={() => selectStageMode(stageMode === 'screen' ? (hasSlides ? 'slides' : 'board') : 'screen')}>{screenSharing ? <StopScreenShareIcon sx={{ fontSize: 19 }} /> : <ScreenShareIcon sx={{ fontSize: 19 }} />}</IconButton>
                         </div>
                         <div className="lg:hidden"><IconButton label="Pilih tampilan kelas" active={stageMenuOpen} onClick={() => { setStageMenuOpen((value) => !value); setToolsOpen(false); }}>{stageMode === 'slides' ? <PresentToAllIcon sx={{ fontSize: 19 }} /> : stageMode === 'board' ? <DrawIcon sx={{ fontSize: 19 }} /> : <ScreenShareIcon sx={{ fontSize: 19 }} />}</IconButton></div>
                         <IconButton label="Alat anotasi" active={toolsOpen || tool !== 'pointer'} onClick={() => { setToolsOpen((value) => !value); setStageMenuOpen(false); }}><BrushIcon sx={{ fontSize: 18 }} /></IconButton>
@@ -1437,9 +1642,34 @@ export default function LiveClassRoom({
 
                 {role === 'student' && (
                     <>
-                        <button type="button" onClick={toggleRaiseHand} className={`flex h-10 shrink-0 items-center gap-2 rounded-xl px-3 text-xs font-black ${currentStudent.handRaised ? 'bg-amber-500 text-gray-950' : 'bg-white/5 text-gray-200'}`}><PanToolIcon sx={{ fontSize: 17 }} /> {currentStudent.handRaised ? 'Turunkan tangan' : 'Angkat tangan'}</button>
+                        <div ref={raiseHandControlRef} className="relative shrink-0">
+                            {(raiseHandPromptOpen || raiseHandNotice) && (
+                                <div role="status" className="absolute bottom-full left-0 z-50 mb-3 w-64 max-w-[calc(100vw-1rem)] rounded-2xl border border-amber-300/25 bg-[#151b27] p-3 text-left shadow-2xl shadow-black/40">
+                                    <span className="absolute -bottom-1.5 left-5 h-3 w-3 rotate-45 border-b border-r border-amber-300/25 bg-[#151b27]" />
+                                    {raiseHandPromptOpen ? (
+                                        <>
+                                            <div className="flex items-start gap-3">
+                                                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-500 text-gray-950"><PanToolIcon sx={{ fontSize: 18 }} /></span>
+                                                <div><p className="text-xs font-black text-white">Angkat tangan?</p><p className="mt-1 text-[11px] font-semibold leading-4 text-gray-400">Mentor akan melihat permintaanmu dan mikrofon dapat digunakan.</p></div>
+                                            </div>
+                                            <div className="mt-3 flex justify-end gap-2">
+                                                <button type="button" onClick={() => setRaiseHandPromptOpen(false)} className="h-8 rounded-lg px-3 text-[11px] font-black text-gray-300 hover:bg-white/5">Batal</button>
+                                                <button type="button" onClick={confirmRaiseHand} className="h-8 rounded-lg bg-amber-500 px-3 text-[11px] font-black text-gray-950 hover:bg-amber-400">Angkat tangan</button>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="flex items-start gap-3">
+                                            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-500/15 text-emerald-300"><CheckIcon sx={{ fontSize: 17 }} /></span>
+                                            <p className="pt-1 text-[11px] font-bold leading-4 text-gray-200">{raiseHandNotice}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            <button type="button" onClick={handleRaiseHandButton} aria-expanded={raiseHandPromptOpen} className={`flex h-10 items-center gap-2 rounded-xl px-3 text-xs font-black transition-colors ${currentStudent.handRaised ? 'bg-amber-500 text-gray-950 hover:bg-amber-400' : 'bg-white/5 text-gray-200 hover:bg-white/10'}`}><PanToolIcon sx={{ fontSize: 17 }} /> {currentStudent.handRaised ? 'Turunkan tangan' : 'Angkat tangan'}</button>
+                        </div>
                         <button
                             type="button"
+                            data-sound="none"
                             disabled={!currentStudent.canSpeak || currentStudent.micBlocked}
                             onClick={currentStudent.handRaised ? () => setStudentMic(!studentSpeaking) : undefined}
                             onPointerDown={currentStudent.handRaised ? undefined : () => setStudentMic(true)}
@@ -1450,7 +1680,7 @@ export default function LiveClassRoom({
                             title={currentStudent.handRaised ? 'Klik untuk mengaktifkan atau mematikan mikrofon' : 'Tahan tombol atau Space untuk bicara'}
                         >
                             {studentSpeaking ? <MicIcon sx={{ fontSize: 17 }} /> : <MicOffIcon sx={{ fontSize: 17 }} />}
-                            {currentStudent.micBlocked ? 'Mic diblokir' : currentStudent.handRaised ? (studentSpeaking ? 'Mic aktif' : 'Aktifkan mic') : 'Tahan untuk bicara'}
+                            {currentStudent.micBlocked ? 'Mikrofon dinonaktifkan mentor' : currentStudent.handRaised ? (studentSpeaking ? 'Mikrofon aktif' : 'Aktifkan mikrofon') : 'Tahan untuk bicara'}
                             {!currentStudent.handRaised && <span className="hidden rounded bg-black/25 px-1.5 py-0.5 text-[9px] md:inline">Space</span>}
                         </button>
                         {canDraw && <IconButton label="Alat menulis" active={toolsOpen || tool !== 'pointer'} onClick={() => setToolsOpen((value) => !value)}><BrushIcon sx={{ fontSize: 18 }} /></IconButton>}

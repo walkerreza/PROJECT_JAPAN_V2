@@ -6,7 +6,20 @@ import FabricSlideCanvas from '@/Components/Features/Presentation/FabricSlideCan
 import PdfCarousel from '@/Components/Features/Presentation/PdfCarousel';
 import EmbedFrame from '@/Components/Features/Presentation/EmbedFrame';
 import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
-import SearchableSelect from '@/Components/UI/SearchableSelect';
+import {
+    DndContext,
+    DragOverlay,
+    KeyboardSensor,
+    PointerSensor,
+    TouchSensor,
+    closestCenter,
+    useDraggable,
+    useDroppable,
+    useSensor,
+    useSensors,
+} from '@dnd-kit/core';
+import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -323,10 +336,208 @@ function SlidePreview({ slide, small = false }) {
     );
 }
 
+const deckSlotKey = (deck) => deck.week_slot === 'after_day'
+    ? `after_day:${deck.day?.id || deck.module_day_id}`
+    : (deck.week_slot || 'opening');
+
+const parseSlotKey = (slotKey) => slotKey.startsWith('after_day:')
+    ? { week_slot: 'after_day', module_day_id: Number(slotKey.split(':')[1]) }
+    : { week_slot: slotKey === 'closing' ? 'closing' : 'opening', module_day_id: null };
+
+const slotLabel = (slotKey, days, hasExam) => {
+    if (slotKey === 'opening') return days.length > 0 ? 'Sebelum Hari 1' : 'Awal Week';
+    if (slotKey === 'closing') return hasExam ? 'Setelah ujian mingguan' : 'Akhir Week';
+
+    const day = days.find((item) => Number(item.id) === Number(slotKey.split(':')[1]));
+    return day ? `Setelah Hari ${day.day_number}` : 'Setelah Hari';
+};
+
+function TimelineDropTarget({ slotKey, index, visible }) {
+    const { isOver, setNodeRef } = useDroppable({
+        id: `drop:${slotKey}:${index}`,
+        data: { slotKey, index },
+    });
+
+    return (
+        <div ref={setNodeRef} className={`grid overflow-hidden transition-all ${visible || isOver ? 'min-h-9 py-1' : 'min-h-3'} ${isOver ? 'scale-[1.01]' : ''}`}>
+            <span className={`place-self-stretch rounded-md border border-dashed text-center text-[10px] font-bold transition ${
+                isOver
+                    ? 'border-orange-500 bg-orange-50 py-2 text-orange-700 dark:bg-orange-950/30 dark:text-orange-300'
+                    : visible
+                        ? 'border-gray-300 py-1.5 text-gray-400 dark:border-gray-700'
+                        : 'border-transparent'
+            }`}>
+                {(visible || isOver) && 'Letakkan di sini'}
+            </span>
+        </div>
+    );
+}
+
+function TimelineDeckCard({ item, selected, moving, onOpen, onMoveMenu }) {
+    const draggableId = item.isDraft ? 'draft' : `deck:${item.id}`;
+    const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+        id: draggableId,
+        data: { item },
+    });
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={transform ? { transform: CSS.Translate.toString(transform) } : undefined}
+            className={`relative rounded-lg border bg-white p-3 shadow-sm transition dark:bg-gray-900 ${
+                item.isDraft
+                    ? 'border-orange-400 ring-1 ring-orange-400'
+                    : selected
+                        ? 'border-orange-300'
+                        : 'border-gray-200 dark:border-gray-700'
+            } ${isDragging ? 'z-20 opacity-30' : ''}`}
+        >
+            <div className="flex items-center gap-3">
+                <button type="button" {...listeners} {...attributes} title="Geser posisi presentasi" className="grid h-9 w-8 shrink-0 cursor-grab place-items-center rounded-md border border-gray-200 text-sm font-black tracking-[-3px] text-gray-500 active:cursor-grabbing dark:border-gray-700 dark:text-gray-300">
+                    ::
+                </button>
+                <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                        <p className="truncate text-sm font-black text-gray-900 dark:text-white">{item.title || 'Presentasi tanpa judul'}</p>
+                        {item.isDraft && <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[9px] font-black uppercase text-orange-700 dark:bg-orange-950/50 dark:text-orange-300">Baru</span>}
+                    </div>
+                    <p className="mt-0.5 text-xs font-medium text-gray-500 dark:text-gray-400">{item.isDraft ? 'Belum dibuat' : `${item.slides_count || 0} slide - ${item.status === 'published' ? 'Terbit' : 'Draft'}`}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                    {!item.isDraft && <button type="button" onClick={() => onOpen(item.id)} className="rounded-md px-2 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800">Edit</button>}
+                    <button type="button" onClick={() => onMoveMenu(draggableId)} className={`rounded-md px-2 py-1.5 text-xs font-bold ${moving ? 'bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800'}`}>
+                        Pindahkan
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function TimelineAnchor({ eyebrow, title, tone = 'day' }) {
+    const toneClass = tone === 'exam'
+        ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200'
+        : 'border-gray-200 bg-gray-100 text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100';
+
+    return (
+        <div className={`rounded-lg border px-3 py-2.5 ${toneClass}`}>
+            <p className="text-[9px] font-black uppercase tracking-[0.12em] opacity-65">{eyebrow}</p>
+            <p className="mt-0.5 text-sm font-black">{title}</p>
+        </div>
+    );
+}
+
+function WeekPlacementEditor({ days, weeklyExams, decks, draft = null, selectedDeckId = null, busy = false, onMoveDeck, onMoveDraft, onOpenDeck }) {
+    const [activeItem, setActiveItem] = useState(null);
+    const [moveMenuId, setMoveMenuId] = useState(null);
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+        useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    );
+    const slotKeys = ['opening', ...days.map((day) => `after_day:${day.id}`), 'closing'];
+    const itemForId = (id) => id === 'draft'
+        ? draft
+        : decks.find((item) => `deck:${item.id}` === id) || null;
+    const itemsInSlot = (slotKey) => {
+        const stored = decks
+            .filter((item) => deckSlotKey(item) === slotKey)
+            .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || Number(a.id) - Number(b.id));
+
+        if (!draft || draft.slotKey !== slotKey) return stored;
+        const next = [...stored];
+        next.splice(Math.min(Number(draft.sort_order || 0), next.length), 0, draft);
+        return next;
+    };
+    const moveItem = (item, targetSlotKey, targetIndex = null) => {
+        if (!item || busy) return;
+        if (item.isDraft) onMoveDraft(targetSlotKey, targetIndex);
+        else onMoveDeck(item.id, targetSlotKey, targetIndex);
+        setMoveMenuId(null);
+    };
+    const renderSlot = (slotKey) => {
+        const items = itemsInSlot(slotKey);
+        const dragging = Boolean(activeItem);
+
+        return (
+            <div key={slotKey} className="ml-4 border-l-2 border-gray-200 pl-4 dark:border-gray-700 sm:ml-6 sm:pl-5">
+                <p className="mb-1 text-[10px] font-black uppercase tracking-[0.12em] text-gray-400">{slotLabel(slotKey, days, weeklyExams.length > 0)}</p>
+                {items.map((item, index) => {
+                    const itemId = item.isDraft ? 'draft' : `deck:${item.id}`;
+                    return (
+                        <React.Fragment key={itemId}>
+                            <TimelineDropTarget slotKey={slotKey} index={index} visible={dragging} />
+                            <TimelineDeckCard item={item} selected={!item.isDraft && Number(item.id) === Number(selectedDeckId)} moving={moveMenuId === itemId} onOpen={onOpenDeck} onMoveMenu={(id) => setMoveMenuId((current) => current === id ? null : id)} />
+                            {moveMenuId === itemId && (
+                                <div className="mt-2 grid gap-1 rounded-lg border border-gray-200 bg-gray-50 p-2 dark:border-gray-700 dark:bg-gray-950 sm:grid-cols-2">
+                                    {items.length > 1 && (
+                                        <>
+                                            <button type="button" disabled={index === 0} onClick={() => moveItem(item, slotKey, index - 1)} className="rounded-md bg-white px-3 py-2 text-left text-xs font-bold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800">
+                                                Naikkan urutan
+                                            </button>
+                                            <button type="button" disabled={index === items.length - 1} onClick={() => moveItem(item, slotKey, index + 1)} className="rounded-md bg-white px-3 py-2 text-left text-xs font-bold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800">
+                                                Turunkan urutan
+                                            </button>
+                                        </>
+                                    )}
+                                    {slotKeys.map((targetSlotKey) => (
+                                        <button key={targetSlotKey} type="button" onClick={() => moveItem(item, targetSlotKey)} className={`rounded-md px-3 py-2 text-left text-xs font-bold transition ${targetSlotKey === slotKey ? 'bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300' : 'bg-white text-gray-700 hover:bg-gray-100 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800'}`}>
+                                            {slotLabel(targetSlotKey, days, weeklyExams.length > 0)}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </React.Fragment>
+                    );
+                })}
+                <TimelineDropTarget slotKey={slotKey} index={items.length} visible={dragging} />
+            </div>
+        );
+    };
+
+    return (
+        <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={({ active }) => setActiveItem(itemForId(active.id))}
+            onDragCancel={() => setActiveItem(null)}
+            onDragEnd={({ active, over }) => {
+                const item = itemForId(active.id);
+                setActiveItem(null);
+                if (!item || !over?.data?.current) return;
+                moveItem(item, over.data.current.slotKey, over.data.current.index);
+            }}
+        >
+            <div className="space-y-3">
+                <TimelineAnchor eyebrow="Mulai" title="Pembuka Week" />
+                {renderSlot('opening')}
+                {days.map((day) => (
+                    <React.Fragment key={day.id}>
+                        <TimelineAnchor eyebrow={`Hari ${day.day_number}`} title={day.title || `Materi Hari ${day.day_number}`} />
+                        {renderSlot(`after_day:${day.id}`)}
+                    </React.Fragment>
+                ))}
+                {weeklyExams.map((exam) => <TimelineAnchor key={exam.id} eyebrow="Evaluasi" title={`Ujian Mingguan ${exam.exam_order}`} tone="exam" />)}
+                {renderSlot('closing')}
+                <TimelineAnchor eyebrow="Selesai" title="Akhir Week" />
+            </div>
+            <DragOverlay>
+                {activeItem && (
+                    <div className="w-72 rounded-lg border border-orange-400 bg-white p-3 shadow-xl dark:bg-gray-900">
+                        <p className="truncate text-sm font-black text-gray-900 dark:text-white">{activeItem.title}</p>
+                        <p className="mt-1 text-xs font-medium text-gray-500">Pindahkan ke celah yang dipilih</p>
+                    </div>
+                )}
+            </DragOverlay>
+        </DndContext>
+    );
+}
+
 export default function BuilderPresentasi({
     deck = null,
     decks = [],
     days = [],
+    weeklyExams = [],
     module = null,
     createMode = false,
     activePlacement = 'opening',
@@ -347,9 +558,14 @@ export default function BuilderPresentasi({
     const [deckDayId, setDeckDayId] = useState(deck?.module_day_id || '');
     const [deckSortOrder, setDeckSortOrder] = useState(deck?.sort_order || 0);
     const [newDeckTitle, setNewDeckTitle] = useState('');
-    const [placement, setPlacement] = useState(activePlacement || 'opening');
-    const [selectedDayId, setSelectedDayId] = useState('');
-    const [sortOrder, setSortOrder] = useState(0);
+    const initialDraftSlot = activePlacement === 'after_day' && days[0]
+        ? `after_day:${days[0].id}`
+        : (activePlacement === 'closing' ? 'closing' : 'opening');
+    const [draftSlotKey, setDraftSlotKey] = useState(initialDraftSlot);
+    const [draftSortOrder, setDraftSortOrder] = useState(0);
+    const [timelineDecks, setTimelineDecks] = useState(decks);
+    const [isPositionSaving, setIsPositionSaving] = useState(false);
+    const [showPlacementEditor, setShowPlacementEditor] = useState(false);
     const [showImportMenu, setShowImportMenu] = useState(false);
     const [showDeckSettings, setShowDeckSettings] = useState(false);
     const [showDeckActions, setShowDeckActions] = useState(false);
@@ -413,13 +629,12 @@ export default function BuilderPresentasi({
     }, [deck?.id, deck?.slides, deck?.status]);
 
     useEffect(() => {
-        const slotLabel = placement === 'closing'
-            ? 'Akhir'
-            : placement === 'after_day'
-                ? 'Setelah Day'
-                : 'Awal';
-        setNewDeckTitle(`${slotLabel} Minggu ${moduleContext.week_number || ''} - ${moduleContext.title || 'Presentasi'}`.trim());
-    }, [moduleContext.id, moduleContext.title, moduleContext.week_number, placement]);
+        setNewDeckTitle(`Presentasi - ${moduleContext.title || `Minggu ${moduleContext.week_number || ''}`}`.trim());
+    }, [moduleContext.id, moduleContext.title, moduleContext.week_number]);
+
+    useEffect(() => {
+        setTimelineDecks(decks);
+    }, [decks]);
 
     useEffect(() => {
         const warnBeforeLeave = (event) => {
@@ -460,6 +675,83 @@ export default function BuilderPresentasi({
         });
     };
 
+    const moveDraft = (targetSlotKey, targetIndex = null) => {
+        const count = timelineDecks.filter((item) => deckSlotKey(item) === targetSlotKey).length;
+        setDraftSlotKey(targetSlotKey);
+        setDraftSortOrder(Math.max(0, Math.min(targetIndex ?? count, count)));
+    };
+
+    const moveDeck = async (deckId, targetSlotKey, targetIndex = null) => {
+        if (isPositionSaving) return;
+
+        const previous = timelineDecks;
+        const movingDeck = previous.find((item) => Number(item.id) === Number(deckId));
+        if (!movingDeck) return;
+
+        const target = parseSlotKey(targetSlotKey);
+        const patchedDeck = {
+            ...movingDeck,
+            ...target,
+            day: target.module_day_id
+                ? days.find((item) => Number(item.id) === Number(target.module_day_id)) || null
+                : null,
+        };
+        const remaining = previous.filter((item) => Number(item.id) !== Number(deckId));
+        const targetItems = remaining
+            .filter((item) => deckSlotKey(item) === targetSlotKey)
+            .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || Number(a.id) - Number(b.id));
+        const storedTargetIndex = !deck
+            && draftSlotKey === targetSlotKey
+            && targetIndex !== null
+            && Number(draftSortOrder) < Number(targetIndex)
+            ? Number(targetIndex) - 1
+            : targetIndex;
+        targetItems.splice(Math.max(0, Math.min(storedTargetIndex ?? targetItems.length, targetItems.length)), 0, patchedDeck);
+
+        const targetIds = new Set(targetItems.map((item) => Number(item.id)));
+        const merged = [
+            ...remaining.filter((item) => !targetIds.has(Number(item.id))),
+            ...targetItems,
+        ];
+        const slotKeys = ['opening', ...days.map((day) => `after_day:${day.id}`), 'closing'];
+        const normalized = slotKeys.flatMap((slot) => merged
+            .filter((item) => deckSlotKey(item) === slot)
+            .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || Number(a.id) - Number(b.id))
+            .map((item, index) => ({ ...item, sort_order: index })));
+
+        setTimelineDecks(normalized);
+        setIsPositionSaving(true);
+
+        try {
+            await window.axios.patch(route('admin.modules.presentations.reorder', moduleContext.id), {
+                positions: normalized.map((item) => ({
+                    deck_id: item.id,
+                    week_slot: item.week_slot,
+                    module_day_id: item.week_slot === 'after_day' ? item.module_day_id : null,
+                    sort_order: item.sort_order,
+                })),
+            });
+
+            if (Number(deck?.id) === Number(deckId)) {
+                const savedActiveDeck = normalized.find((item) => Number(item.id) === Number(deckId));
+                const savedSortOrder = Number(savedActiveDeck?.sort_order || 0);
+                setDeckPlacement(target.week_slot);
+                setDeckDayId(target.module_day_id || '');
+                setDeckSortOrder(savedSortOrder);
+                cleanSnapshotRef.current = builderSnapshot(slides, status, {
+                    week_slot: target.week_slot,
+                    module_day_id: target.week_slot === 'after_day' ? target.module_day_id : '',
+                    sort_order: savedSortOrder,
+                });
+            }
+        } catch (error) {
+            setTimelineDecks(previous);
+            window.alert(error.response?.data?.message || 'Posisi presentasi belum tersimpan. Coba pindahkan kembali.');
+        } finally {
+            setIsPositionSaving(false);
+        }
+    };
+
     const leaveWorkspace = () => {
         if (hasUnsavedChanges && !window.confirm('Perubahan pada presentasi ini belum disimpan. Tetap keluar?')) {
             return;
@@ -472,14 +764,16 @@ export default function BuilderPresentasi({
         const title = newDeckTitle.trim();
         if (!title || !moduleContext.id) return;
 
+        const target = parseSlotKey(draftSlotKey);
+
         router.post(route('admin.presentations.store'), {
             title,
             description: '',
             level_id: moduleContext.level_id || null,
             module_id: moduleContext.id,
-            module_day_id: placement === 'after_day' ? selectedDayId : null,
-            week_slot: placement,
-            sort_order: Number(sortOrder || 0),
+            module_day_id: target.module_day_id,
+            week_slot: target.week_slot,
+            sort_order: Number(draftSortOrder || 0),
             status: 'draft',
         });
     };
@@ -806,6 +1100,36 @@ export default function BuilderPresentasi({
                     </div>
                 )}
 
+                {deck && showPlacementEditor && (
+                    <div className="fixed inset-0 z-[105] flex justify-end bg-gray-950/45" role="dialog" aria-modal="true" aria-label="Atur posisi presentasi">
+                        <div className="flex h-full w-full max-w-xl flex-col bg-gray-50 shadow-2xl dark:bg-gray-950">
+                            <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-800 dark:bg-gray-900">
+                                <div>
+                                    <p className="text-xs font-black uppercase text-orange-600">Alur Week {moduleContext.week_number || '-'}</p>
+                                    <h2 className="mt-0.5 text-base font-black text-gray-950 dark:text-white">Atur posisi presentasi</h2>
+                                </div>
+                                <button type="button" onClick={() => setShowPlacementEditor(false)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-black text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">Selesai</button>
+                            </div>
+                            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+                                <p className="mb-4 text-sm font-medium text-gray-600 dark:text-gray-400">Geser presentasi ke celah yang sesuai. Perubahan posisi langsung disimpan tanpa mengubah isi slide.</p>
+                                <WeekPlacementEditor
+                                    days={days}
+                                    weeklyExams={weeklyExams}
+                                    decks={timelineDecks}
+                                    selectedDeckId={deck.id}
+                                    busy={isPositionSaving}
+                                    onMoveDeck={moveDeck}
+                                    onMoveDraft={moveDraft}
+                                    onOpenDeck={(deckId) => {
+                                        setShowPlacementEditor(false);
+                                        visitDeck(deckId);
+                                    }}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <header className="sticky top-16 z-30 border-b border-gray-200 bg-white px-3 py-2 dark:border-gray-800 dark:bg-gray-900 lg:top-0 lg:px-4">
                     <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                         <div className="flex min-w-0 items-center gap-3">
@@ -832,24 +1156,19 @@ export default function BuilderPresentasi({
                                     <TuneIcon sx={{ fontSize: 17 }} /><span className="hidden sm:inline">Pengaturan</span>
                                 </button>
                                 {showDeckSettings && (
-                                    <div className="absolute right-0 top-10 z-50 w-72 space-y-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-2xl dark:border-gray-800 dark:bg-gray-900">
-                                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">Posisi dan publikasi</p>
-                                        <label className="block">
-                                            <span className="mb-1.5 block text-xs font-bold text-gray-500">Posisi</span>
-                                            <select value={deckPlacement} onChange={(event) => { setDeckPlacement(event.target.value); if (event.target.value !== 'after_day') setDeckDayId(''); }} className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
-                                                <option value="opening">Awal minggu</option><option value="after_day">Setelah Day</option><option value="closing">Akhir minggu</option>
-                                            </select>
-                                        </label>
-                                        {deckPlacement === 'after_day' && (
-                                            <label className="block">
-                                                <span className="mb-1.5 block text-xs font-bold text-gray-500">Day patokan</span>
-                                                <SearchableSelect value={deckDayId} onChange={setDeckDayId} placeholder="Pilih Day" searchPlaceholder="Cari Day..." options={days.map((day) => ({ value: day.id, label: `Day ${day.day_number} - ${day.title}` }))} />
-                                            </label>
-                                        )}
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <label><span className="mb-1.5 block text-xs font-bold text-gray-500">Urutan</span><input type="number" min="0" value={deckSortOrder} onChange={(event) => setDeckSortOrder(event.target.value)} className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white" /></label>
-                                            <label><span className="mb-1.5 block text-xs font-bold text-gray-500">Status</span><select value={status} onChange={(event) => setStatus(event.target.value)} className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white"><option value="draft">Draft</option><option value="published">Published</option></select></label>
+                                    <div className="absolute right-0 top-10 z-50 w-72 space-y-3 rounded-lg border border-gray-200 bg-white p-4 shadow-xl dark:border-gray-800 dark:bg-gray-900">
+                                        <p className="text-[10px] font-black uppercase tracking-[0.12em] text-gray-400">Pengaturan presentasi</p>
+                                        <div className="rounded-lg bg-gray-50 px-3 py-2.5 dark:bg-gray-950">
+                                            <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400">Posisi di Week</p>
+                                            <p className="mt-0.5 text-xs font-black text-gray-900 dark:text-white">{slotLabel(deckSlotKey({ week_slot: deckPlacement, module_day_id: deckDayId }), days, weeklyExams.length > 0)}</p>
                                         </div>
+                                        <button type="button" onClick={() => { setShowDeckSettings(false); setShowPlacementEditor(true); }} className="h-10 w-full rounded-lg border border-orange-200 text-xs font-black text-orange-700 transition hover:bg-orange-50 dark:border-orange-900 dark:text-orange-300 dark:hover:bg-orange-950/30">
+                                            Atur posisi di alur Week
+                                        </button>
+                                        <label className="block">
+                                            <span className="mb-1.5 block text-xs font-bold text-gray-500">Status</span>
+                                            <select value={status} onChange={(event) => setStatus(event.target.value)} className="h-10 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 text-xs font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white"><option value="draft">Draft</option><option value="published">Published</option></select>
+                                        </label>
                                     </div>
                                 )}
                             </div>
@@ -977,58 +1296,53 @@ export default function BuilderPresentasi({
                 </header>
 
                 {!deck ? (
-                    <main className="mx-auto grid min-h-[calc(100vh-180px)] max-w-3xl place-items-center px-4 py-10">
-                        <section className="w-full rounded-2xl border border-dashed border-orange-200 bg-white p-6 text-center shadow-sm dark:border-orange-900/50 dark:bg-gray-900 sm:p-10">
-                            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-xl font-black text-orange-600 dark:bg-orange-900/20">+</span>
-                            <h2 className="mt-4 text-xl font-black text-gray-900 dark:text-white">
-                                Tambah Presentasi Mingguan
-                            </h2>
-                            <p className="mx-auto mt-2 max-w-md text-sm font-medium leading-6 text-gray-500 dark:text-gray-400">
-                                Tentukan posisi presentasi pada perjalanan belajar. Presentasi tidak mengubah syarat kelulusan Day atau ujian.
-                            </p>
-                            <div className="mx-auto mt-6 grid max-w-lg gap-4 text-left sm:grid-cols-2">
-                            <label className="sm:col-span-2">
-                                <span className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-gray-500">Judul presentasi</span>
+                    <main className="mx-auto grid max-w-6xl gap-8 px-4 py-7 lg:grid-cols-[320px_minmax(0,1fr)] lg:px-6">
+                        <section className="lg:sticky lg:top-28 lg:self-start">
+                            <p className="text-xs font-black uppercase text-orange-600">Presentasi baru</p>
+                            <h2 className="mt-1 text-xl font-black text-gray-950 dark:text-white">Buat dan letakkan di Week</h2>
+                            <p className="mt-2 text-sm font-medium leading-6 text-gray-600 dark:text-gray-400">Isi judul, lalu geser kartu presentasi baru ke celah yang diinginkan.</p>
+
+                            <label className="mt-5 block">
+                                <span className="mb-1.5 block text-xs font-bold text-gray-600 dark:text-gray-300">Judul presentasi</span>
                                 <input
                                     value={newDeckTitle}
                                     onChange={(event) => setNewDeckTitle(event.target.value)}
-                                    className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 text-sm font-bold text-gray-800 outline-none focus:border-orange-400 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+                                    autoFocus
+                                    className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm font-bold text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
                                 />
                             </label>
-                            <label>
-                                <span className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-gray-500">Penempatan</span>
-                                <select value={placement} onChange={(event) => setPlacement(event.target.value)} className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
-                                    <option value="opening">Awal minggu</option>
-                                    <option value="after_day">Setelah Day</option>
-                                    <option value="closing">Akhir minggu</option>
-                                </select>
-                            </label>
-                            {placement === 'after_day' ? (
-                                <label>
-                                    <span className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-gray-500">Day patokan</span>
-                                    <SearchableSelect value={selectedDayId} onChange={setSelectedDayId} placeholder="Pilih Day" searchPlaceholder="Cari Day..." options={days.map((day) => ({ value: day.id, label: `Day ${day.day_number} - ${day.title}` }))} />
-                                </label>
-                            ) : (
-                                <label>
-                                    <span className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-gray-500">Urutan</span>
-                                    <input type="number" min="0" value={sortOrder} onChange={(event) => setSortOrder(event.target.value)} className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
-                                </label>
-                            )}
-                            {placement === 'after_day' && (
-                                <label className="sm:col-start-2">
-                                    <span className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-gray-500">Urutan</span>
-                                    <input type="number" min="0" value={sortOrder} onChange={(event) => setSortOrder(event.target.value)} className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
-                                </label>
-                            )}
+                            <div className="mt-4 rounded-lg bg-gray-100 px-3 py-2.5 dark:bg-gray-900">
+                                <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400">Posisi terpilih</p>
+                                <p className="mt-0.5 text-xs font-black text-gray-900 dark:text-white">{slotLabel(draftSlotKey, days, weeklyExams.length > 0)}</p>
                             </div>
                             <button
                                 type="button"
                                 onClick={createDeck}
-                                disabled={!newDeckTitle.trim() || (placement === 'after_day' && !selectedDayId)}
-                                className="mt-4 h-11 rounded-xl bg-orange-600 px-5 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                disabled={!newDeckTitle.trim()}
+                                className="mt-4 h-11 w-full rounded-lg bg-orange-600 px-5 text-sm font-black text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 Buat Presentasi
                             </button>
+                        </section>
+
+                        <section aria-label="Alur presentasi dalam Week" className="min-w-0">
+                            <div className="mb-4 flex items-end justify-between gap-3 border-b border-gray-200 pb-4 dark:border-gray-800">
+                                <div>
+                                    <p className="text-xs font-black uppercase text-gray-400">Alur Week {moduleContext.week_number || '-'}</p>
+                                    <h3 className="mt-1 text-lg font-black text-gray-950 dark:text-white">{moduleContext.title}</h3>
+                                </div>
+                                <p className="hidden text-xs font-medium text-gray-500 sm:block">Geser lewat handle ::</p>
+                            </div>
+                            <WeekPlacementEditor
+                                days={days}
+                                weeklyExams={weeklyExams}
+                                decks={timelineDecks}
+                                draft={{ isDraft: true, title: newDeckTitle || 'Presentasi baru', slotKey: draftSlotKey, sort_order: draftSortOrder }}
+                                busy={isPositionSaving}
+                                onMoveDeck={moveDeck}
+                                onMoveDraft={moveDraft}
+                                onOpenDeck={visitDeck}
+                            />
                         </section>
                     </main>
                 ) : (

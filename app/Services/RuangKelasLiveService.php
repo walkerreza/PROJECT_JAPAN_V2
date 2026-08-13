@@ -13,6 +13,7 @@ use App\Models\KloterBelajar;
 use App\Models\Pengguna;
 use App\Models\PesertaKelasLive;
 use App\Models\SesiKelasLive;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -22,8 +23,12 @@ use Livekit\TrackSource;
 
 class RuangKelasLiveService
 {
-    public function createSession(Pengguna $mentor, KloterBelajar $kloter, ?DeckPresentasi $deck): SesiKelasLive
-    {
+    public function createSession(
+        Pengguna $mentor,
+        KloterBelajar $kloter,
+        ?DeckPresentasi $deck,
+        ?Carbon $scheduledAt = null,
+    ): SesiKelasLive {
         $this->assertMentorOwnsKloter($mentor, $kloter);
 
         if ($deck) {
@@ -31,7 +36,7 @@ class RuangKelasLiveService
             abort_unless($deck->module?->program_pembelajaran_id === $kloter->program_pembelajaran_id, 422, 'Presentasi tidak berasal dari kelas kloter ini.');
         }
 
-        return DB::transaction(function () use ($mentor, $kloter, $deck) {
+        return DB::transaction(function () use ($mentor, $kloter, $deck, $scheduledAt) {
             KloterBelajar::query()->whereKey($kloter->id)->lockForUpdate()->firstOrFail();
 
             $liveSession = SesiKelasLive::query()
@@ -41,40 +46,26 @@ class RuangKelasLiveService
                 ->first();
 
             if ($liveSession) {
-                abort_unless(
-                    $liveSession->mentor_id === $mentor->id,
-                    409,
-                    'Kloter ini masih memiliki ruang kelas yang dipandu admin lain.'
-                );
+                if ($scheduledAt) {
+                    throw ValidationException::withMessages([
+                        'session' => 'Kloter ini masih memiliki kelas yang sedang berlangsung.',
+                    ]);
+                }
+
+                abort_unless($liveSession->mentor_id === $mentor->id, 409, 'Kloter ini masih memiliki ruang kelas yang dipandu admin lain.');
 
                 return $liveSession;
             }
 
-            $existing = SesiKelasLive::query()
+            if ($scheduledAt && SesiKelasLive::query()
                 ->where('kloter_belajar_id', $kloter->id)
-                ->where('mentor_id', $mentor->id)
-                ->where('status', 'draft')
-                ->latest('id')
+                ->where('status', 'scheduled')
+                ->where('scheduled_at', $scheduledAt)
                 ->lockForUpdate()
-                ->first();
-
-            if ($existing) {
-                $existing->update([
-                    'presentation_deck_id' => $deck?->id,
-                    'stage_mode' => $deck ? 'slides' : 'board',
-                    'current_slide_index' => 0,
-                    'board_snapshot' => null,
+                ->exists()) {
+                throw ValidationException::withMessages([
+                    'scheduled_at' => 'Kloter ini sudah memiliki jadwal pada waktu yang sama.',
                 ]);
-                $existing->participants()->update([
-                    'can_draw' => false,
-                    'joined_at' => null,
-                    'left_at' => null,
-                    'mic_blocked_at' => null,
-                    'kicked_at' => null,
-                    'last_seen_at' => null,
-                ]);
-
-                return $existing->fresh();
             }
 
             return SesiKelasLive::create([
@@ -84,8 +75,9 @@ class RuangKelasLiveService
                 'mentor_id' => $mentor->id,
                 'room_name' => 'japanlingo-'.Str::lower((string) Str::ulid()),
                 'join_code' => $this->uniqueJoinCode(),
-                'status' => 'draft',
+                'status' => $scheduledAt ? 'scheduled' : 'draft',
                 'stage_mode' => $deck ? 'slides' : 'board',
+                'scheduled_at' => $scheduledAt,
             ]);
         });
     }
@@ -93,6 +85,12 @@ class RuangKelasLiveService
     public function startSession(SesiKelasLive $session, Pengguna $mentor): SesiKelasLive
     {
         $this->assertMentor($session, $mentor);
+
+        if ($session->status === 'live') {
+            return $session;
+        }
+
+        abort_unless(in_array($session->status, ['draft', 'scheduled'], true), 409, 'Ruang kelas ini tidak dapat dimulai kembali.');
 
         return DB::transaction(function () use ($session, $mentor) {
             $session = SesiKelasLive::query()->lockForUpdate()->findOrFail($session->id);
@@ -119,6 +117,16 @@ class RuangKelasLiveService
 
             return $session->fresh();
         });
+    }
+
+    public function cancelSession(SesiKelasLive $session, Pengguna $mentor): SesiKelasLive
+    {
+        $this->assertMentor($session, $mentor);
+        abort_unless(in_array($session->status, ['draft', 'scheduled'], true), 409, 'Hanya kelas yang belum dimulai yang dapat dibatalkan.');
+
+        $session->update(['status' => 'cancelled']);
+
+        return $session->fresh();
     }
 
     public function endSession(SesiKelasLive $session, Pengguna $mentor): SesiKelasLive
@@ -157,6 +165,11 @@ class RuangKelasLiveService
         $apiKey = (string) config('services.livekit.api_key');
         $apiSecret = (string) config('services.livekit.api_secret');
         abort_if($apiKey === '' || $apiSecret === '', 503, 'Kredensial LiveKit belum dikonfigurasi.');
+        abort_if(
+            strlen($apiSecret) < 32,
+            503,
+            'LIVEKIT_API_SECRET minimal 32 karakter dan harus sama dengan konfigurasi server LiveKit.'
+        );
 
         $canPublish = $role === 'mentor' || ! $participant->mic_blocked_at;
         $grant = (new VideoGrant)
@@ -386,6 +399,9 @@ class RuangKelasLiveService
             'stage_mode' => $session->stage_mode,
             'current_slide_index' => $session->current_slide_index,
             'board_snapshot' => $session->board_snapshot ?: [],
+            'scheduled_at' => $session->scheduled_at?->toIso8601String(),
+            'started_at' => $session->started_at?->toIso8601String(),
+            'ended_at' => $session->ended_at?->toIso8601String(),
             'program' => $session->program,
             'kloter' => $session->kloter,
             'mentor' => $session->mentor,
@@ -447,7 +463,12 @@ class RuangKelasLiveService
 
     private function assertMentorOwnsKloter(Pengguna $mentor, KloterBelajar $kloter): void
     {
-        abort_unless($mentor->role === 'admin' && $kloter->admin_id === $mentor->id, 403, 'Anda bukan mentor kloter ini.');
+        abort_unless(
+            $mentor->role === 'admin'
+                && ($mentor->isAdminGlobal() || $kloter->admin_id === $mentor->id),
+            403,
+            'Anda bukan mentor kloter ini.'
+        );
         abort_unless($kloter->status === 'active', 422, 'Kloter tidak aktif.');
     }
 

@@ -947,6 +947,94 @@ it('creates multiple presentations in the same position and after a Day', functi
         ->count())->toBe(1);
 });
 
+it('reorders every presentation inside one Week atomically', function () {
+    $fixture = createDayRoadmapFixture();
+    $admin = Pengguna::factory()->create(['role' => 'admin']);
+    $opening = DeckPresentasi::create([
+        'level_id' => $fixture['level']->id,
+        'module_id' => $fixture['module']->id,
+        'week_slot' => 'opening',
+        'sort_order' => 0,
+        'title' => 'Pembuka',
+        'status' => 'draft',
+    ]);
+    $closing = DeckPresentasi::create([
+        'level_id' => $fixture['level']->id,
+        'module_id' => $fixture['module']->id,
+        'week_slot' => 'closing',
+        'sort_order' => 0,
+        'title' => 'Penutup',
+        'status' => 'draft',
+    ]);
+
+    $this->actingAs($admin)
+        ->patchJson(route('admin.modules.presentations.reorder', $fixture['module']), [
+            'positions' => [
+                [
+                    'deck_id' => $opening->id,
+                    'week_slot' => 'after_day',
+                    'module_day_id' => $fixture['dayOne']->id,
+                    'sort_order' => 0,
+                ],
+                [
+                    'deck_id' => $closing->id,
+                    'week_slot' => 'after_day',
+                    'module_day_id' => $fixture['dayOne']->id,
+                    'sort_order' => 1,
+                ],
+            ],
+        ])
+        ->assertOk();
+
+    expect($opening->fresh()->week_slot)->toBe('after_day')
+        ->and($opening->fresh()->module_day_id)->toBe($fixture['dayOne']->id)
+        ->and($opening->fresh()->sort_order)->toBe(0)
+        ->and($closing->fresh()->week_slot)->toBe('after_day')
+        ->and($closing->fresh()->module_day_id)->toBe($fixture['dayOne']->id)
+        ->and($closing->fresh()->sort_order)->toBe(1);
+});
+
+it('rejects a presentation position that points outside its Week', function () {
+    $fixture = createDayRoadmapFixture();
+    $admin = Pengguna::factory()->create(['role' => 'admin']);
+    $otherModule = Modul::create([
+        'level_id' => $fixture['level']->id,
+        'program_pembelajaran_id' => $fixture['program']->id,
+        'title' => 'Week Lain',
+        'week_number' => 2,
+        'status' => 'published',
+    ]);
+    $otherDay = HariModul::create([
+        'module_id' => $otherModule->id,
+        'day_number' => 1,
+        'title' => 'Day Luar',
+        'status' => 'published',
+    ]);
+    $deck = DeckPresentasi::create([
+        'level_id' => $fixture['level']->id,
+        'module_id' => $fixture['module']->id,
+        'week_slot' => 'opening',
+        'sort_order' => 0,
+        'title' => 'Presentasi Week Satu',
+        'status' => 'draft',
+    ]);
+
+    $this->actingAs($admin)
+        ->patchJson(route('admin.modules.presentations.reorder', $fixture['module']), [
+            'positions' => [[
+                'deck_id' => $deck->id,
+                'week_slot' => 'after_day',
+                'module_day_id' => $otherDay->id,
+                'sort_order' => 0,
+            ]],
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('positions.0.module_day_id');
+
+    expect($deck->fresh()->week_slot)->toBe('opening')
+        ->and($deck->fresh()->module_day_id)->toBeNull();
+});
+
 it('uploads an MP4 asset for a presentation deck', function () {
     Storage::fake('public');
 

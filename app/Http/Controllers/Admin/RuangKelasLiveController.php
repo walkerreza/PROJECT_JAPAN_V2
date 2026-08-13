@@ -8,25 +8,26 @@ use App\Models\KloterBelajar;
 use App\Models\Pengguna;
 use App\Models\ProgramPembelajaran;
 use App\Models\SesiKelasLive;
+use App\Services\KloterBelajarService;
 use App\Services\RuangKelasLiveService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class RuangKelasLiveController extends Controller
 {
-    public function create(Request $request): Response
+    public function create(Request $request, KloterBelajarService $kloterService): Response
     {
         $program = ProgramPembelajaran::query()->findOrFail($request->integer('program_id'));
 
         return Inertia::render('Admin/RuangKelas/Show', [
             'setup' => [
                 'program' => $program->only(['id', 'title', 'description']),
-                'kloters' => KloterBelajar::query()
-                    ->where('admin_id', $request->user()->id)
+                'kloters' => $kloterService->kloterDikelola($request->user())
                     ->where('program_pembelajaran_id', $program->id)
                     ->where('status', 'active')
                     ->orderBy('nama')
@@ -48,16 +49,28 @@ class RuangKelasLiveController extends Controller
         $validated = $request->validate([
             'kloter_belajar_id' => ['required', 'integer', 'exists:kloter_belajar,id'],
             'presentation_deck_id' => ['nullable', 'integer', 'exists:presentation_decks,id'],
+            'action' => ['required', Rule::in(['schedule', 'start'])],
+            'scheduled_at' => ['nullable', 'required_if:action,schedule', 'date', 'after_or_equal:now'],
         ]);
+
+        $scheduledAt = $validated['action'] === 'schedule'
+            ? Carbon::parse($validated['scheduled_at'])
+            : null;
 
         $session = $service->createSession(
             $request->user(),
             KloterBelajar::findOrFail($validated['kloter_belajar_id']),
             filled($validated['presentation_deck_id'] ?? null) ? DeckPresentasi::findOrFail($validated['presentation_deck_id']) : null,
+            $scheduledAt,
         );
-        $service->startSession($session, $request->user());
 
-        return redirect()->route('admin.live-classes.show', $session);
+        if ($validated['action'] === 'start') {
+            $service->startSession($session, $request->user());
+        }
+
+        return redirect()
+            ->route('admin.live-classes.show', $session)
+            ->with('success', $validated['action'] === 'start' ? 'Kelas dimulai.' : 'Jadwal kelas disimpan.');
     }
 
     public function show(Request $request, SesiKelasLive $liveClassSession, RuangKelasLiveService $service): Response
@@ -68,6 +81,8 @@ class RuangKelasLiveController extends Controller
             'session' => $service->sessionPayload($liveClassSession),
             'participants' => $liveClassSession->participants()->where('role', 'student')->with('user:id,username,avatar')->get()->map($service->participantPayload(...))->values(),
             'tokenEndpoint' => route('admin.live-classes.token', $liveClassSession, absolute: false),
+            'startEndpoint' => route('admin.live-classes.start', $liveClassSession, absolute: false),
+            'cancelEndpoint' => route('admin.live-classes.cancel', $liveClassSession, absolute: false),
             'stateEndpoint' => route('admin.live-classes.state', $liveClassSession, absolute: false),
             'endEndpoint' => route('admin.live-classes.end', $liveClassSession, absolute: false),
             'participantEndpoint' => route('admin.live-classes.participants.update', [$liveClassSession, '__USER__'], absolute: false),
@@ -75,6 +90,24 @@ class RuangKelasLiveController extends Controller
             'joinUrl' => route('user.live-classes.show', $liveClassSession->join_code, absolute: false),
             'exitUrl' => route('admin.programs.index', absolute: false),
         ]);
+    }
+
+    public function start(Request $request, SesiKelasLive $liveClassSession, RuangKelasLiveService $service): RedirectResponse
+    {
+        $service->startSession($liveClassSession, $request->user());
+
+        return redirect()
+            ->route('admin.live-classes.show', $liveClassSession)
+            ->with('success', 'Kelas dimulai.');
+    }
+
+    public function cancel(Request $request, SesiKelasLive $liveClassSession, RuangKelasLiveService $service): RedirectResponse
+    {
+        $service->cancelSession($liveClassSession, $request->user());
+
+        return redirect()
+            ->route('admin.programs.index')
+            ->with('success', 'Jadwal kelas dibatalkan.');
     }
 
     public function token(Request $request, SesiKelasLive $liveClassSession, RuangKelasLiveService $service): JsonResponse

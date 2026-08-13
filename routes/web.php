@@ -161,6 +161,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('/presentations/{presentationDeck}', [AdminPresentasiController::class, 'update'])->name('presentations.update');
         Route::delete('/presentations/{presentationDeck}', [AdminPresentasiController::class, 'destroy'])->name('presentations.destroy');
         Route::get('/modules/{module}/presentations/builder', [AdminPresentasiController::class, 'workspace'])->name('modules.presentations.builder');
+        Route::patch('/modules/{module}/presentations/reorder', [AdminPresentasiController::class, 'reorder'])->name('modules.presentations.reorder');
         Route::get('/presentations/{presentationDeck}/builder', [AdminPresentasiController::class, 'builder'])->name('presentations.builder');
         Route::post('/presentations/{presentationDeck}/builder', [AdminPresentasiController::class, 'updateSlides'])->name('presentations.builder.update');
         Route::post('/presentations/{presentationDeck}/import/pptx', [AdminPresentasiController::class, 'importPptx'])->middleware('throttle:admin-imports')->name('presentations.import.pptx');
@@ -173,6 +174,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/live-classes/create', [AdminRuangKelasLiveController::class, 'create'])->name('live-classes.create');
         Route::post('/live-classes', [AdminRuangKelasLiveController::class, 'store'])->middleware('throttle:live-room-create')->name('live-classes.store');
         Route::get('/live-classes/{liveClassSession}', [AdminRuangKelasLiveController::class, 'show'])->name('live-classes.show');
+        Route::post('/live-classes/{liveClassSession}/start', [AdminRuangKelasLiveController::class, 'start'])->middleware('throttle:live-room-control')->name('live-classes.start');
+        Route::delete('/live-classes/{liveClassSession}', [AdminRuangKelasLiveController::class, 'cancel'])->middleware('throttle:live-room-control')->name('live-classes.cancel');
         Route::post('/live-classes/{liveClassSession}/token', [AdminRuangKelasLiveController::class, 'token'])->middleware('throttle:live-room-token')->name('live-classes.token');
         Route::patch('/live-classes/{liveClassSession}/state', [AdminRuangKelasLiveController::class, 'state'])->middleware('throttle:live-room-state')->name('live-classes.state');
         Route::patch('/live-classes/{liveClassSession}/participants/{user}', [AdminRuangKelasLiveController::class, 'updateParticipant'])->middleware('throttle:live-room-control')->name('live-classes.participants.update');
@@ -253,7 +256,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/news', [BeritaController::class, 'index'])->name('news.index');
         Route::get('/news/{news}', [BeritaController::class, 'show'])->name('news.show');
         Route::get('/live-classes/{session:join_code}', [UserRuangKelasLiveController::class, 'show'])->name('live-classes.show');
-        Route::post('/live-classes/{session:join_code}/token', [UserRuangKelasLiveController::class, 'token'])->middleware('throttle:live-room-token')->name('live-classes.token');
+        Route::post('/live-classes/{session:join_code}/token', [UserRuangKelasLiveController::class, 'token'])->middleware('throttle:live-room-user-token')->name('live-classes.token');
         Route::post('/live-classes/{session:join_code}/leave', [UserRuangKelasLiveController::class, 'leave'])->middleware('throttle:live-room-control')->name('live-classes.leave');
 
         Route::get('/quizzes', [PembelajaranController::class, 'quizLobby'])->name('quizzes.index');

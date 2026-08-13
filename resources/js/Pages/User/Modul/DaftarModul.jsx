@@ -20,12 +20,14 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import LockIcon from '@mui/icons-material/Lock';
 import QuizIcon from '@mui/icons-material/Quiz';
 import SlideshowIcon from '@mui/icons-material/Slideshow';
+import VideoCameraFrontIcon from '@mui/icons-material/VideoCameraFront';
 
 const RESOURCE_COLORS = {
     presentation: { color: '#0284c7', shadow: '#075985' },
     day: { color: '#dc2626', shadow: '#991b1b' },
     quiz: { color: '#e11d48', shadow: '#9f1239' },
     exam: { color: '#16a34a', shadow: '#166534' },
+    live: { color: '#f97316', shadow: '#c2410c' },
 };
 
 const todayInputValue = () => {
@@ -332,6 +334,7 @@ function ExamTargetCard({ program, completedWeekCount, totalWeeks }) {
 }
 
 function itemStatusLabel(item) {
+    if (item.kind === 'live') return item.status === 'active' ? 'Live sekarang' : 'Terjadwal';
     if (item.status === 'done') return 'Selesai';
     if (item.status === 'active') return 'Lanjutkan';
     if (item.status === 'unavailable') return 'Belum tersedia';
@@ -367,6 +370,10 @@ function iconFor(item, size) {
 
     if (item.kind === 'presentation') {
         return <SlideshowIcon sx={{ fontSize: size - 3, color: '#fff' }} />;
+    }
+
+    if (item.kind === 'live') {
+        return <VideoCameraFrontIcon sx={{ fontSize: size - 3, color: '#fff' }} />;
     }
 
     if (item.kind === 'quiz' || item.kind === 'exam') {
@@ -419,6 +426,31 @@ function quizItem(day, available) {
 function weeklyMainItems(week) {
     const items = [];
     const presentations = week.presentations || [];
+    const liveSession = week.live_session;
+
+    if (liveSession) {
+        const schedule = liveSession.scheduled_at
+            ? new Intl.DateTimeFormat('id-ID', {
+                day: 'numeric',
+                month: 'short',
+                hour: '2-digit',
+                minute: '2-digit',
+            }).format(new Date(liveSession.scheduled_at))
+            : 'Menunggu mentor';
+
+        items.push({
+            key: `live-${liveSession.id}`,
+            kind: 'live',
+            level: 'root',
+            eyebrow: liveSession.status === 'live' ? 'Sedang berlangsung' : 'Kelas mentor',
+            title: liveSession.deck_title || 'Ruang Kelas',
+            weekLabel: `Minggu ${week.week_number}`,
+            detail: `${schedule}${liveSession.mentor_name ? ` · ${liveSession.mentor_name}` : ''}`,
+            status: liveSession.status === 'live' ? 'active' : 'scheduled',
+            href: liveSession.join_url,
+            mainPosition: 'center',
+        });
+    }
     const presentationItem = (presentation, eyebrow) => ({
         key: `presentation-${presentation.id}`,
         kind: 'presentation',
@@ -617,6 +649,45 @@ function PathNode({ item, selected, onDayToggle }) {
 function PathNodeLabel({ item }) {
     const showStatus = item.status !== 'done';
     const hasExtraInfo = showStatus || (item.kind !== 'day' && item.detail);
+
+    if (item.kind === 'live') {
+        const isLive = item.status === 'active';
+        const cardClassName = `relative mt-3 block w-48 overflow-hidden rounded-xl border px-3 py-2 text-left shadow-md transition sm:w-56 ${
+            isLive
+                ? 'border-red-300 bg-white shadow-red-900/10 hover:-translate-y-0.5 hover:border-red-400 dark:border-red-800 dark:bg-gray-900'
+                : 'border-orange-200 bg-white/95 shadow-orange-900/5 dark:border-orange-900/70 dark:bg-gray-900'
+        }`;
+        const cardContent = (
+            <>
+                <span className={`absolute inset-y-0 left-0 w-1 ${isLive ? 'bg-red-500' : 'bg-orange-500'}`} />
+                <div className="flex items-center justify-between gap-2 pl-1">
+                    <span className="text-[9px] font-black uppercase tracking-[0.14em] text-orange-700 dark:text-orange-300">
+                        {item.weekLabel} · Kelas Live
+                    </span>
+                    <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[8px] font-black uppercase ${
+                        isLive
+                            ? 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300'
+                            : 'bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300'
+                    }`}>
+                        {isLive && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" aria-hidden="true" />}
+                        {isLive ? 'Live' : 'Terjadwal'}
+                    </span>
+                </div>
+                <h3 className="mt-1 line-clamp-1 pl-1 text-xs font-black text-gray-900 dark:text-white sm:text-sm">
+                    {item.title}
+                </h3>
+                <p className="mt-0.5 line-clamp-1 pl-1 text-[9px] font-semibold text-gray-500 dark:text-gray-400 sm:text-[10px]">
+                    {item.detail}
+                </p>
+            </>
+        );
+
+        return item.href ? (
+            <Link href={item.href} className={cardClassName}>{cardContent}</Link>
+        ) : (
+            <div className={cardClassName}>{cardContent}</div>
+        );
+    }
 
     return (
         <div className="relative mt-3 w-36 text-center sm:w-44">
@@ -978,6 +1049,7 @@ function WeekRoadmapSection({ week, expanded, onToggle }) {
     const days = week.days || [];
     const [selectedDayId, setSelectedDayId] = useState(null);
     const locked = ['locked', 'unavailable'].includes(week.status);
+    const canExpand = !locked || Boolean(week.live_session);
     const completedDays = days.filter((day) => day.status === 'done').length;
     const progress = days.length > 0 ? Math.round((completedDays / days.length) * 100) : 0;
 
@@ -997,12 +1069,12 @@ function WeekRoadmapSection({ week, expanded, onToggle }) {
             <button
                 type="button"
                 onClick={() => {
-                    if (locked) return;
+                    if (!canExpand) return;
 
                     playSoundEffect(expanded ? 'close' : 'open');
                     onToggle();
                 }}
-                disabled={locked}
+                disabled={!canExpand}
                 aria-expanded={expanded}
                 className={`relative flex min-h-[76px] w-full items-center gap-3 overflow-hidden rounded-2xl border px-3 py-3 text-left shadow-lg shadow-red-900/5 transition sm:px-5 ${
                     week.status === 'active'
@@ -1010,7 +1082,7 @@ function WeekRoadmapSection({ week, expanded, onToggle }) {
                         : week.status === 'done'
                             ? 'border-emerald-200 bg-white/90 hover:border-emerald-300 dark:border-emerald-900/60 dark:bg-gray-900'
                             : 'border-white/70 bg-white/75 hover:border-gray-200 dark:border-gray-800 dark:bg-gray-900/75'
-                } ${locked ? 'cursor-not-allowed opacity-75' : 'hover:-translate-y-0.5'}`}
+                } ${!canExpand ? 'cursor-not-allowed opacity-75' : 'hover:-translate-y-0.5'}`}
             >
                 <span className={`absolute inset-y-0 left-0 w-1.5 ${
                     week.status === 'done'
@@ -1061,13 +1133,13 @@ function WeekRoadmapSection({ week, expanded, onToggle }) {
                         <span className="mt-1 block line-clamp-2 text-[10px] font-semibold text-gray-400">{week.lock_reason}</span>
                     )}
                 </span>
-                {!locked && (
+                {canExpand && (
                     <ExpandMoreIcon className={`shrink-0 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} sx={{ fontSize: 24 }} />
                 )}
             </button>
 
             <AnimatePresence initial={false}>
-                {expanded && !locked && (
+                {expanded && canExpand && (
                     <motion.div
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
@@ -1244,6 +1316,7 @@ export default function DaftarModul({ weeks = [], program = null, back_url = nul
         days: [],
     }];
     const defaultExpandedWeekId = displayWeeks.find((week) => week.status === 'active')?.id
+        || displayWeeks.find((week) => Boolean(week.live_session))?.id
         || [...displayWeeks].reverse().find((week) => week.status === 'done')?.id
         || null;
     const [expandedWeekId, setExpandedWeekId] = useState(defaultExpandedWeekId);
@@ -1254,6 +1327,9 @@ export default function DaftarModul({ weeks = [], program = null, back_url = nul
         : 0;
     const activeWeek = displayWeeks.find((week) => week.status === 'active');
     const activeDay = activeWeek?.days?.find((day) => day.status === 'active');
+    const liveSessionSignature = displayWeeks
+        .map((week) => `${week.live_session?.id || ''}:${week.live_session?.status || ''}`)
+        .join('|');
     const nextAction = activeWeek
         ? `Lanjutkan Minggu ${activeWeek.week_number}${activeDay ? `, Hari ${activeDay.day_number}` : ''}`
         : completedWeekCount === displayWeeks.length
@@ -1283,6 +1359,19 @@ export default function DaftarModul({ weeks = [], program = null, back_url = nul
 
         return () => window.removeEventListener('keydown', closeOnEscape);
     }, [libraryOpen]);
+
+    useEffect(() => {
+        if (!program?.kloter) return undefined;
+
+        const hasVisibleSession = displayWeeks.some((week) => Boolean(week.live_session));
+
+        const interval = window.setInterval(() => {
+            if (document.visibilityState !== 'visible') return;
+            router.reload({ only: ['weeks'], preserveScroll: true, preserveState: true });
+        }, hasVisibleSession ? 30000 : 60000);
+
+        return () => window.clearInterval(interval);
+    }, [liveSessionSignature, program?.kloter?.id]);
 
     return (
         <AuthenticatedLayout header={false}>

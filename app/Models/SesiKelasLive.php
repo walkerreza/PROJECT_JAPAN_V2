@@ -24,6 +24,7 @@ class SesiKelasLive extends Model
         'stage_mode',
         'current_slide_index',
         'board_snapshot',
+        'scheduled_at',
         'started_at',
         'ended_at',
     ];
@@ -33,6 +34,7 @@ class SesiKelasLive extends Model
         return [
             'board_snapshot' => 'array',
             'current_slide_index' => 'integer',
+            'scheduled_at' => 'datetime',
             'started_at' => 'datetime',
             'ended_at' => 'datetime',
         ];

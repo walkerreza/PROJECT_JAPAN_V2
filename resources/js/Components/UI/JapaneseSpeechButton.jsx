@@ -222,6 +222,7 @@ export default function JapaneseSpeechButton({
             title={supported ? title : 'Narator tidak tersedia di browser ini'}
             aria-label={supported ? title : 'Narator tidak tersedia'}
             className={`${className} ${!supported ? 'cursor-not-allowed opacity-45' : ''}`}
+            data-sound="none"
             data-voice-ready={voiceReady ? 'true' : 'false'}
             {...buttonProps}
         >

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
 import SidebarLink from '@/Components/Navigation/SidebarLink';
+import { playSoundEffect } from '@/Components/UI/SoundEffects';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import PeopleIcon from '@mui/icons-material/People';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
@@ -14,6 +15,9 @@ import MenuIcon from '@mui/icons-material/Menu';
 import CloseIcon from '@mui/icons-material/Close';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import LightModeIcon from '@mui/icons-material/LightMode';
+import CheckIcon from '@mui/icons-material/Check';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 
 // Ikon Bawah
 import NotificationsOutlinedIcon from '@mui/icons-material/NotificationsOutlined';
@@ -55,6 +59,96 @@ const applyDocumentTheme = (mode = resolveThemeMode()) => {
     document.documentElement.classList.toggle('dark', shouldUseDarkMode(mode));
 };
 
+const flashNoticeConfig = {
+    error: {
+        label: 'Tidak dapat melanjutkan',
+        icon: CloseIcon,
+        duration: 8000,
+        accent: 'bg-red-500',
+        iconStyle: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300',
+    },
+    warning: {
+        label: 'Perlu diperhatikan',
+        icon: WarningAmberIcon,
+        duration: 7000,
+        accent: 'bg-amber-500',
+        iconStyle: 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300',
+    },
+    success: {
+        label: 'Berhasil',
+        icon: CheckIcon,
+        duration: 4500,
+        accent: 'bg-emerald-500',
+        iconStyle: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
+    },
+    info: {
+        label: 'Informasi',
+        icon: InfoOutlinedIcon,
+        duration: 5500,
+        accent: 'bg-sky-500',
+        iconStyle: 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300',
+    },
+};
+
+function FlashToast({ notice, onDismiss, soundEnabled = false }) {
+    const timerRef = useRef(null);
+    const config = flashNoticeConfig[notice.type] || flashNoticeConfig.info;
+    const Icon = config.icon;
+
+    const startTimer = () => {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = window.setTimeout(onDismiss, config.duration);
+    };
+
+    useEffect(() => {
+        if (soundEnabled) {
+            const effect = notice.type === 'error'
+                ? 'incorrect'
+                : notice.type === 'warning'
+                    ? 'warning'
+                    : 'notification';
+            playSoundEffect(effect, { deduplicate: true });
+        }
+        startTimer();
+        return () => window.clearTimeout(timerRef.current);
+    }, [notice.id]);
+
+    return (
+        <div className="pointer-events-none fixed inset-x-3 top-[4.5rem] z-[100] flex justify-end sm:inset-x-auto sm:right-5 sm:top-20 lg:right-6">
+            <section
+                role={notice.type === 'error' || notice.type === 'warning' ? 'alert' : 'status'}
+                aria-live={notice.type === 'error' ? 'assertive' : 'polite'}
+                className="pointer-events-auto relative w-full max-w-sm overflow-hidden rounded-xl border border-gray-200 bg-white text-gray-950 shadow-[0_16px_40px_-18px_rgba(15,23,42,0.4)] dark:border-gray-700 dark:bg-[#111827] dark:text-white"
+                style={{ animation: 'flash-toast-in 180ms ease-out both' }}
+            >
+                <div className={`absolute inset-y-0 left-0 w-1 ${config.accent}`} />
+                <div className="flex items-start gap-3 py-3 pl-4 pr-3 sm:py-3.5 sm:pl-5">
+                    <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${config.iconStyle}`}>
+                        <Icon sx={{ fontSize: 20 }} />
+                    </span>
+                    <div className="min-w-0 flex-1 pt-0.5">
+                        <p className="text-xs font-black text-gray-950 dark:text-white">{config.label}</p>
+                        <p className="mt-0.5 break-words text-sm font-medium leading-5 text-gray-700 dark:text-gray-300">{notice.message}</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onDismiss}
+                        className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-white"
+                        aria-label="Tutup pesan"
+                    >
+                        <CloseIcon sx={{ fontSize: 18 }} />
+                    </button>
+                </div>
+                <span
+                    key={notice.id}
+                    className={`absolute bottom-0 left-0 h-0.5 ${config.accent}`}
+                    style={{ animation: `flash-toast-progress ${config.duration}ms linear forwards` }}
+                />
+            </section>
+        </div>
+    );
+}
+
 const resolveSidebarExpanded = () => {
     if (typeof window === 'undefined') {
         return true;
@@ -74,18 +168,6 @@ export default function AuthenticatedLayout({ children }) {
         ['success', flash.success],
         ['info', flash.info],
     ].find(([, message]) => typeof message === 'string' && message.trim().length > 0);
-    const flashNoticeStyle = {
-        error: 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/70 dark:bg-red-950/70 dark:text-red-100',
-        warning: 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/70 dark:text-amber-100',
-        success: 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/70 dark:text-emerald-100',
-        info: 'border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-900/70 dark:bg-sky-950/70 dark:text-sky-100',
-    };
-    const flashNoticeLabel = {
-        error: 'Tidak bisa melanjutkan',
-        warning: 'Perhatian',
-        success: 'Berhasil',
-        info: 'Informasi',
-    };
     const [profileMenuOpen, setProfileMenuOpen] = useState(false);
     const [mobileAccountOpen, setMobileAccountOpen] = useState(false);
     const [notificationOpen, setNotificationOpen] = useState(false);
@@ -98,8 +180,27 @@ export default function AuthenticatedLayout({ children }) {
     const menuRef = useRef(null);
     const mobileAccountRef = useRef(null);
     const mobileMenuButtonRef = useRef(null);
+    const [activeFlashNotice, setActiveFlashNotice] = useState(null);
 
     const [toastAchievements, setToastAchievements] = useState([]);
+
+    useEffect(() => {
+        if (!flashNotice) return;
+
+        const [type, message] = flashNotice;
+        setActiveFlashNotice({
+            id: `${Date.now()}-${type}`,
+            type,
+            message: message.trim(),
+        });
+        router.replaceProp('flash', (current) => ({
+            ...(current || {}),
+            error: null,
+            warning: null,
+            success: null,
+            info: null,
+        }));
+    }, [flash.error, flash.info, flash.success, flash.warning]);
 
     useEffect(() => {
         const syncTheme = () => {
@@ -806,18 +907,6 @@ export default function AuthenticatedLayout({ children }) {
                     {renderUtilityControls(false)}
                 </header>
                 <main className="min-h-screen bg-slate-50 dark:bg-[#0b1121] text-slate-900 dark:text-slate-100 shadow-[-5px_0_30px_-10px_rgba(0,0,0,0.05)] relative z-0 transition-colors duration-300">
-                    {flashNotice && (
-                        <div className={`pointer-events-none fixed inset-x-3 top-20 z-40 flex justify-center lg:right-6 lg:top-20 ${isExpanded ? 'lg:left-[260px]' : 'lg:left-[108px]'}`}>
-                            <div className={`pointer-events-auto w-full max-w-3xl rounded-xl border px-4 py-3 text-sm shadow-lg backdrop-blur ${flashNoticeStyle[flashNotice[0]]}`}>
-                                <p className="text-xs font-black uppercase tracking-[0.18em]">
-                                    {flashNoticeLabel[flashNotice[0]]}
-                                </p>
-                                <p className="mt-1 font-semibold leading-6">
-                                    {flashNotice[1]}
-                                </p>
-                            </div>
-                        </div>
-                    )}
                     {children}
                 </main>
                 {isUser && (
@@ -831,6 +920,14 @@ export default function AuthenticatedLayout({ children }) {
                     </footer>
                 )}
             </div>
+
+            {activeFlashNotice && (
+                <FlashToast
+                    notice={activeFlashNotice}
+                    soundEnabled={user?.role === 'user'}
+                    onDismiss={() => setActiveFlashNotice(null)}
+                />
+            )}
 
             {toastAchievements.length > 0 && (
                 <div className="fixed inset-x-3 top-3 z-[100] flex flex-col gap-3 animate-in sm:inset-x-auto sm:right-6 sm:top-6">
@@ -853,6 +950,14 @@ export default function AuthenticatedLayout({ children }) {
             <style dangerouslySetInnerHTML={{__html:`
                 .hide-scrollbar::-webkit-scrollbar { display: none; }
                 .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+                @keyframes flash-toast-in {
+                    from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+                    to { opacity: 1; transform: translateY(0) scale(1); }
+                }
+                @keyframes flash-toast-progress {
+                    from { width: 100%; }
+                    to { width: 0%; }
+                }
                 .goog-te-banner-frame,
                 .goog-te-gadget,
                 .goog-te-balloon-frame,

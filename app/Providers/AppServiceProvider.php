@@ -39,6 +39,21 @@ class AppServiceProvider extends ServiceProvider
             ->by(($request->user()?->id ?? 'guest').':'.$request->ip()));
         RateLimiter::for('live-room-token', fn (Request $request) => Limit::perMinute(15)
             ->by(($request->user()?->id ?? 'guest').':'.$request->ip()));
+        RateLimiter::for('live-room-user-token', function (Request $request): array {
+            $session = $request->route('session');
+            $sessionKey = is_object($session) && method_exists($session, 'getRouteKey')
+                ? $session->getRouteKey()
+                : (string) $session;
+            $key = ($request->user()?->id ?? 'guest').':'.$sessionKey;
+            $response = static fn (Request $request, array $headers) => response()->json([
+                'message' => 'Ruang kelas sedang disiapkan. Kami akan mencoba menyambungkan kembali secara otomatis.',
+            ], 429, $headers);
+
+            return [
+                Limit::perMinute(12)->by($key)->response($response),
+                Limit::perHour(120)->by($key)->response($response),
+            ];
+        });
         RateLimiter::for('live-room-state', fn (Request $request) => Limit::perMinute(30)
             ->by(($request->user()?->id ?? 'guest').':'.$request->ip()));
         RateLimiter::for('live-room-control', fn (Request $request) => Limit::perMinute(30)

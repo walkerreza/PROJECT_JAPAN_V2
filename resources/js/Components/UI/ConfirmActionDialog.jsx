@@ -134,6 +134,7 @@ export default function ConfirmActionDialog({
                 <div className="flex justify-end gap-3 p-5">
                     <button
                         type="button"
+                        data-sound="close"
                         onClick={onCancel}
                         disabled={processing}
                         className="rounded-xl border border-gray-200 px-5 py-2.5 text-sm font-black text-gray-600 transition hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
@@ -142,6 +143,7 @@ export default function ConfirmActionDialog({
                     </button>
                     <button
                         type="button"
+                        data-sound="confirm"
                         onClick={onConfirm}
                         disabled={processing}
                         className={`rounded-xl px-5 py-2.5 text-sm font-black shadow-md transition disabled:opacity-50 ${style.confirm}`}

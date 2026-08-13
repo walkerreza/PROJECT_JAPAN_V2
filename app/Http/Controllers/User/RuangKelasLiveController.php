@@ -15,13 +15,14 @@ class RuangKelasLiveController extends Controller
     public function show(Request $request, SesiKelasLive $session, RuangKelasLiveService $service): Response
     {
         abort_unless($service->roleFor($session, $request->user()) === 'student', 403);
+        $sessionPayload = $service->sessionPayload($session);
 
         return Inertia::render('User/RuangKelas/Show', [
-            'session' => $service->sessionPayload($session),
+            'session' => $sessionPayload,
             'participants' => $session->participants()->where('role', 'student')->with('user:id,username,avatar')->get()->map($service->participantPayload(...))->values(),
             'tokenEndpoint' => route('user.live-classes.token', $session->join_code, absolute: false),
             'leaveEndpoint' => route('user.live-classes.leave', $session->join_code, absolute: false),
-            'exitUrl' => route('user.kelas.index', absolute: false),
+            'exitUrl' => route('user.modul.program', $sessionPayload['program']['slug'], absolute: false),
         ]);
     }
 

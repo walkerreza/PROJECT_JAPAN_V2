@@ -13,6 +13,7 @@ use App\Models\PengerjaanKuis;
 use App\Models\ProgramPembelajaran;
 use App\Models\ProgresHariModul;
 use App\Models\ReviewFlashcard;
+use App\Models\SesiKelasLive;
 use App\Models\SetFlashcard;
 use App\Models\Soal;
 use App\Models\TargetUjianPengguna;
@@ -100,10 +101,30 @@ class ModulController extends Controller
             ->get();
         $kloterAktif = $kloterService->kloterAktifUser($user, $program->id);
         $mingguAktifKloter = $kloterService->mingguAktif($kloterAktif);
+        $fallbackLiveModuleId = $moduls
+            ->firstWhere('week_number', $mingguAktifKloter)?->id
+            ?? $moduls->first()?->id;
+        $liveSessionsByModule = collect();
+
+        if ($kloterAktif && $fallbackLiveModuleId) {
+            $liveSessionsByModule = SesiKelasLive::query()
+                ->with([
+                    'mentor:id,username',
+                    'deck:id,module_id,title',
+                ])
+                ->where('program_pembelajaran_id', $program->id)
+                ->where('kloter_belajar_id', $kloterAktif->id)
+                ->whereIn('status', ['scheduled', 'live'])
+                ->orderByRaw("CASE WHEN status = 'live' THEN 0 ELSE 1 END")
+                ->orderBy('scheduled_at')
+                ->get()
+                ->groupBy(fn (SesiKelasLive $session) => $session->deck?->module_id ?? $fallbackLiveModuleId)
+                ->map(fn ($sessions) => $sessions->first());
+        }
 
         $completedModulIds = collect();
 
-        $weeks = $moduls->values()->map(function (Modul $modul, int $index) use (&$completedModulIds, $user, $aksesPremium, $moduls, $program, $kloterAktif, $mingguAktifKloter, $aksesKuis) {
+        $weeks = $moduls->values()->map(function (Modul $modul, int $index) use (&$completedModulIds, $user, $aksesPremium, $moduls, $program, $kloterAktif, $mingguAktifKloter, $aksesKuis, $liveSessionsByModule) {
             $flashcardSet = $this->firstFlashcardSetFor($modul);
             $weeklyExams = $modul->weeklyExams;
             $weeklyExamStats = $weeklyExams->mapWithKeys(
@@ -114,6 +135,7 @@ class ModulController extends Controller
             $quizStats = $quiz ? $weeklyExamStats->get($quiz->id) : $this->quizStats($user->id, null);
             $passingScore = (int) ($quiz?->passing_score ?? 70);
             $presentationCount = $modul->presentationDecks->count();
+            $liveSession = $liveSessionsByModule->get($modul->id);
             $vocabularyCount = $this->vocabularyQueryForModules(collect([$modul->id]))->count('vocabulary_bank.id');
 
             $hasFlashcard = $flashcardStats['total'] > 0;
@@ -356,7 +378,16 @@ class ModulController extends Controller
                 'presentations' => $presentationPayloads,
                 'weekly_exams' => $weeklyExamPayload,
                 'all_days_completed' => $allDaysCompleted,
-                'live_session' => null,
+                'live_session' => $liveSession ? [
+                    'id' => $liveSession->id,
+                    'status' => $liveSession->status,
+                    'scheduled_at' => $liveSession->scheduled_at?->toIso8601String(),
+                    'mentor_name' => $liveSession->mentor?->username,
+                    'deck_title' => $liveSession->deck?->title,
+                    'join_url' => $liveSession->status === 'live'
+                        ? route('user.live-classes.show', $liveSession->join_code, absolute: false)
+                        : null,
+                ] : null,
             ];
         });
 
