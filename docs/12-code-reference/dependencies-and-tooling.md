@@ -19,6 +19,7 @@ Dependency development mencakup Breeze, Pint, Pest, Mockery, Faker, Collision, P
 
 - LiveKit React/client untuk kamera, mic, screen share, dan media room.
 - Laravel Echo + Pusher client untuk event Reverb.
+- dnd-kit (`@dnd-kit/core`, `sortable`, dan `utilities`) untuk drag-and-drop urutan presentasi di dalam Week.
 - TipTap untuk rich text berita/editor.
 - Fabric untuk canvas presentasi/jamboard.
 - pdf.js untuk render PDF.
@@ -54,4 +55,3 @@ vendor/bin/pint --test
 ```
 
 Jangan menjalankan `npm audit fix --force` atau `composer update` langsung di production; perubahan versi harus diuji dan lock file ditinjau di development.
-

@@ -2,7 +2,7 @@
 
 > Dibangkitkan oleh `scripts/generate-code-reference.ps1`. Migration, factory, seeder, dan seluruh test tercantum di bawah.
 
-Total file database dan test: 108.
+Total file database dan test: 110.
 
 ## Test bootstrap/config
 
@@ -90,6 +90,7 @@ Total file database dan test: 108.
 | `database/migrations/2026_07_30_120000_create_learning_feedback_table.php` | `-` | Perubahan skema/data: 2026 07 30 120000 create learning feedback table. |
 | `database/migrations/2026_07_30_180000_create_user_exam_targets_table.php` | `-` | Perubahan skema/data: 2026 07 30 180000 create user exam targets table. |
 | `database/migrations/2026_08_02_170000_create_live_class_tables.php` | `-` | Perubahan skema/data: 2026 08 02 170000 create live class tables. |
+| `database/migrations/2026_08_12_000001_add_scheduled_at_to_live_class_sessions_table.php` | `-` | Perubahan skema/data: 2026 08 12 000001 add scheduled at to live class sessions table. |
 
 ## Seeder
 
@@ -124,6 +125,7 @@ Total file database dan test: 108.
 | `tests/Feature/LeaderboardAndProgressTest.php` | `-` | Regresi HTTP/domain: Leaderboard And Progress Test. |
 | `tests/Feature/LearningFeedbackTest.php` | `-` | Regresi HTTP/domain: Learning Feedback Test. |
 | `tests/Feature/LearningRoadmapDayTest.php` | `-` | Regresi HTTP/domain: Learning Roadmap Day Test. |
+| `tests/Feature/LiveClassRoadmapTest.php` | `-` | Regresi HTTP/domain: Live Class Roadmap Test. |
 | `tests/Feature/NewsPortalTest.php` | `-` | Regresi HTTP/domain: News Portal Test. |
 | `tests/Feature/ProfileTest.php` | `-` | Regresi HTTP/domain: Profile Test. |
 | `tests/Feature/PublicLegalPagesTest.php` | `-` | Regresi HTTP/domain: Public Legal Pages Test. |

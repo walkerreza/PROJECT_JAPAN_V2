@@ -12,6 +12,8 @@ File route HTTP utama. Semua halaman Inertia dan endpoint web berada di sini.
 - Admin: prefix/name `admin`, role `admin`; mengelola kloter/siswa, analitik, kosakata, flashcard/repetisi, kuis/ujian, kelas/Week/Day, presentasi, upload, dan ruang kelas live.
 - User: prefix/name `user`, role `user`; dashboard, kelas, checkout, roadmap, materi, berita, kelas live, kuis, repetisi inline, leaderboard, sertifikat, dan progress.
 
+Workspace presentasi admin menyediakan endpoint pengurutan deck di dalam Week. Ruang kelas live admin memiliki aksi terpisah untuk membuat jadwal, memulai, membatalkan, menerbitkan token, menyinkronkan state, dan memoderasi peserta. Pengguna masuk melalui `join_code`; permintaan token pengguna memakai limiter tersendiri agar reconnect normal tidak berbagi kuota dengan kontrol mentor.
+
 Route index lama untuk flashcard, presentasi, kuis, dan board sengaja mengarah ke workspace kelas. Route builder/CRUD tetap tersedia untuk kompatibilitas dan dipanggil dari workspace.
 
 Webhook Midtrans tidak memakai group `auth` dan dikecualikan dari CSRF di `bootstrap/app.php`. Keamanannya bergantung pada validasi signature dan status di service pembayaran, bukan session browser.
@@ -32,7 +34,7 @@ Mendaftarkan scheduler untuk expiry subscription, pembersihan import/log/snapsho
 
 - `bootstrap/app.php`: memasang route files, middleware Inertia, pengecualian CSRF webhook, serta alias `role` dan `subscribed`.
 - `bootstrap/providers.php`: daftar service provider aplikasi.
-- `app/Providers/AppServiceProvider.php`: rate limiter access key, pembayaran, aksi belajar, kelas live, import/upload admin, dan endpoint guest sensitif.
+- `app/Providers/AppServiceProvider.php`: rate limiter access key, pembayaran, aksi belajar, pembuatan/kontrol/token kelas live (termasuk token user yang terpisah), import/upload admin, dan endpoint guest sensitif.
 - `app/Http/Middleware/HandleInertiaRequests.php`: shared props Inertia seperti identitas pengguna, notifikasi, akses, dan tema.
 - `app/Http/Middleware/CheckRole.php`: pagar role route.
 - `app/Http/Middleware/SubscriptionMiddleware.php`: pagar subscription pada route yang menggunakannya.
@@ -55,4 +57,3 @@ Mendaftarkan scheduler untuk expiry subscription, pembersihan import/log/snapsho
 | `config/session.php` | Driver session, lifetime, cookie, domain, SameSite, dan secure cookie. |
 
 Nilai rahasia hanya boleh berasal dari `.env`; jangan hard-code secret ke route, controller, config, atau frontend. Gunakan [environment reference](../01-development/environment-reference.md) sebagai daftar variabel.
-
