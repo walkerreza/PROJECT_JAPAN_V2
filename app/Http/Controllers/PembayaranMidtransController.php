@@ -201,7 +201,11 @@ class PembayaranMidtransController extends Controller
             abort(422, 'Midtrans belum dapat membatalkan pesanan ini. Coba lagi beberapa saat lagi.');
         }
 
-        abort_unless($this->payloadMatchesTransaction($transaction, $cancelResponse->json()), 422, 'Respons pembatalan Midtrans tidak sesuai transaksi.');
+        abort_unless(
+            $this->cancelPayloadMatchesTransaction($transaction, $cancelResponse->json()),
+            422,
+            'Respons pembatalan Midtrans tidak sesuai transaksi.'
+        );
         $this->applyMidtransStatus($transaction, $cancelResponse->json(), $request->user()->id, 'Pesanan dibatalkan oleh user melalui Midtrans.');
 
         return response()->json([
@@ -677,6 +681,21 @@ class PembayaranMidtransController extends Controller
     {
         return (string) ($payload['order_id'] ?? '') === $transaction->transaction_code
             && (int) ($payload['gross_amount'] ?? -1) === (int) $transaction->amount;
+    }
+
+    private function cancelPayloadMatchesTransaction(Transaksi $transaction, array $payload): bool
+    {
+        if (($payload['transaction_status'] ?? null) !== 'cancel') {
+            return false;
+        }
+
+        if (filled($payload['order_id'] ?? null)
+            && (string) $payload['order_id'] !== $transaction->transaction_code) {
+            return false;
+        }
+
+        return ! filled($payload['gross_amount'] ?? null)
+            || (int) $payload['gross_amount'] === (int) $transaction->amount;
     }
 
     private function canTransitionStatus(string $oldStatus, string $newStatus): bool

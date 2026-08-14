@@ -301,7 +301,6 @@ it('lets the transaction owner cancel a pending Midtrans invoice', function () {
             'transaction_status' => 'pending',
         ]),
         'https://api.sandbox.midtrans.com/v2/MIDTRANS-CANCEL-TEST/cancel' => Http::response([
-            'order_id' => $transaction->transaction_code,
             'gross_amount' => '99000.00',
             'transaction_status' => 'cancel',
         ]),
