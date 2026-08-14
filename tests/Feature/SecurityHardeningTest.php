@@ -351,6 +351,35 @@ it('cancels an uncharged Snap session when Midtrans has no transaction yet', fun
         === 'https://app.sandbox.midtrans.com/snap/v1/transactions/snap-token-to-cancel/cancel');
 });
 
+it('keeps an uncharged Midtrans order pending when the user checks its status', function () {
+    config(['services.midtrans.server_key' => 'test-server-key']);
+
+    $user = Pengguna::factory()->create(['role' => 'user']);
+    $transaction = Transaksi::create([
+        'transaction_code' => 'MIDTRANS-UNCHARGED-SYNC',
+        'midtrans_snap_token' => 'uncharged-snap-token',
+        'user_id' => $user->id,
+        'amount' => 69000,
+        'payment_method' => 'midtrans',
+        'status' => 'pending',
+    ]);
+
+    Http::fake([
+        'https://api.sandbox.midtrans.com/v2/MIDTRANS-UNCHARGED-SYNC/status' => Http::response([
+            'status_code' => '404',
+            'status_message' => 'Transaction does not exist.',
+        ]),
+    ]);
+
+    $this->actingAs($user)
+        ->postJson(route('payments.midtrans.sync', $transaction->transaction_code))
+        ->assertOk()
+        ->assertJsonPath('status', 'pending')
+        ->assertJsonPath('message', 'Pembayaran belum dimulai di Midtrans. Kamu masih dapat melanjutkan atau membatalkan pesanan ini.');
+
+    expect($transaction->fresh()->status)->toBe('pending');
+});
+
 it('does not let another user cancel a Midtrans invoice', function () {
     $owner = Pengguna::factory()->create(['role' => 'user']);
     $otherUser = Pengguna::factory()->create(['role' => 'user']);

@@ -163,7 +163,7 @@ export default function Checkout({ transaction, midtrans }) {
       }
 
       if (nextStatus === 'pending') {
-        setNotice('Pembayaran masih menunggu konfirmasi. Coba periksa lagi beberapa saat setelah pembayaran selesai.');
+        setNotice(response.data?.message || 'Pembayaran masih menunggu konfirmasi. Coba periksa lagi beberapa saat setelah pembayaran selesai.');
         return;
       }
 

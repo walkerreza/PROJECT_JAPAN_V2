@@ -116,18 +116,27 @@ class PembayaranMidtransController extends Controller
             ->acceptJson()
             ->get($this->apiBaseUrl().'/v2/'.$transaction->transaction_code.'/status');
 
-        if ($response->failed()) {
+        $transactionNotFound = $this->midtransTransactionNotFound($response);
+
+        if ($response->failed() && ! $transactionNotFound) {
             abort(422, 'Gagal mengambil status transaksi dari Midtrans.');
         }
 
-        abort_unless($this->payloadMatchesTransaction($transaction, $response->json()), 422, 'Respons Midtrans tidak sesuai transaksi.');
-        $this->applyMidtransStatus($transaction, $response->json(), $request->user()->id, 'Sync status Midtrans dari frontend.');
+        if ($transactionNotFound) {
+            $this->expirePendingCheckoutLocallyIfStale($transaction, $request->user()->id);
+        } else {
+            abort_unless($this->payloadMatchesTransaction($transaction, $response->json()), 422, 'Respons Midtrans tidak sesuai transaksi.');
+            $this->applyMidtransStatus($transaction, $response->json(), $request->user()->id, 'Sync status Midtrans dari frontend.');
+        }
 
         $freshTransaction = $transaction->fresh(['kloterBelajar.admin']);
         $accessState = $this->accessState($freshTransaction);
 
         return response()->json([
             'status' => $transaction->fresh()->status,
+            'message' => $transactionNotFound
+                ? 'Pembayaran belum dimulai di Midtrans. Kamu masih dapat melanjutkan atau membatalkan pesanan ini.'
+                : null,
             'subscription_status' => $request->user()->fresh()->subscription_status,
             'is_premium' => app(AksesPremiumService::class)->isPremium($request->user()->fresh()),
             'access_status' => app(AksesPremiumService::class)->statusAkses($request->user()->fresh()),
@@ -231,7 +240,7 @@ class PembayaranMidtransController extends Controller
                 || str_contains($message, 'token not found'));
 
             if ($response->failed() && ! $isAlreadyClosed) {
-                abort(422, 'Pesanan sedang diproses Midtrans dan belum dapat dibatalkan. Periksa status pembayaran terlebih dahulu.');
+                abort(422, 'Halaman pembayaran masih aktif. Tutup halaman Midtrans, tunggu 1-2 menit, lalu coba batalkan kembali.');
             }
         }
 
@@ -607,10 +616,16 @@ class PembayaranMidtransController extends Controller
             return;
         }
 
+        $this->expirePendingCheckoutLocallyIfStale($transaction, $changedBy);
+    }
+
+    private function expirePendingCheckoutLocallyIfStale(Transaksi $transaction, ?int $changedBy): bool
+    {
         $expiryHours = max(1, (int) config('services.midtrans.snap_expiry_hours', 24));
 
-        if ($transaction->created_at?->gt(now()->subHours($expiryHours))) {
-            return;
+        if ($transaction->status !== 'pending'
+            || $transaction->created_at?->gt(now()->subHours($expiryHours))) {
+            return false;
         }
 
         $this->applyMidtransStatus($transaction, [
@@ -618,6 +633,8 @@ class PembayaranMidtransController extends Controller
             'gross_amount' => (string) $transaction->amount,
             'transaction_status' => 'expire',
         ], $changedBy, 'Checkout lokal ditandai kedaluwarsa setelah token Snap melewati batas waktu.');
+
+        return true;
     }
 
     private function prepareSnapPayment(Transaksi $transaction, Request $request): array
