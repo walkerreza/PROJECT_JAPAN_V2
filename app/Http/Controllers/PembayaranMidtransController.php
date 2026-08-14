@@ -231,7 +231,7 @@ class PembayaranMidtransController extends Controller
     private function cancelSnapCheckout(Transaksi $transaction, string $serverKey, int $changedBy): JsonResponse
     {
         if (filled($transaction->midtrans_snap_token)) {
-            $response = Http::withHeaders(['Authorization' => $serverKey])
+            $response = Http::withBasicAuth($serverKey, '')
                 ->acceptJson()
                 ->timeout(10)
                 ->post($this->snapBaseUrl().'/snap/v1/transactions/'.$transaction->midtrans_snap_token.'/cancel');
@@ -240,7 +240,18 @@ class PembayaranMidtransController extends Controller
                 || str_contains($message, 'token not found'));
 
             if ($response->failed() && ! $isAlreadyClosed) {
-                abort(422, 'Halaman pembayaran masih aktif. Tutup halaman Midtrans, tunggu 1-2 menit, lalu coba batalkan kembali.');
+                if (in_array($response->status(), [401, 403], true)) {
+                    abort(502, 'Konfigurasi pembayaran belum dapat memproses pembatalan. Hubungi pengelola Japanlingo.');
+                }
+
+                $isInProgress = $errors->contains(fn ($message) => str_contains($message, 'transaction is on progress'));
+
+                abort(
+                    422,
+                    $isInProgress
+                        ? 'Halaman pembayaran masih aktif. Tutup halaman Midtrans, tunggu 1-2 menit, lalu coba batalkan kembali.'
+                        : 'Midtrans belum dapat membatalkan pesanan. Coba lagi beberapa saat lagi.'
+                );
             }
         }
 

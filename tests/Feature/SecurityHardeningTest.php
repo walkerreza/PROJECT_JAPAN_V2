@@ -348,7 +348,8 @@ it('cancels an uncharged Snap session when Midtrans has no transaction yet', fun
     expect($transaction->fresh()->status)->toBe('canceled');
 
     Http::assertSent(fn ($request) => $request->url()
-        === 'https://app.sandbox.midtrans.com/snap/v1/transactions/snap-token-to-cancel/cancel');
+        === 'https://app.sandbox.midtrans.com/snap/v1/transactions/snap-token-to-cancel/cancel'
+        && $request->hasHeader('Authorization', 'Basic '.base64_encode('test-server-key:')));
 });
 
 it('keeps an uncharged Midtrans order pending when the user checks its status', function () {
