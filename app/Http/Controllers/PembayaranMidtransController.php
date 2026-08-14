@@ -162,6 +162,10 @@ class PembayaranMidtransController extends Controller
             ->timeout(10)
             ->get($this->apiBaseUrl().'/v2/'.$transaction->transaction_code.'/status');
 
+        if ($this->midtransTransactionNotFound($statusResponse)) {
+            return $this->cancelSnapCheckout($transaction, $serverKey, $request->user()->id);
+        }
+
         if ($statusResponse->failed()) {
             abort(422, 'Gagal mengambil status transaksi dari Midtrans. Coba lagi beberapa saat lagi.');
         }
@@ -210,6 +214,35 @@ class PembayaranMidtransController extends Controller
 
         return response()->json([
             'status' => $transaction->fresh()->status,
+            'canceled' => true,
+            'message' => 'Pesanan berhasil dibatalkan.',
+        ]);
+    }
+
+    private function cancelSnapCheckout(Transaksi $transaction, string $serverKey, int $changedBy): JsonResponse
+    {
+        if (filled($transaction->midtrans_snap_token)) {
+            $response = Http::withHeaders(['Authorization' => $serverKey])
+                ->acceptJson()
+                ->timeout(10)
+                ->post($this->snapBaseUrl().'/snap/v1/transactions/'.$transaction->midtrans_snap_token.'/cancel');
+            $errors = collect($response->json('error_messages', []))->map(fn ($message) => strtolower((string) $message));
+            $isAlreadyClosed = $errors->contains(fn ($message) => str_contains($message, 'already canceled')
+                || str_contains($message, 'token not found'));
+
+            if ($response->failed() && ! $isAlreadyClosed) {
+                abort(422, 'Pesanan sedang diproses Midtrans dan belum dapat dibatalkan. Periksa status pembayaran terlebih dahulu.');
+            }
+        }
+
+        $this->applyMidtransStatus($transaction, [
+            'order_id' => $transaction->transaction_code,
+            'gross_amount' => (string) $transaction->amount,
+            'transaction_status' => 'cancel',
+        ], $changedBy, 'Sesi Snap yang belum memiliki transaksi pembayaran dibatalkan oleh user.');
+
+        return response()->json([
+            'status' => 'canceled',
             'canceled' => true,
             'message' => 'Pesanan berhasil dibatalkan.',
         ]);
@@ -696,6 +729,12 @@ class PembayaranMidtransController extends Controller
 
         return ! filled($payload['gross_amount'] ?? null)
             || (int) $payload['gross_amount'] === (int) $transaction->amount;
+    }
+
+    private function midtransTransactionNotFound($response): bool
+    {
+        return $response->status() === 404
+            || (string) $response->json('status_code') === '404';
     }
 
     private function canTransitionStatus(string $oldStatus, string $newStatus): bool

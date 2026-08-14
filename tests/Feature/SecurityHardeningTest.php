@@ -316,6 +316,41 @@ it('lets the transaction owner cancel a pending Midtrans invoice', function () {
         ->and($transaction->fresh()->subscription_id)->toBeNull();
 });
 
+it('cancels an uncharged Snap session when Midtrans has no transaction yet', function () {
+    config(['services.midtrans.server_key' => 'test-server-key']);
+
+    $user = Pengguna::factory()->create(['role' => 'user']);
+    $transaction = Transaksi::create([
+        'transaction_code' => 'MIDTRANS-SNAP-CANCEL-TEST',
+        'midtrans_snap_token' => 'snap-token-to-cancel',
+        'user_id' => $user->id,
+        'amount' => 99000,
+        'payment_method' => 'midtrans',
+        'status' => 'pending',
+    ]);
+
+    Http::fake([
+        'https://api.sandbox.midtrans.com/v2/MIDTRANS-SNAP-CANCEL-TEST/status' => Http::response([
+            'status_code' => '404',
+            'status_message' => 'Transaction does not exist.',
+        ], 404),
+        'https://app.sandbox.midtrans.com/snap/v1/transactions/snap-token-to-cancel/cancel' => Http::response([
+            'canceled_at' => now()->toIso8601String(),
+        ]),
+    ]);
+
+    $this->actingAs($user)
+        ->postJson(route('payments.midtrans.cancel', $transaction->transaction_code))
+        ->assertOk()
+        ->assertJsonPath('status', 'canceled')
+        ->assertJsonPath('canceled', true);
+
+    expect($transaction->fresh()->status)->toBe('canceled');
+
+    Http::assertSent(fn ($request) => $request->url()
+        === 'https://app.sandbox.midtrans.com/snap/v1/transactions/snap-token-to-cancel/cancel');
+});
+
 it('does not let another user cancel a Midtrans invoice', function () {
     $owner = Pengguna::factory()->create(['role' => 'user']);
     $otherUser = Pengguna::factory()->create(['role' => 'user']);
