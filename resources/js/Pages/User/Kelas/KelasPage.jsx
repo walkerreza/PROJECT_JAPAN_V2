@@ -385,13 +385,24 @@ export default function KelasPage({ programs = [], selectedPlanId = null }) {
         try {
             setCheckoutPlanId(plan.id);
             const storageKey = `midtrans:checkout-intent:${plan.id}:${kloterId || 'mandiri'}`;
-            const requestKey = window.sessionStorage?.getItem(storageKey) || createCheckoutRequestKey();
+            const submitCheckout = (requestKey) => window.axios.post(route('payments.midtrans.checkout'), {
+                    payment_plan_id: plan.id,
+                    checkout_request_key: requestKey,
+                    kloter_belajar_id: kloterId,
+                });
+            let requestKey = window.sessionStorage?.getItem(storageKey) || createCheckoutRequestKey();
             window.sessionStorage?.setItem(storageKey, requestKey);
-            const response = await window.axios.post(route('payments.midtrans.checkout'), {
-                payment_plan_id: plan.id,
-                checkout_request_key: requestKey,
-                kloter_belajar_id: kloterId,
-            });
+            let response;
+
+            try {
+                response = await submitCheckout(requestKey);
+            } catch (checkoutError) {
+                if (checkoutError.response?.status !== 410) throw checkoutError;
+
+                requestKey = createCheckoutRequestKey();
+                window.sessionStorage?.setItem(storageKey, requestKey);
+                response = await submitCheckout(requestKey);
+            }
             const transactionCode = response.data?.transaction_code;
 
             if (!transactionCode) {
@@ -406,7 +417,7 @@ export default function KelasPage({ programs = [], selectedPlanId = null }) {
 
             window.location.href = route('user.checkout', { transactionCode });
         } catch (error) {
-            if (error.response?.status === 409) {
+            if ([409, 410].includes(error.response?.status)) {
                 window.sessionStorage?.removeItem(storageKey);
             }
 

@@ -49,6 +49,12 @@ class PembayaranMidtransController extends Controller
             $validated['kloter_belajar_id'] = null;
         }
 
+        $this->refreshReusableCheckoutStatus(
+            $request,
+            $plan,
+            $validated['kloter_belajar_id'] ?? null
+        );
+
         [$transaction, $wasCreated] = $this->createOrReuseCheckout(
             $request,
             $plan,
@@ -87,7 +93,10 @@ class PembayaranMidtransController extends Controller
             ->where('user_id', $request->user()->id)
             ->firstOrFail();
 
-        abort_unless($transaction->status === 'pending', 422, 'Transaksi ini sudah tidak bisa dibayar ulang.');
+        $this->refreshPendingCheckoutStatus($transaction, $request->user()->id);
+        $transaction->refresh();
+
+        abort_unless($transaction->status === 'pending', 410, 'Pesanan ini sudah berakhir. Buat pesanan baru untuk melanjutkan.');
 
         return response()->json($this->prepareSnapPayment($transaction, $request));
     }
@@ -166,7 +175,9 @@ class PembayaranMidtransController extends Controller
             return response()->json([
                 'status' => $transaction->status,
                 'canceled' => false,
-                'message' => 'Status pembayaran sudah berubah. Pesanan tidak dibatalkan.',
+                'message' => $transaction->status === 'expired'
+                    ? 'Waktu pembayaran sudah berakhir. Kamu dapat membuat pesanan baru.'
+                    : 'Status pembayaran sudah berubah. Pesanan tidak dibatalkan.',
             ]);
         }
 
@@ -523,7 +534,53 @@ class PembayaranMidtransController extends Controller
             409,
             'Masih ada checkout untuk kloter lain. Batalkan pesanan lama sebelum mengganti kloter.'
         );
-        abort_if($transaction->status !== 'pending', 409, 'Checkout sebelumnya sudah selesai. Buat checkout baru untuk melanjutkan.');
+        abort_if($transaction->status !== 'pending', 410, 'Pesanan sebelumnya sudah berakhir. Buat pesanan baru untuk melanjutkan.');
+    }
+
+    private function refreshReusableCheckoutStatus(
+        Request $request,
+        PaketPembayaran $plan,
+        ?int $kloterId
+    ): void {
+        $transaction = Transaksi::query()
+            ->where('user_id', $request->user()->id)
+            ->where('payment_plan_id', $plan->id)
+            ->where('payment_method', 'midtrans')
+            ->where('status', 'pending')
+            ->where(function ($query) use ($kloterId) {
+                $kloterId
+                    ? $query->where('kloter_belajar_id', $kloterId)
+                    : $query->whereNull('kloter_belajar_id');
+            })
+            ->latest('id')
+            ->first();
+
+        if ($transaction) {
+            $this->refreshPendingCheckoutStatus($transaction, $request->user()->id);
+        }
+    }
+
+    private function refreshPendingCheckoutStatus(Transaksi $transaction, ?int $changedBy): void
+    {
+        if ($transaction->status !== 'pending' || blank($transaction->midtrans_snap_token)) {
+            return;
+        }
+
+        if ($this->reconcilePendingTransaction($transaction)) {
+            return;
+        }
+
+        $expiryHours = max(1, (int) config('services.midtrans.snap_expiry_hours', 24));
+
+        if ($transaction->created_at?->gt(now()->subHours($expiryHours))) {
+            return;
+        }
+
+        $this->applyMidtransStatus($transaction, [
+            'order_id' => $transaction->transaction_code,
+            'gross_amount' => (string) $transaction->amount,
+            'transaction_status' => 'expire',
+        ], $changedBy, 'Checkout lokal ditandai kedaluwarsa setelah token Snap melewati batas waktu.');
     }
 
     private function prepareSnapPayment(Transaksi $transaction, Request $request): array
@@ -558,6 +615,11 @@ class PembayaranMidtransController extends Controller
             ]],
             'callbacks' => [
                 'finish' => route('user.checkout', $transaction->transaction_code),
+                'error' => route('user.checkout', $transaction->transaction_code),
+            ],
+            'expiry' => [
+                'duration' => max(1, (int) config('services.midtrans.snap_expiry_hours', 24)),
+                'unit' => 'hours',
             ],
             'credit_card' => [
                 'secure' => (bool) config('services.midtrans.is_3ds', true),

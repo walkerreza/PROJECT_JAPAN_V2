@@ -140,6 +140,79 @@ it('reuses one pending Midtrans checkout for the same checkout intent', function
     Http::assertSentCount(1);
 });
 
+it('expires a stale Midtrans checkout and allows a fresh order', function () {
+    config([
+        'services.midtrans.server_key' => 'test-server-key',
+        'services.midtrans.snap_expiry_hours' => 24,
+    ]);
+
+    $user = Pengguna::factory()->create(['role' => 'user']);
+    $program = ProgramPembelajaran::create([
+        'title' => 'Program retry checkout',
+        'slug' => 'program-retry-checkout',
+        'status' => 'published',
+    ]);
+    $plan = PaketPembayaran::create([
+        'name' => 'Plan retry checkout',
+        'slug' => 'plan-retry-checkout',
+        'scope_type' => 'program',
+        'program_pembelajaran_id' => $program->id,
+        'price' => 79000,
+        'duration_days' => 30,
+        'is_active' => true,
+    ]);
+    $expiredRequestKey = 'bd8c1e15-e3a2-4334-a48b-f1a102114fc0';
+    $freshRequestKey = '3ce3f0da-7b40-41f0-a961-14427ba420df';
+    $expiredTransaction = Transaksi::create([
+        'transaction_code' => 'MID-EXPIRED-RETRY',
+        'checkout_request_key' => $expiredRequestKey,
+        'midtrans_snap_token' => 'expired-snap-token',
+        'user_id' => $user->id,
+        'payment_plan_id' => $plan->id,
+        'scope_type' => 'program',
+        'program_pembelajaran_id' => $program->id,
+        'amount' => 79000,
+        'payment_method' => 'midtrans',
+        'status' => 'pending',
+    ]);
+
+    Http::fake([
+        'https://api.sandbox.midtrans.com/v2/MID-EXPIRED-RETRY/status' => Http::response([
+            'order_id' => 'MID-EXPIRED-RETRY',
+            'gross_amount' => '79000.00',
+            'transaction_status' => 'expire',
+        ]),
+        'https://app.sandbox.midtrans.com/snap/v1/transactions' => Http::response([
+            'token' => 'fresh-snap-token',
+            'redirect_url' => 'https://app.sandbox.midtrans.com/snap/v2/vtweb/fresh-snap-token',
+        ]),
+    ]);
+
+    $this->actingAs($user)->postJson(route('payments.midtrans.checkout'), [
+        'payment_plan_id' => $plan->id,
+        'checkout_request_key' => $expiredRequestKey,
+    ])->assertStatus(410);
+
+    $freshResponse = $this->actingAs($user)->postJson(route('payments.midtrans.checkout'), [
+        'payment_plan_id' => $plan->id,
+        'checkout_request_key' => $freshRequestKey,
+    ])->assertOk();
+
+    expect($expiredTransaction->fresh()->status)->toBe('expired')
+        ->and($freshResponse->json('transaction_code'))->not->toBe($expiredTransaction->transaction_code)
+        ->and(Transaksi::where('checkout_request_key', $freshRequestKey)->value('midtrans_snap_token'))->toBe('fresh-snap-token');
+
+    Http::assertSent(function ($request) {
+        if (! str_ends_with($request->url(), '/snap/v1/transactions')) {
+            return false;
+        }
+
+        return $request['callbacks']['finish'] === route('user.checkout', $request['transaction_details']['order_id'])
+            && $request['callbacks']['error'] === route('user.checkout', $request['transaction_details']['order_id'])
+            && $request['expiry'] === ['duration' => 24, 'unit' => 'hours'];
+    });
+});
+
 it('cancels only the subscription linked to a refunded Midtrans transaction', function () {
     config(['services.midtrans.server_key' => 'test-server-key']);
 

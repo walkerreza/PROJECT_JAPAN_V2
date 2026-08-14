@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -134,20 +134,6 @@ export default function Checkout({ transaction, midtrans }) {
   const presentation = statusPresentation[presentationKey] || statusPresentation.pending;
   const StatusIcon = presentation.Icon;
 
-  const savedPayment = useMemo(() => {
-    try {
-      return JSON.parse(window.sessionStorage?.getItem(storageKey) || '{}');
-    } catch {
-      return {};
-    }
-  }, [storageKey]);
-
-  useEffect(() => {
-    if (savedPayment?.snapToken) {
-      setSnapToken(savedPayment.snapToken);
-    }
-  }, [savedPayment?.snapToken]);
-
   useEffect(() => {
     if (status !== 'success' || playedPaymentSuccessRef.current) return;
 
@@ -218,6 +204,12 @@ export default function Checkout({ transaction, midtrans }) {
         onClose: () => setNotice('Pembayaran belum diselesaikan. Kamu dapat melanjutkannya kapan saja dari halaman ini.'),
       });
     } catch (openError) {
+      if (openError.response?.status === 410) {
+        window.sessionStorage?.removeItem(storageKey);
+        await syncStatus('');
+        return;
+      }
+
       setError(openError.response?.data?.message || openError.message || 'Gagal membuka Midtrans.');
     } finally {
       setIsOpening(false);
@@ -235,7 +227,7 @@ export default function Checkout({ transaction, midtrans }) {
       const nextStatus = response.data?.status || status;
       setStatus(nextStatus);
 
-      if (nextStatus === 'canceled') {
+      if (['failed', 'expired', 'refunded', 'canceled'].includes(nextStatus)) {
         window.sessionStorage?.removeItem(storageKey);
       }
 
