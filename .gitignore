@@ -26,6 +26,12 @@
 !/public/audio/sfx/Audio/open_001.ogg
 !/public/audio/sfx/Audio/close_001.ogg
 !/public/audio/sfx/Audio/select_001.ogg
+!/public/audio/sfx/Audio/select_003.ogg
+!/public/audio/sfx/Audio/click_002.ogg
+!/public/audio/sfx/Audio/switch_002.ogg
+!/public/audio/sfx/Audio/confirmation_002.ogg
+!/public/audio/sfx/Audio/pluck_001.ogg
+!/public/audio/sfx/Audio/question_001.ogg
 /public/audio/sfx/*.url
 /storage/*.key
 /storage/pail
