@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import ConfirmActionDialog, { useConfirmAction } from '@/Components/UI/ConfirmActionDialog';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlineOutlined';
 import HourglassTopIcon from '@mui/icons-material/HourglassTop';
@@ -261,9 +262,19 @@ export default function Checkout({ transaction, midtrans }) {
       <main className="min-h-screen bg-slate-50 px-4 py-5 text-slate-900 sm:px-6 sm:py-8">
         <div className="mx-auto max-w-5xl">
           <header className="flex items-center justify-between gap-4 border-b border-slate-200 pb-4 sm:pb-5">
-            <Link href={route('home')} className="text-lg font-black text-slate-950">
-              Japanlingo
-            </Link>
+            <div className="flex min-w-0 items-center gap-3">
+              <Link
+                href={route('user.kelas.index')}
+                aria-label="Kembali ke daftar kelas"
+                className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-2.5 text-sm font-bold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 sm:px-3"
+              >
+                <ArrowBackIcon sx={{ fontSize: 19 }} />
+                <span className="hidden sm:inline">Kembali</span>
+              </Link>
+              <Link href={route('home')} className="truncate text-lg font-black text-slate-950">
+                Japanlingo
+              </Link>
+            </div>
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
               <VerifiedUserIcon sx={{ fontSize: 17 }} className="text-slate-600" />
               <span>Pembayaran aman melalui Midtrans</span>
