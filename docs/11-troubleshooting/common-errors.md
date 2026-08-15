@@ -12,6 +12,27 @@ php artisan optimize:clear
 
 Pastikan `resources/js/app.jsx` masih menjadi entry yang didaftarkan pada Blade/Vite config.
 
+### Halaman production putih dan elemen `#app` tidak ada
+
+Jika route menjawab 200 tetapi body hampir kosong, `document.body.innerText` kosong, dan `document.getElementById('app')` menghasilkan `null`, periksa error Nginx/PHP dan manifest:
+
+```bash
+sudo tail -n 100 /var/log/nginx/error.log
+ls -lh public/build/manifest.json
+npm run build
+```
+
+Tunggu sampai muncul `built in ...`; pesan chunk lebih besar dari 500 kB hanya warning dan bukan penyebab halaman putih. Setelah manifest tersedia:
+
+```bash
+php artisan optimize:clear
+php artisan optimize
+sudo systemctl restart php8.3-fpm
+sudo systemctl reload nginx
+```
+
+Peringatan browser bahwa CSS di-preload tetapi belum digunakan biasanya akibat HTML gagal dirender, bukan akar masalahnya.
+
 ### Ziggy parameter required
 
 Route `user.checkout` membutuhkan `transactionCode`:
@@ -25,6 +46,12 @@ Error bukan berasal dari key Midtrans; pemanggil frontend membuat URL tanpa para
 ### 422 checkout Midtrans
 
 Periksa response JSON Laravel, `payment_plan_id`, UUID `checkout_request_key`, kebutuhan `kloter_belajar_id`, plan aktif, kapasitas kloter, dan server key. Console browser hanya menunjukkan status; penyebab detail ada di response/log.
+
+### Midtrans menjawab `Transaction doesn't exist`
+
+Midtrans kadang memberi HTTP 200 dengan body `status_code: "404"` untuk sesi Snap yang belum diteruskan user ke metode pembayaran. User masih boleh melanjutkan atau membatalkan checkout. Untuk pembatalan sesi ini, gunakan endpoint Snap dengan token dan Basic Auth server key, bukan header bearer/mentah.
+
+Jika scheduler terus mencatat mismatch untuk kondisi ini, itu keterbatasan handler rekonsiliasi terjadwal saat ini; endpoint pemeriksaan status frontend sudah menanganinya secara terpisah.
 
 ### `.env` invalid
 
@@ -118,6 +145,8 @@ Jangan menampilkan secret saat membagikan output. Periksa package SDK, key, TTL,
 - proxy `/app` dan `/apps` dengan upgrade header;
 - cek `/broadcasting/auth`, cookie, dan membership private channel;
 - batasi origin setelah koneksi stabil.
+
+Jika browser menampilkan `You must pass your app key when you instantiate Pusher`, `VITE_REVERB_APP_KEY` kosong ketika bundle dibuat. Isi pasangan `REVERB_*` dan `VITE_REVERB_*`, kemudian jalankan `npm run build`; membersihkan config cache saja tidak mengubah nilai yang sudah tertanam dalam bundle JavaScript.
 
 ### Signal connect, audio/video gagal
 

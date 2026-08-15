@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\DeckPresentasi;
 use App\Models\KloterBelajar;
+use App\Models\Modul;
 use App\Models\Pengguna;
 use App\Models\ProgramPembelajaran;
 use App\Models\SesiKelasLive;
@@ -23,21 +24,46 @@ class RuangKelasLiveController extends Controller
     public function create(Request $request, KloterBelajarService $kloterService): Response
     {
         $program = ProgramPembelajaran::query()->findOrFail($request->integer('program_id'));
+        $user = $request->user();
+        $decks = DeckPresentasi::query()
+            ->with(['module:id,title,week_number', 'creator:id,username'])
+            ->withCount('slides')
+            ->whereHas('module', fn ($query) => $query->where('program_pembelajaran_id', $program->id))
+            ->where(function ($query) use ($user) {
+                $query->where(function ($sharedQuery) {
+                    $sharedQuery->shared()->where('status', 'published');
+                })
+                    ->orWhere(function ($mentorQuery) use ($user) {
+                        $mentorQuery->where('audience_scope', DeckPresentasi::AUDIENCE_MENTOR_SESSION)
+                            ->when(! $user->isAdminGlobal(), fn ($ownerQuery) => $ownerQuery->where('created_by', $user->id));
+                    });
+            })
+            ->orderBy('module_id')
+            ->orderByDesc('updated_at')
+            ->get(['id', 'created_by', 'module_id', 'title', 'status', 'audience_scope', 'updated_at']);
 
         return Inertia::render('Admin/RuangKelas/Show', [
             'setup' => [
                 'program' => $program->only(['id', 'title', 'description']),
-                'kloters' => $kloterService->kloterDikelola($request->user())
+                'kloters' => $kloterService->kloterDikelola($user)
                     ->where('program_pembelajaran_id', $program->id)
                     ->where('status', 'active')
                     ->orderBy('nama')
                     ->get(['id', 'nama', 'kode']),
-                'decks' => DeckPresentasi::query()
-                    ->with('module:id,title,week_number')
-                    ->withCount('slides')
-                    ->whereHas('module', fn ($query) => $query->where('program_pembelajaran_id', $program->id))
-                    ->orderByDesc('updated_at')
-                    ->get(['id', 'module_id', 'title', 'status']),
+                'weeks' => Modul::query()
+                    ->where('program_pembelajaran_id', $program->id)
+                    ->where('status', 'published')
+                    ->orderBy('week_number')
+                    ->orderBy('id')
+                    ->get(['id', 'title', 'week_number']),
+                'decks' => $decks,
+                'initial' => [
+                    'kloter_id' => $request->integer('kloter_id') ?: null,
+                    'week_id' => $request->integer('week_id') ?: null,
+                    'deck_id' => $request->integer('deck_id') ?: null,
+                ],
+                'is_global_admin' => $user->isAdminGlobal(),
+                'current_user_id' => $user->id,
             ],
             'storeEndpoint' => route('admin.live-classes.store', absolute: false),
             'exitUrl' => route('admin.programs.index', absolute: false),

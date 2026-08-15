@@ -33,6 +33,19 @@ scope_type = kloter
 - admin global dapat melihat seluruh approval, tetapi tetap tidak boleh mengubah data secara ambigu tanpa konteks kloter;
 - superadmin membuat kloter dan menetapkan admin pengampu.
 
+## Jalur Persetujuan dan Jalur Manual
+
+```text
+Pembayaran mentor: pending_payment -> paid_pending_approval -> active
+Administratif: subscription aktif -> ditambahkan manual -> active
+```
+
+- Tab **Persetujuan** hanya menampilkan membership `paid_pending_approval` dengan transaksi `success`.
+- Admin pengampu menjadi pemroses utama; admin global dapat memproses seluruh kloter sebagai penanggung jawab cadangan.
+- Admin kloter lain tetap tidak dapat memproses enrollment di luar kloter yang diampunya.
+- **Tambahkan Siswa Secara Manual** hanya untuk access key, pembayaran manual, migrasi, atau koreksi administratif. Jalur ini langsung mengaktifkan membership dan tidak masuk antrean persetujuan.
+- Status kloter `draft`, `active`, dan `archived` dikelola superadmin. Admin mengatur jadwal, roster, serta persetujuan hanya pada kloter aktif.
+
 ## Access Key
 
 Access key adalah alternatif untuk promo, pembayaran manual, atau enrollment administratif.

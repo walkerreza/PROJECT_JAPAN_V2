@@ -9,279 +9,462 @@ use App\Models\Kosakata;
 use App\Models\Kuis;
 use App\Models\LevelPembelajaran;
 use App\Models\Modul;
+use App\Models\Pengguna;
 use App\Models\ProgramPembelajaran;
 use App\Models\SetFlashcard;
 use App\Models\SlidePresentasi;
 use App\Models\Soal;
-use App\Services\SoalKuisService;
 use Illuminate\Database\Seeder;
 
 class KelasDemoSeeder extends Seeder
 {
-    public function run(SoalKuisService $questions): void
+    public const MANDIRI_SLUG = 'jlpt-n3-mingguan';
+
+    public const MENTOR_SLUG = 'jlpt-n3-mentor';
+
+    public function run(): void
     {
         $level = LevelPembelajaran::updateOrCreate(
             ['level_name' => 'JLPT N3'],
             ['stage' => 3, 'is_premium' => true]
         );
+        $globalAdmin = Pengguna::where('email', 'admin@japanlingo.com')->first();
+        $mentor = Pengguna::where('email', 'admin.kloter@japanlingo.com')->first();
 
-        collect($this->kelas())->each(function (array $kelas, int $index) use ($level, $questions) {
+        foreach ($this->programs() as $index => $programData) {
             $program = ProgramPembelajaran::updateOrCreate(
-                ['slug' => $kelas['slug']],
+                ['slug' => $programData['slug']],
                 [
                     'level_id' => $level->id,
-                    'title' => $kelas['title'],
-                    'description' => $kelas['description'],
-                    'instructor_name' => $kelas['instructor_name'],
-                    'thumbnail_url' => $kelas['thumbnail_url'],
+                    'title' => $programData['title'],
+                    'description' => $programData['description'],
+                    'instructor_name' => $programData['instructor_name'],
+                    'thumbnail_url' => $programData['thumbnail_url'],
                     'status' => 'published',
                     'sort_order' => $index + 1,
                 ]
             );
 
-            foreach ($kelas['modules'] as $week => $moduleData) {
+            foreach ($this->curriculum() as $weekIndex => $weekData) {
                 $module = Modul::updateOrCreate(
-                    ['program_pembelajaran_id' => $program->id, 'week_number' => $week + 1],
                     [
-                        'level_id' => $level->id,
-                        'title' => $moduleData['title'],
-                        'description' => $moduleData['description'],
-                        'status' => 'published',
-                    ]
-                );
-
-                $dayOne = HariModul::updateOrCreate(
-                    ['module_id' => $module->id, 'day_number' => 1],
-                    [
-                        'title' => 'Pengenalan Materi',
-                        'description' => 'Pelajari ringkasan, presentasi, dan flashcard sebelum masuk ke evaluasi.',
-                        'status' => 'published',
-                        'checkpoint_quiz_id' => null,
-                    ]
-                );
-                $dayTwo = HariModul::updateOrCreate(
-                    ['module_id' => $module->id, 'day_number' => 2],
-                    [
-                        'title' => 'Latihan dan Evaluasi',
-                        'description' => 'Uji pemahaman melalui kuis checkpoint untuk menyelesaikan Week.',
-                        'status' => 'published',
-                    ]
-                );
-
-                $flashcardSet = SetFlashcard::updateOrCreate(
-                    ['module_id' => $module->id, 'title' => $moduleData['flashcard_title']],
-                    [
-                        'level_id' => $level->id,
-                        'module_day_id' => $dayOne->id,
-                        'description' => $moduleData['flashcard_description'],
-                        'source_type' => 'manual',
-                        'status' => 'published',
-                    ]
-                );
-
-                foreach ($moduleData['flashcards'] as $order => $card) {
-                    Flashcard::updateOrCreate(
-                        ['flashcard_set_id' => $flashcardSet->id, 'order' => $order + 1],
-                        [
-                            'front_text' => $card['front'],
-                            'reading' => $card['reading'],
-                            'back_text' => $card['back'],
-                            'hint' => $card['hint'],
-                            'example_sentence' => $card['example'],
-                            'example_meaning' => $card['meaning'],
-                        ]
-                    );
-                }
-
-                $quiz = Kuis::updateOrCreate(
-                    ['module_id' => $module->id],
-                    [
-                        'module_day_id' => $dayTwo->id,
-                        'type' => 'multiple_choice',
-                        'time_limit' => $moduleData['time_limit'],
-                        'status' => 'published',
-                    ]
-                );
-
-                foreach ($moduleData['questions'] as $order => $question) {
-                    Soal::updateOrCreate(
-                        ['quiz_id' => $quiz->id, 'order' => $order + 1],
-                        [
-                            'type' => 'multiple_choice',
-                            'question_text' => $question['text'],
-                            'correct_answer' => $question['answer'],
-                            'options' => $question['options'],
-                            'explanation' => $question['explanation'],
-                        ]
-                    );
-                }
-
-                $writing = $moduleData['handwriting'];
-                $vocabulary = Kosakata::updateOrCreate(
-                    ['module_id' => $module->id, 'word' => $writing['word']],
-                    [
-                        'content_type' => 'kanji',
-                        'reading' => $writing['reading'],
-                        'meaning_id' => $writing['meaning'],
-                        'jlpt_level' => 'N3',
-                        'category' => 'latihan-menulis',
-                        'status' => 'published',
-                    ]
-                );
-                $vocabulary->days()->syncWithoutDetaching([
-                    $dayTwo->id => ['sort_order' => 1],
-                ]);
-
-                $writingSet = SetFlashcard::updateOrCreate(
-                    [
-                        'module_id' => $module->id,
-                        'module_day_id' => $dayTwo->id,
-                        'source_type' => 'handwriting-demo',
+                        'program_pembelajaran_id' => $program->id,
+                        'week_number' => $weekIndex + 1,
                     ],
                     [
                         'level_id' => $level->id,
-                        'title' => 'Latihan Kanji '.$moduleData['title'],
-                        'description' => 'Flashcard penguatan sebelum latihan urutan stroke.',
-                        'status' => 'published',
-                    ]
-                );
-                Flashcard::updateOrCreate(
-                    ['flashcard_set_id' => $writingSet->id, 'order' => 1],
-                    [
-                        'vocabulary_id' => $vocabulary->id,
-                        'front_text' => $writing['word'],
-                        'reading' => $writing['reading'],
-                        'back_text' => $writing['meaning'],
-                        'hint' => 'Perhatikan bentuk dan urutan stroke.',
-                    ]
-                );
-
-                $dayTwo->update(['checkpoint_quiz_id' => $quiz->id]);
-
-                $deck = DeckPresentasi::updateOrCreate(
-                    ['module_id' => $module->id, 'title' => $moduleData['presentation_title']],
-                    [
-                        'level_id' => $level->id,
-                        'module_day_id' => $dayOne->id,
-                        'description' => $moduleData['presentation_description'],
+                        'title' => $weekData['title'],
+                        'description' => $weekData['description'],
                         'status' => 'published',
                     ]
                 );
 
-                SlidePresentasi::updateOrCreate(
-                    ['presentation_deck_id' => $deck->id, 'order' => 1],
-                    [
-                        'title' => $moduleData['presentation_title'],
-                        'layout' => 'title',
-                        'content' => $moduleData['presentation_description'],
-                        'background' => 'light',
-                        'accent_color' => $kelas['accent_color'],
-                        'speaker_notes' => 'Gunakan slide ini sebagai pembuka kelas.',
-                    ]
-                );
+                $days = collect($weekData['days'])->map(function (array $dayData, int $dayIndex) use ($level, $module) {
+                    $day = HariModul::updateOrCreate(
+                        ['module_id' => $module->id, 'day_number' => $dayIndex + 1],
+                        [
+                            'title' => $dayData['title'],
+                            'description' => $dayData['description'],
+                            'status' => 'published',
+                        ]
+                    );
+
+                    $set = SetFlashcard::updateOrCreate(
+                        ['module_id' => $module->id, 'module_day_id' => $day->id],
+                        [
+                            'level_id' => $level->id,
+                            'title' => 'Repetisi '.$dayData['title'],
+                            'description' => 'Materi repetisi sebelum mengerjakan kuis '.$dayData['title'].'.',
+                            'source_type' => 'vocabulary',
+                            'status' => 'published',
+                        ]
+                    );
+
+                    $vocabulary = collect($dayData['vocabulary'])->map(function (array $item, int $itemIndex) use ($module, $day, $set) {
+                        $word = Kosakata::firstOrNew([
+                            'word' => $item['word'],
+                            'reading' => $item['reading'],
+                        ]);
+
+                        if (! $word->exists) {
+                            $word->module_id = $module->id;
+                        }
+
+                        $word->fill([
+                            'content_type' => $item['content_type'],
+                            'meaning_id' => $item['meaning'],
+                            'meaning_en' => $item['meaning_en'],
+                            'jlpt_level' => 'N3',
+                            'category' => $item['category'],
+                            'tags' => $item['tags'],
+                            'example_sentence' => $item['example_sentence'],
+                            'example_reading' => $item['example_reading'],
+                            'example_meaning' => $item['example_meaning'],
+                            'source_type' => 'demo-seeder',
+                            'source_title' => $day->title,
+                            'metadata' => $item['metadata'] ?? null,
+                            'status' => 'published',
+                        ])->save();
+                        $word->days()->syncWithoutDetaching([$day->id => ['sort_order' => $itemIndex + 1]]);
+
+                        Flashcard::updateOrCreate(
+                            ['flashcard_set_id' => $set->id, 'vocabulary_id' => $word->id],
+                            [
+                                'front_text' => $word->word,
+                                'reading' => $word->reading,
+                                'back_text' => $word->meaning_id,
+                                'hint' => $word->category,
+                                'example_sentence' => $word->example_sentence,
+                                'example_meaning' => $word->example_meaning,
+                                'audio_url' => null,
+                                'order' => $itemIndex + 1,
+                            ]
+                        );
+
+                        return $word;
+                    });
+
+                    $quiz = Kuis::updateOrCreate(
+                        ['module_id' => $module->id, 'module_day_id' => $day->id],
+                        [
+                            'exam_order' => null,
+                            'type' => 'multiple_choice',
+                            'time_limit' => 420,
+                            'passing_score' => 70,
+                            'status' => 'published',
+                        ]
+                    );
+                    $this->seedDailyQuestions($quiz, $dayData, $vocabulary->values()->all());
+                    $day->update(['checkpoint_quiz_id' => $quiz->id]);
+
+                    return ['day' => $day, 'vocabulary' => $vocabulary];
+                })->values();
+
+                $this->seedWeeklyExam($module, $days);
+                $this->seedSharedPresentations($module, $weekData, $days, $globalAdmin);
+
+                if ($programData['slug'] === self::MENTOR_SLUG && $weekIndex === 0 && $mentor) {
+                    $this->seedMentorPresentation($module, $mentor);
+                }
             }
+        }
+    }
+
+    private function seedDailyQuestions(Kuis $quiz, array $dayData, array $vocabulary): void
+    {
+        $meanings = collect($vocabulary)->pluck('meaning_id')->values();
+        $readings = collect($vocabulary)->pluck('reading')->values();
+
+        foreach ($vocabulary as $index => $word) {
+            $askReading = $index % 2 === 1;
+            $answer = $askReading ? $word->reading : $word->meaning_id;
+            $pool = $askReading ? $readings : $meanings;
+            $options = collect([$answer])
+                ->merge($pool->reject(fn ($value) => $value === $answer))
+                ->take(4)
+                ->values()
+                ->all();
+
+            Soal::updateOrCreate(
+                ['quiz_id' => $quiz->id, 'order' => $index + 1],
+                [
+                    'type' => 'multiple_choice',
+                    'question_text' => $askReading
+                        ? "Bagaimana cara membaca {$word->word}?"
+                        : "Apa arti {$word->word}?",
+                    'correct_answer' => $answer,
+                    'options' => $options,
+                    'explanation' => "{$word->word} dibaca {$word->reading} dan berarti {$word->meaning_id}.",
+                    'points' => 1,
+                ]
+            );
+        }
+
+        Soal::where('quiz_id', $quiz->id)->where('order', '>', count($vocabulary))->delete();
+    }
+
+    private function seedWeeklyExam(Modul $module, $days): void
+    {
+        $exam = Kuis::updateOrCreate(
+            ['module_id' => $module->id, 'exam_order' => 1],
+            [
+                'module_day_id' => null,
+                'type' => 'weekly_exam',
+                'time_limit' => 900,
+                'passing_score' => 70,
+                'status' => 'published',
+            ]
+        );
+
+        $words = $days
+            ->flatMap(fn (array $day) => $day['vocabulary']->take(2))
+            ->values();
+        $meaningPool = $words->pluck('meaning_id')->values();
+
+        $words->each(function (Kosakata $word, int $index) use ($exam, $meaningPool) {
+            $options = collect([$word->meaning_id])
+                ->merge($meaningPool->reject(fn ($meaning) => $meaning === $word->meaning_id))
+                ->take(4)
+                ->values()
+                ->all();
+
+            Soal::updateOrCreate(
+                ['quiz_id' => $exam->id, 'order' => $index + 1],
+                [
+                    'type' => 'multiple_choice',
+                    'question_text' => "Pilih arti yang tepat untuk {$word->word}.",
+                    'correct_answer' => $word->meaning_id,
+                    'options' => $options,
+                    'explanation' => "{$word->word} berarti {$word->meaning_id}.",
+                    'points' => 1,
+                ]
+            );
         });
+        Soal::where('quiz_id', $exam->id)->where('order', '>', $words->count())->delete();
     }
 
-    private function kelas(): array
+    private function seedSharedPresentations(Modul $module, array $weekData, $days, ?Pengguna $creator): void
+    {
+        $placements = [
+            [
+                'key' => 'opening',
+                'title' => 'Pembuka - '.$weekData['title'],
+                'description' => 'Tujuan belajar dan gambaran materi Week.',
+                'day_id' => null,
+                'sort_order' => 0,
+            ],
+            [
+                'key' => 'after_day',
+                'title' => 'Penguatan - '.$weekData['title'],
+                'description' => 'Ringkasan materi setelah Day 2.',
+                'day_id' => $days[1]['day']->id,
+                'sort_order' => 1,
+            ],
+            [
+                'key' => 'closing',
+                'title' => 'Penutup - '.$weekData['title'],
+                'description' => 'Rangkuman dan tindak lanjut setelah ujian mingguan.',
+                'day_id' => null,
+                'sort_order' => 2,
+            ],
+        ];
+
+        foreach ($placements as $placement) {
+            $deck = DeckPresentasi::updateOrCreate(
+                ['module_id' => $module->id, 'title' => $placement['title']],
+                [
+                    'level_id' => $module->level_id,
+                    'created_by' => $creator?->id,
+                    'module_day_id' => $placement['day_id'],
+                    'week_slot' => $placement['key'],
+                    'sort_order' => $placement['sort_order'],
+                    'description' => $placement['description'],
+                    'status' => 'published',
+                    'audience_scope' => DeckPresentasi::AUDIENCE_SHARED,
+                    'source_type' => 'manual',
+                ]
+            );
+
+            $this->seedSlides($deck, [
+                [
+                    'title' => $placement['title'],
+                    'layout' => 'title',
+                    'content' => $placement['description'],
+                ],
+                [
+                    'title' => 'Poin utama',
+                    'layout' => 'content',
+                    'content' => $weekData['description'].' Fokuskan latihan pada kosakata, pola, dan contoh penggunaannya.',
+                ],
+            ]);
+        }
+    }
+
+    private function seedMentorPresentation(Modul $module, Pengguna $mentor): void
+    {
+        $deck = DeckPresentasi::updateOrCreate(
+            ['module_id' => $module->id, 'title' => 'PPT Sesi Mentor - Diskusi Week 1'],
+            [
+                'level_id' => $module->level_id,
+                'created_by' => $mentor->id,
+                'module_day_id' => null,
+                'week_slot' => 'opening',
+                'sort_order' => 0,
+                'description' => 'Contoh PPT privat yang dapat disesuaikan mentor sebelum kelas live.',
+                'status' => 'draft',
+                'audience_scope' => DeckPresentasi::AUDIENCE_MENTOR_SESSION,
+                'source_type' => 'manual',
+            ]
+        );
+
+        $this->seedSlides($deck, [
+            [
+                'title' => 'Diskusi bersama mentor',
+                'layout' => 'title',
+                'content' => 'Catat pertanyaan dan bahas contoh penggunaan kosakata bersama mentor.',
+            ],
+            [
+                'title' => 'Papan diskusi',
+                'layout' => 'jamboard',
+                'content' => 'Gunakan area ini untuk menulis contoh kalimat bersama.',
+            ],
+        ]);
+    }
+
+    private function seedSlides(DeckPresentasi $deck, array $slides): void
+    {
+        foreach ($slides as $index => $slide) {
+            SlidePresentasi::updateOrCreate(
+                ['presentation_deck_id' => $deck->id, 'order' => $index + 1],
+                [
+                    ...$slide,
+                    'background' => 'light',
+                    'accent_color' => '#E64A19',
+                    'speaker_notes' => 'Konten contoh dari seeder demo.',
+                ]
+            );
+        }
+        SlidePresentasi::where('presentation_deck_id', $deck->id)
+            ->where('order', '>', count($slides))
+            ->delete();
+    }
+
+    private function programs(): array
     {
         return [
             [
-                'slug' => 'jlpt-n3-mingguan',
-                'title' => 'JLPT N3 Mingguan',
-                'description' => 'Roadmap inti N3 untuk belajar bertahap dari kosakata, kanji, flashcard, kuis, dan PPT.',
-                'instructor_name' => 'Guru gembul',
+                'slug' => self::MANDIRI_SLUG,
+                'title' => 'JLPT N3 Mandiri',
+                'description' => 'Belajar mandiri melalui roadmap Week dan Day dengan repetisi, kuis, serta ujian mingguan.',
+                'instructor_name' => 'Tim Akademik JapanLingo',
                 'thumbnail_url' => '/images/kelas-n3-mingguan.jpg',
-                'accent_color' => '#E64A19',
-                'modules' => [
-                    $this->module('Lingkungan Sekitar', 'Kosakata tempat umum', 'waribiki', 'discount', 'Apa arti waribiki?', 'discount'),
-                    $this->module('Rutinitas Harian', 'Pola kalimat kegiatan harian', 'hitsuyou', 'perlu', 'Apa arti hitsuyou?', 'perlu'),
-                    $this->module('Percakapan Ringan', 'Ungkapan saat bertanya arah', 'annai', 'panduan', 'Apa arti annai?', 'panduan'),
-                ],
             ],
             [
-                'slug' => 'n3-kosakata-50d',
-                'title' => 'N3 Kosakata 50D',
-                'description' => 'Kelas drill kosakata intensif 50 hari untuk memperkuat ingatan kata N3.',
-                'instructor_name' => 'Sensei Dewi',
-                'thumbnail_url' => '/images/kelas-n3-kosakata.jpg',
-                'accent_color' => '#0EA5E9',
-                'modules' => [
-                    $this->module('Kata Kerja Penting', 'Latihan kata kerja yang sering muncul', 'tsuzukeru', 'melanjutkan', 'Apa arti tsuzukeru?', 'melanjutkan'),
-                    $this->module('Kata Sifat N3', 'Latihan i-keiyoushi dan na-keiyoushi', 'anzen', 'aman', 'Apa arti anzen?', 'aman'),
-                    $this->module('Ekspresi Formal', 'Kosakata untuk situasi formal', 'shinsei', 'permohonan', 'Apa arti shinsei?', 'permohonan'),
-                ],
-            ],
-            [
-                'slug' => 'n3-kanji-repetition',
-                'title' => 'N3 Kanji Repetition',
-                'description' => 'Kelas repetisi kanji ala drill untuk membaca bentuk, arti, dan contoh kata.',
-                'instructor_name' => 'Sensei Johan',
-                'thumbnail_url' => '/images/kelas-n3-kanji.jpg',
-                'accent_color' => '#7C3AED',
-                'modules' => [
-                    $this->module('Kanji Aktivitas', 'Kanji yang sering dipakai dalam aktivitas', 'undou', 'olahraga', 'Apa arti undou?', 'olahraga'),
-                    $this->module('Kanji Tempat', 'Kanji lokasi dan fasilitas umum', 'byouin', 'rumah sakit', 'Apa arti byouin?', 'rumah sakit'),
-                    $this->module('Kanji Waktu', 'Kanji jadwal, waktu, dan kebiasaan', 'yotei', 'rencana', 'Apa arti yotei?', 'rencana'),
-                ],
-            ],
-            [
-                'slug' => 'n3-tryout-ujian',
-                'title' => 'N3 Tryout Ujian',
-                'description' => 'Kelas latihan ujian untuk membiasakan timing, soal pilihan ganda, dan review jawaban.',
-                'instructor_name' => 'Sensei Ade',
-                'thumbnail_url' => '/images/kelas-n3-ujian.jpg',
-                'accent_color' => '#16A34A',
-                'modules' => [
-                    $this->module('Mondai 1', 'Latihan kanji dan kosakata cepat', 'seikai', 'jawaban benar', 'Apa arti seikai?', 'jawaban benar'),
-                    $this->module('Mondai 2', 'Latihan konteks kalimat', 'sentaku', 'pilihan', 'Apa arti sentaku?', 'pilihan'),
-                    $this->module('Review Tryout', 'Review strategi setelah latihan', 'fukushuu', 'review', 'Apa arti fukushuu?', 'review'),
-                ],
+                'slug' => self::MENTOR_SLUG,
+                'title' => 'JLPT N3 Bersama Mentor',
+                'description' => 'Kurikulum JLPT N3 dengan pendampingan mentor, kloter, dan sesi kelas live.',
+                'instructor_name' => 'Mentor JapanLingo',
+                'thumbnail_url' => '/images/kelas-n3-mingguan.jpg',
             ],
         ];
     }
 
-    private function module(string $topic, string $focus, string $word, string $meaning, string $question, string $answer): array
+    private function curriculum(): array
     {
         return [
-            'title' => 'Minggu '.$topic,
-            'description' => $focus,
-            'lesson_title' => 'Materi: '.$topic,
-            'lesson_body' => $focus.'. Pelajari flashcard, baca ringkasan, lalu selesaikan kuis.',
-            'duration_minutes' => 15,
-            'flashcard_title' => 'Flashcard '.$topic,
-            'flashcard_description' => 'Flashcard pendamping untuk '.$topic.'.',
-            'flashcards' => [
-                ['front' => $word, 'reading' => $word, 'back' => $meaning, 'hint' => $focus, 'example' => $word.' o oboemashou.', 'meaning' => 'Ingat arti: '.$meaning],
-                ['front' => $topic, 'reading' => null, 'back' => $focus, 'hint' => 'Topik modul', 'example' => $topic.' no renshuu.', 'meaning' => 'Latihan '.$topic],
+            [
+                'title' => 'Minggu 1 - Lingkungan dan Belanja',
+                'description' => 'Memahami tempat umum, transaksi sederhana, dan cara menanyakan lokasi.',
+                'days' => [
+                    $this->day('Tempat Umum', 'Mengenali kanji dan kosakata tempat di sekitar kita.', [
+                        $this->word('駅', 'えき', 'stasiun', 'station', 'kanji', 'tempat', '駅で友達を待ちます。', 'えきでともだちをまちます。', 'Saya menunggu teman di stasiun.', 'エキ', null, '馬', 14),
+                        $this->word('病院', 'びょういん', 'rumah sakit', 'hospital', 'kosakata', 'tempat', '病院は駅の近くです。', 'びょういんはえきのちかくです。', 'Rumah sakit berada dekat stasiun.'),
+                        $this->word('郵便局', 'ゆうびんきょく', 'kantor pos', 'post office', 'kosakata', 'tempat', '郵便局で荷物を送ります。', 'ゆうびんきょくでにもつをおくります。', 'Saya mengirim paket di kantor pos.'),
+                        $this->word('近所', 'きんじょ', 'lingkungan sekitar', 'neighborhood', 'kosakata', 'tempat', '近所に新しい店ができました。', 'きんじょにあたらしいみせができました。', 'Ada toko baru di lingkungan sekitar.'),
+                    ]),
+                    $this->day('Belanja dan Diskon', 'Berlatih kosakata yang digunakan saat berbelanja.', [
+                        $this->word('割引', 'わりびき', 'diskon', 'discount', 'kanji', 'belanja', 'この商品は二割引です。', 'このしょうひんはにわりびきです。', 'Barang ini mendapat diskon dua puluh persen.', 'カツ・イン', 'わり・ひく', '刀・弓', 16),
+                        $this->word('半額', 'はんがく', 'setengah harga', 'half price', 'kosakata', 'belanja', '弁当が半額になりました。', 'べんとうがはんがくになりました。', 'Bento menjadi setengah harga.'),
+                        $this->word('支払う', 'しはらう', 'membayar', 'to pay', 'kosakata', 'belanja', 'カードで支払います。', 'カードでしはらいます。', 'Saya membayar dengan kartu.'),
+                        $this->word('領収書', 'りょうしゅうしょ', 'kuitansi', 'receipt', 'kosakata', 'belanja', '領収書をお願いします。', 'りょうしゅうしょをおねがいします。', 'Tolong berikan kuitansinya.'),
+                    ]),
+                    $this->day('Menanyakan Lokasi', 'Menggunakan pola sopan untuk bertanya dan memberi arah.', [
+                        $this->word('案内', 'あんない', 'panduan', 'guidance', 'kanji', 'arah', '駅まで案内します。', 'えきまであんないします。', 'Saya akan memandu sampai stasiun.', 'アン', 'つくえ', '木', 10),
+                        $this->word('曲がる', 'まがる', 'berbelok', 'to turn', 'kosakata', 'arah', '次の角を右に曲がってください。', 'つぎのかどをみぎにまがってください。', 'Silakan belok kanan di sudut berikutnya.'),
+                        $this->word('まっすぐ', 'まっすぐ', 'lurus', 'straight', 'kosakata', 'arah', 'この道をまっすぐ進みます。', 'このみちをまっすぐすすみます。', 'Lanjutkan lurus di jalan ini.'),
+                        $this->word('どこでしょうか', 'どこでしょうか', 'di manakah', 'where might it be', 'bunpo', 'pola-sopan', '受付はどこでしょうか。', 'うけつけはどこでしょうか。', 'Di manakah bagian resepsionis?'),
+                    ]),
+                ],
             ],
-            'time_limit' => 300,
-            'questions' => [
-                ['text' => $question, 'answer' => $answer, 'options' => [$answer, 'membeli', 'berangkat', 'menulis'], 'explanation' => $word.' berarti '.$answer.'.'],
-                ['text' => 'Apa fokus modul ini?', 'answer' => $focus, 'options' => [$focus, 'Latihan N1', 'Percakapan bisnis lanjut', 'Menulis sakubun'], 'explanation' => 'Modul ini fokus pada '.$focus.'.'],
+            [
+                'title' => 'Minggu 2 - Rutinitas dan Jadwal',
+                'description' => 'Menceritakan kegiatan, jadwal, rencana, dan kewajiban sehari-hari.',
+                'days' => [
+                    $this->day('Aktivitas Harian', 'Menceritakan kebiasaan dan aktivitas sehari-hari.', [
+                        $this->word('運動', 'うんどう', 'olahraga', 'exercise', 'kanji', 'rutinitas', '毎朝公園で運動します。', 'まいあさこうえんでうんどうします。', 'Saya berolahraga di taman setiap pagi.', 'ウン・ドウ', 'はこぶ・うごく', '辶・力', 23),
+                        $this->word('準備', 'じゅんび', 'persiapan', 'preparation', 'kosakata', 'rutinitas', '出かける準備をします。', 'でかけるじゅんびをします。', 'Saya bersiap untuk pergi.'),
+                        $this->word('続ける', 'つづける', 'melanjutkan', 'to continue', 'kosakata', 'rutinitas', '毎日勉強を続けています。', 'まいにちべんきょうをつづけています。', 'Saya terus belajar setiap hari.'),
+                        $this->word('習慣', 'しゅうかん', 'kebiasaan', 'habit', 'kosakata', 'rutinitas', '早起きは良い習慣です。', 'はやおきはよいしゅうかんです。', 'Bangun pagi adalah kebiasaan baik.'),
+                    ]),
+                    $this->day('Jadwal dan Waktu', 'Memahami perubahan jadwal dan batas waktu.', [
+                        $this->word('予定', 'よてい', 'rencana atau jadwal', 'schedule', 'kanji', 'jadwal', '午後の予定を確認します。', 'ごごのよていをかくにんします。', 'Saya memeriksa jadwal sore.', 'ヨ・テイ', 'あらかじめ・さだめる', '亅・宀', 12),
+                        $this->word('締切', 'しめきり', 'tenggat', 'deadline', 'kosakata', 'jadwal', '申込の締切は金曜日です。', 'もうしこみのしめきりはきんようびです。', 'Tenggat pendaftaran adalah Jumat.'),
+                        $this->word('変更', 'へんこう', 'perubahan', 'change', 'kosakata', 'jadwal', '会議の時間が変更されました。', 'かいぎのじかんがへんこうされました。', 'Waktu rapat telah diubah.'),
+                        $this->word('間に合う', 'まにあう', 'tepat waktu', 'to be in time', 'kosakata', 'jadwal', '電車に間に合いました。', 'でんしゃにまにあいました。', 'Saya berhasil mengejar kereta tepat waktu.'),
+                    ]),
+                    $this->day('Rencana dan Keharusan', 'Mengungkapkan kebutuhan, keputusan, dan kewajiban.', [
+                        $this->word('必要', 'ひつよう', 'perlu', 'necessary', 'kanji', 'keharusan', '予約が必要です。', 'よやくがひつようです。', 'Reservasi diperlukan.', 'ヒツ・ヨウ', 'かなめ', '心・襾', 19),
+                        $this->word('決める', 'きめる', 'memutuskan', 'to decide', 'kosakata', 'rencana', '旅行の日を決めました。', 'りょこうのひをきめました。', 'Saya sudah menentukan hari perjalanan.'),
+                        $this->word('なければならない', 'なければならない', 'harus', 'must', 'bunpo', 'keharusan', '明日までに提出しなければなりません。', 'あしたまでにていしゅつしなければなりません。', 'Harus menyerahkan sebelum besok.'),
+                        $this->word('つもり', 'つもり', 'berniat', 'intend to', 'bunpo', 'rencana', '来年日本へ行くつもりです。', 'らいねんにほんへいくつもりです。', 'Saya berniat pergi ke Jepang tahun depan.'),
+                    ]),
+                ],
             ],
-            'handwriting' => $this->handwritingFor($word, $meaning),
-            'presentation_title' => 'PPT '.$topic,
-            'presentation_description' => 'Slide pembuka untuk '.$focus.'.',
+            [
+                'title' => 'Minggu 3 - Komunikasi Formal',
+                'description' => 'Menggunakan ungkapan formal, meminta izin, dan meninjau materi N3.',
+                'days' => [
+                    $this->day('Ungkapan Formal', 'Mengenali ungkapan yang umum dalam situasi resmi.', [
+                        $this->word('申請', 'しんせい', 'permohonan resmi', 'application', 'kanji', 'formal', 'ビザを申請しました。', 'ビザをしんせいしました。', 'Saya mengajukan permohonan visa.', 'シン・セイ', 'もうす・こう', '田・言', 14),
+                        $this->word('確認', 'かくにん', 'konfirmasi', 'confirmation', 'kosakata', 'formal', '内容をご確認ください。', 'ないようをごかくにんください。', 'Silakan periksa isinya.'),
+                        $this->word('担当者', 'たんとうしゃ', 'petugas penanggung jawab', 'person in charge', 'kosakata', 'formal', '担当者に連絡します。', 'たんとうしゃにれんらくします。', 'Saya akan menghubungi petugasnya.'),
+                        $this->word('承知しました', 'しょうちしました', 'saya mengerti', 'understood', 'kosakata', 'formal', '変更の件、承知しました。', 'へんこうのけん、しょうちしました。', 'Saya mengerti mengenai perubahan tersebut.'),
+                    ]),
+                    $this->day('Permintaan dan Izin', 'Meminta bantuan dan izin dengan bahasa yang sesuai.', [
+                        $this->word('許可', 'きょか', 'izin', 'permission', 'kanji', 'izin', '写真を撮る許可をもらいました。', 'しゃしんをとるきょかをもらいました。', 'Saya mendapat izin mengambil foto.', 'キョ・カ', 'ゆるす', '言・口', 16),
+                        $this->word('依頼', 'いらい', 'permintaan', 'request', 'kosakata', 'formal', '先生に確認を依頼しました。', 'せんせいにかくにんをいらいしました。', 'Saya meminta guru untuk memeriksa.'),
+                        $this->word('てもよろしいでしょうか', 'てもよろしいでしょうか', 'bolehkah saya', 'may I', 'bunpo', 'izin', 'こちらに座ってもよろしいでしょうか。', 'こちらにすわってもよろしいでしょうか。', 'Bolehkah saya duduk di sini?'),
+                        $this->word('ていただけませんか', 'ていただけませんか', 'bisakah Anda', 'could you', 'bunpo', 'permintaan', 'もう一度説明していただけませんか。', 'もういちどせつめいしていただけませんか。', 'Bisakah Anda menjelaskan sekali lagi?'),
+                    ]),
+                    $this->day('Review N3', 'Meninjau kembali kosakata dan pola penting sebelum ujian.', [
+                        $this->word('復習', 'ふくしゅう', 'mengulas pelajaran', 'review', 'kanji', 'belajar', '試験の前に復習します。', 'しけんのまえにふくしゅうします。', 'Saya mengulas pelajaran sebelum ujian.', 'フク・シュウ', 'また・ならう', '彳・羽', 20),
+                        $this->word('正解', 'せいかい', 'jawaban benar', 'correct answer', 'kosakata', 'ujian', '正解を確認してください。', 'せいかいをかくにんしてください。', 'Silakan periksa jawaban yang benar.'),
+                        $this->word('選択', 'せんたく', 'pilihan', 'selection', 'kosakata', 'ujian', '最も良い答えを選択します。', 'もっともよいこたえをせんたくします。', 'Pilih jawaban yang paling baik.'),
+                        $this->word('間違い', 'まちがい', 'kesalahan', 'mistake', 'kosakata', 'ujian', '間違いから学びましょう。', 'まちがいからまなびましょう。', 'Mari belajar dari kesalahan.'),
+                    ]),
+                ],
+            ],
         ];
     }
 
-    private function handwritingFor(string $word, string $meaning): array
+    private function day(string $title, string $description, array $vocabulary): array
     {
-        return match ($word) {
-            'waribiki' => ['character' => '割', 'word' => '割引', 'reading' => 'わりびき', 'meaning' => $meaning],
-            'hitsuyou' => ['character' => '必', 'word' => '必要', 'reading' => 'ひつよう', 'meaning' => $meaning],
-            'annai' => ['character' => '案', 'word' => '案内', 'reading' => 'あんない', 'meaning' => $meaning],
-            'tsuzukeru' => ['character' => '続', 'word' => '続ける', 'reading' => 'つづける', 'meaning' => $meaning],
-            'anzen' => ['character' => '安', 'word' => '安全', 'reading' => 'あんぜん', 'meaning' => $meaning],
-            'shinsei' => ['character' => '申', 'word' => '申請', 'reading' => 'しんせい', 'meaning' => $meaning],
-            'undou' => ['character' => '動', 'word' => '運動', 'reading' => 'うんどう', 'meaning' => $meaning],
-            'byouin' => ['character' => '院', 'word' => '病院', 'reading' => 'びょういん', 'meaning' => $meaning],
-            'yotei' => ['character' => '予', 'word' => '予定', 'reading' => 'よてい', 'meaning' => $meaning],
-            'seikai' => ['character' => '正', 'word' => '正解', 'reading' => 'せいかい', 'meaning' => $meaning],
-            'sentaku' => ['character' => '選', 'word' => '選択', 'reading' => 'せんたく', 'meaning' => $meaning],
-            'fukushuu' => ['character' => '復', 'word' => '復習', 'reading' => 'ふくしゅう', 'meaning' => $meaning],
-            default => ['character' => '新', 'word' => '新しい', 'reading' => 'あたらしい', 'meaning' => $meaning],
-        };
+        return compact('title', 'description', 'vocabulary');
+    }
+
+    private function word(
+        string $word,
+        string $reading,
+        string $meaning,
+        string $meaningEn,
+        string $contentType,
+        string $category,
+        string $exampleSentence,
+        string $exampleReading,
+        string $exampleMeaning,
+        ?string $onyomi = null,
+        ?string $kunyomi = null,
+        ?string $radicals = null,
+        ?int $strokeCount = null,
+    ): array {
+        return [
+            'word' => $word,
+            'reading' => $reading,
+            'meaning' => $meaning,
+            'meaning_en' => $meaningEn,
+            'content_type' => $contentType,
+            'category' => $category,
+            'tags' => ['N3', $category],
+            'example_sentence' => $exampleSentence,
+            'example_reading' => $exampleReading,
+            'example_meaning' => $exampleMeaning,
+            'metadata' => array_filter([
+                'content_type' => $contentType,
+                'onyomi' => $onyomi,
+                'kunyomi' => $kunyomi,
+                'radicals' => $radicals ? [$radicals] : null,
+                'stroke_count' => $strokeCount,
+            ], fn ($value) => $value !== null),
+        ];
     }
 }

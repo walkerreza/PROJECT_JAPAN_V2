@@ -5,10 +5,13 @@ namespace Database\Seeders;
 use App\Models\PaketPembayaran;
 use App\Models\ProgramPembelajaran;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Str;
 
 class ProgramPaymentPlanSeeder extends Seeder
 {
+    public const MANDIRI_PLAN_SLUG = 'akses-jlpt-n3-mandiri-30-hari';
+
+    public const MENTOR_PLAN_SLUG = 'kelas-jlpt-n3-mentor-90-hari';
+
     public function run(): void
     {
         PaketPembayaran::query()
@@ -18,61 +21,51 @@ class ProgramPaymentPlanSeeder extends Seeder
             })
             ->update(['is_active' => false]);
 
-        ProgramPembelajaran::query()
-            ->where('status', 'published')
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get()
-            ->each(function (ProgramPembelajaran $program) {
-                $setting = $this->setting($program->slug);
-                $hasActiveMentorPlan = $program->paymentPlans()
-                    ->where('scope_type', 'kloter')
-                    ->where('is_active', true)
-                    ->exists();
+        $mandiri = ProgramPembelajaran::where('slug', KelasDemoSeeder::MANDIRI_SLUG)->firstOrFail();
+        $mentor = ProgramPembelajaran::where('slug', KelasDemoSeeder::MENTOR_SLUG)->firstOrFail();
 
-                PaketPembayaran::updateOrCreate(
-                    ['slug' => 'akses-'.Str::slug($program->slug ?: $program->title).'-'.$setting['duration_days'].'-hari'],
-                    [
-                        'name' => 'Akses '.$program->title,
-                        'scope_type' => 'program',
-                        'program_pembelajaran_id' => $program->id,
-                        'description' => $setting['description'],
-                        'price' => $setting['price'],
-                        'duration_days' => $setting['duration_days'],
-                        'features' => $setting['features'],
-                        'is_active' => ! $hasActiveMentorPlan,
-                    ]
-                );
-            });
-    }
-
-    private function setting(string $slug): array
-    {
-        return match ($slug) {
-            'n3-kosakata-50d' => [
-                'price' => 69000,
-                'duration_days' => 50,
-                'description' => 'Akses kelas drill kosakata N3 selama 50 hari.',
-                'features' => ['Drill kosakata', 'Flashcard harian', 'Kuis cepat', 'Progress repetisi'],
-            ],
-            'n3-kanji-repetition' => [
-                'price' => 89000,
-                'duration_days' => 45,
-                'description' => 'Akses kelas repetisi kanji N3 selama 45 hari.',
-                'features' => ['Repetisi kanji', 'Contoh kata', 'Flashcard kanji', 'Kuis review'],
-            ],
-            'n3-tryout-ujian' => [
-                'price' => 99000,
-                'duration_days' => 30,
-                'description' => 'Akses kelas tryout dan review ujian N3 selama 30 hari.',
-                'features' => ['Tryout', 'Review jawaban', 'Timer ujian', 'PPT pembahasan'],
-            ],
-            default => [
+        PaketPembayaran::updateOrCreate(
+            ['slug' => self::MANDIRI_PLAN_SLUG],
+            [
+                'name' => 'Akses JLPT N3 Mandiri',
+                'scope_type' => 'program',
+                'program_pembelajaran_id' => $mandiri->id,
+                'description' => 'Akses seluruh roadmap JLPT N3 Mandiri selama 30 hari.',
                 'price' => 79000,
                 'duration_days' => 30,
-                'description' => 'Akses 30 hari untuk kelas '.$slug.'.',
-                'features' => ['Roadmap mingguan', 'PPT kelas', 'Kosakata', 'Flashcard', 'Kuis'],
-            ],
-        };
+                'features' => [
+                    'Roadmap 3 Week dan 9 Day',
+                    'PPT materi kelas',
+                    'Kosakata dan repetisi',
+                    'Kuis harian dan ujian mingguan',
+                ],
+                'is_active' => true,
+            ]
+        );
+
+        PaketPembayaran::updateOrCreate(
+            ['slug' => self::MENTOR_PLAN_SLUG],
+            [
+                'name' => 'Kelas JLPT N3 Bersama Mentor',
+                'scope_type' => 'kloter',
+                'program_pembelajaran_id' => $mentor->id,
+                'description' => 'Kelas JLPT N3 dengan kloter, pendampingan mentor, dan ruang kelas live selama 90 hari.',
+                'price' => 199000,
+                'duration_days' => 90,
+                'features' => [
+                    'Roadmap 3 Week dan 9 Day',
+                    'PPT materi kelas',
+                    'Kuis harian dan ujian mingguan',
+                    'Kloter dan pendampingan mentor',
+                    'Ruang kelas live',
+                ],
+                'is_active' => true,
+            ]
+        );
+
+        PaketPembayaran::query()
+            ->whereIn('program_pembelajaran_id', [$mandiri->id, $mentor->id])
+            ->whereNotIn('slug', [self::MANDIRI_PLAN_SLUG, self::MENTOR_PLAN_SLUG])
+            ->update(['is_active' => false]);
     }
 }

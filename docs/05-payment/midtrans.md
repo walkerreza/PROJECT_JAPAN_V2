@@ -20,6 +20,7 @@ MIDTRANS_CLIENT_KEY=SB-Mid-client-...
 MIDTRANS_IS_PRODUCTION=false
 MIDTRANS_IS_SANITIZED=true
 MIDTRANS_IS_3DS=true
+MIDTRANS_SNAP_EXPIRY_HOURS=24
 ```
 
 Production memakai pasangan key production dan `MIDTRANS_IS_PRODUCTION=true`. Jangan mencampur server/client key sandbox dan production.
@@ -41,6 +42,12 @@ Finish redirect tidak boleh diarahkan ke route `user.checkout` tanpa `transactio
 Frontend menyimpan `checkout_request_key` di session storage. Backend memiliki constraint dan lock sehingga klik berulang dengan key yang sama menggunakan transaksi yang sama. Ini mencegah pembuatan banyak transaksi aplikasi, tetapi Midtrans tetap dapat meminta pembayaran hanya setelah user mengonfirmasi metode pembayaran pada Snap.
 
 Idempotensi juga diterapkan saat status masuk berulang: transaksi dikunci, transisi status divalidasi, dan aktivasi subscription tidak digandakan.
+
+## Masa Berlaku dan Checkout Ulang
+
+Snap dibuat dengan masa berlaku sesuai `MIDTRANS_SNAP_EXPIRY_HOURS` (default 24 jam). Sebelum memakai kembali transaksi pending, backend memeriksa status resminya. Checkout yang sudah kedaluwarsa ditutup dan frontend membuat `checkout_request_key` baru agar user dapat memesan kembali tanpa memakai token lama dari `sessionStorage`.
+
+Callback `finish` dan `error` Snap selalu kembali ke invoice JapanLingo yang menyertakan `transactionCode`. Jangan memakai URL contoh vendor seperti `https://example.com`.
 
 ## Validasi Webhook
 
@@ -82,10 +89,18 @@ php artisan payments:reconcile-pending --hours=48
 
 Scheduler menjalankannya setiap 10 menit dengan `withoutOverlapping`. Reconciliation adalah reliability layer; mapping webhook aman tidak boleh menunggu scheduler selesai dibuat.
 
+Midtrans dapat merespons HTTP 200 dengan body `status_code: "404"` ketika token Snap sudah dibuat tetapi user belum memilih metode pembayaran sehingga transaksi belum tercatat di Core API. Endpoint pemeriksaan status frontend memperlakukan kondisi ini sebagai checkout yang belum dimulai, bukan transaksi tidak valid.
+
+Keterbatasan aktif: command rekonsiliasi terjadwal masih mencatat respons 200/404 tersebut sebagai mismatch. Sampai handler command diselaraskan, warning ini tidak berarti pembayaran user gagal, tetapi harus dipantau agar tidak menutupi kegagalan API lain.
+
 ## Cancel dan Refund
 
 - User hanya dapat membatalkan transaksi Midtrans miliknya yang masih pending.
-- Pembatalan memanggil API Midtrans dan menyelaraskan status resmi jika API cancel gagal.
+- Pembatalan transaksi yang sudah masuk Core API memakai endpoint Core API.
+- Bila Core API menjawab transaksi belum ada, backend membatalkan sesi menggunakan endpoint Snap dan `midtrans_snap_token`.
+- Kedua endpoint server-to-server wajib memakai HTTP Basic Auth dengan server key sebagai username dan password kosong. Header `Authorization` berisi server key mentah akan ditolak 401.
+- Respons Snap cancel yang sah dapat hanya berisi `canceled_at`; respons tersebut tidak boleh dipaksa memiliki payload transaksi lengkap.
+- Pembatalan menyelaraskan status resmi jika API cancel gagal atau transaksi sudah tertutup.
 - Refund/chargeback membatalkan hanya subscription terkait transaksi.
 - Penolakan enrollment kelas mentor tidak otomatis melakukan refund finansial; superadmin harus memproses refund melalui Midtrans dan mencatatnya.
 
@@ -102,6 +117,9 @@ Invoice `PurchaseReceiptNotification` dipicu ketika status pertama kali berubah 
 - klik checkout berulang memakai transaksi yang sama;
 - sync hanya membaca transaksi milik user;
 - cancel pending dan callback terlambat;
+- Core API HTTP 200 dengan body `status_code: 404`;
+- pembatalan sesi Snap yang belum tercatat di Core API;
+- checkout kedaluwarsa menghasilkan pesanan dan token baru;
 - settlement kelas mandiri langsung aktif;
 - settlement kelas mentor menjadi `paid_pending_approval`;
 - reconciliation mengubah pending sesuai status resmi.

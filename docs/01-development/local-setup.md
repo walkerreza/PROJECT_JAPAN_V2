@@ -44,16 +44,13 @@ php artisan migrate
 php artisan db:seed
 ```
 
-Untuk data demo tertentu, gunakan seeder secara eksplisit agar tidak menghapus atau menggandakan data yang tidak dimaksud:
+Untuk menyiapkan seluruh data demo yang konsisten, gunakan:
 
 ```powershell
-php artisan db:seed --class=PenggunaSeeder
-php artisan db:seed --class=KelasDemoSeeder
-php artisan db:seed --class=KloterDemoSeeder
-php artisan db:seed --class=NewsPortalSeeder
+php artisan db:seed --class=DemoDataSeeder
 ```
 
-Baca isi seeder sebelum menjalankannya pada database yang sudah berisi data client. Jangan menjalankan `migrate:fresh --seed` pada production.
+Seeder ini dapat dijalankan ulang dan akan mereset dataset demo yang dikenali sebelum membuat dua kelas contoh: kelas mandiri dan kelas mentor. Baca isi seeder sebelum menjalankannya pada database yang sudah berisi data client. Jangan menjalankan `migrate:fresh --seed` pada production.
 
 ## Menjalankan Aplikasi
 
@@ -96,7 +93,15 @@ npm audit --omit=dev
 
 ## Akun Demo
 
-Akun demo berasal dari seeder dan dapat berubah. Periksa `database/seeders/PenggunaSeeder.php` serta `.A_context_project` sebelum membagikan kredensial kepada client. Seeder dapat menandai email dummy sebagai sudah terverifikasi sehingga tidak memicu OTP/verifikasi ke alamat palsu.
+Semua akun berikut memakai password `JapanLingo#2026`:
+
+- `superadmin@japanlingo.com`: superadmin.
+- `admin@japanlingo.com`: admin global.
+- `admin.kloter@japanlingo.com`: admin mentor/pengampu kloter.
+- `student@japanlingo.com`: siswa kelas mandiri.
+- `student2@japanlingo.com`: siswa kelas mentor.
+
+Email demo ditandai sudah terverifikasi sehingga login pertama tidak memicu OTP ke alamat dummy. Kredensial ini hanya untuk development, staging, dan demonstrasi client.
 
 ## Masalah Umum
 

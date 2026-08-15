@@ -10,6 +10,7 @@ use App\Models\Pengguna;
 use App\Models\ProgramPembelajaran;
 use App\Models\Transaksi;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class AksesLanggananService
@@ -40,7 +41,20 @@ class AksesLanggananService
             }
 
             if ($scope['scope_type'] === self::SCOPE_KLOTER) {
+                if ($transaction->status !== 'success') {
+                    throw ValidationException::withMessages([
+                        'payment' => 'Akses kelas mentor hanya dapat diproses setelah pembayaran berhasil.',
+                    ]);
+                }
+
                 if (! $user || ! $transaction->kloterBelajar) {
+                    Log::error('Transaksi kelas mentor sukses tidak memiliki user atau kloter yang valid.', [
+                        'transaction_id' => $transaction->id,
+                        'transaction_code' => $transaction->transaction_code,
+                        'user_id' => $transaction->user_id,
+                        'kloter_belajar_id' => $transaction->kloter_belajar_id,
+                    ]);
+
                     throw ValidationException::withMessages([
                         'kloter_belajar_id' => 'Transaksi kelas mentor tidak memiliki user atau kloter yang valid.',
                     ]);
@@ -48,15 +62,28 @@ class AksesLanggananService
 
                 $anggota = AnggotaKloter::query()
                     ->where('transaction_id', $transaction->id)
+                    ->where('user_id', $transaction->user_id)
+                    ->where('kloter_belajar_id', $transaction->kloter_belajar_id)
                     ->lockForUpdate()
                     ->first();
 
                 if (! $anggota) {
-                    $anggota = app(KloterBelajarService::class)->reservePaymentSeat(
-                        $user,
-                        $transaction->kloterBelajar,
-                        $transaction
-                    );
+                    Log::error('Transaksi kelas mentor sukses tidak memiliki reservasi anggota kloter.', [
+                        'transaction_id' => $transaction->id,
+                        'transaction_code' => $transaction->transaction_code,
+                        'user_id' => $transaction->user_id,
+                        'kloter_belajar_id' => $transaction->kloter_belajar_id,
+                    ]);
+
+                    throw ValidationException::withMessages([
+                        'kloter_belajar_id' => 'Reservasi kloter untuk transaksi ini tidak ditemukan. Hubungi superadmin untuk pemeriksaan pembayaran.',
+                    ]);
+                }
+
+                if (! in_array($anggota->status, ['pending_payment', 'paid_pending_approval'], true)) {
+                    throw ValidationException::withMessages([
+                        'approval' => 'Pendaftaran kelas mentor sudah ditutup atau diproses sebelumnya.',
+                    ]);
                 }
 
                 $anggota->update([
@@ -132,6 +159,12 @@ class AksesLanggananService
             if ($anggota->status !== 'paid_pending_approval' || $anggota->transaction?->status !== 'success') {
                 throw ValidationException::withMessages([
                     'approval' => 'Pendaftaran belum dibayar atau sudah diproses.',
+                ]);
+            }
+
+            if ($anggota->kloterBelajar?->status !== 'active') {
+                throw ValidationException::withMessages([
+                    'approval' => 'Kloter tidak aktif. Aktifkan kloter melalui superadmin sebelum menyetujui peserta.',
                 ]);
             }
 

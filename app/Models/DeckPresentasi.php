@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,12 +10,17 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class DeckPresentasi extends Model
 {
+    public const AUDIENCE_SHARED = 'shared';
+
+    public const AUDIENCE_MENTOR_SESSION = 'mentor_session';
+
     protected $table = 'presentation_decks';
 
     use HasFactory;
 
     protected $fillable = [
         'level_id',
+        'created_by',
         'module_id',
         'module_day_id',
         'week_slot',
@@ -22,6 +28,7 @@ class DeckPresentasi extends Model
         'title',
         'description',
         'status',
+        'audience_scope',
         'source_type',
         'source_file_path',
         'source_file_name',
@@ -31,6 +38,7 @@ class DeckPresentasi extends Model
     ];
 
     protected $casts = [
+        'created_by' => 'integer',
         'import_summary' => 'array',
         'sort_order' => 'integer',
     ];
@@ -52,6 +60,21 @@ class DeckPresentasi extends Model
     public function day(): BelongsTo
     {
         return $this->belongsTo(HariModul::class, 'module_day_id');
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(Pengguna::class, 'created_by');
+    }
+
+    public function scopeShared(Builder $query): Builder
+    {
+        return $query->where('audience_scope', self::AUDIENCE_SHARED);
+    }
+
+    public function isMentorSession(): bool
+    {
+        return $this->audience_scope === self::AUDIENCE_MENTOR_SESSION;
     }
 
     public function slides(): HasMany

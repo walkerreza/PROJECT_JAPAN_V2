@@ -10,10 +10,10 @@ use App\Models\ProgramPembelajaran;
 use App\Models\Transaksi;
 use App\Services\AksesLanggananService;
 use App\Services\KloterBelajarService;
-use Database\Seeders\KloterDemoSeeder;
-use Database\Seeders\PenggunaSeeder;
+use Database\Seeders\DemoDataSeeder;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Validation\ValidationException;
 use Inertia\Testing\AssertableInertia as Assert;
 
 function createAdminGlobalKloterFixture(): array
@@ -199,6 +199,79 @@ it('keeps mentor access pending until its assigned admin approves it idempotentl
             ->count())->toBe(1);
 });
 
+it('allows global admin to approve enrollment from any active cohort', function () {
+    Notification::fake();
+    $fixture = createAdminGlobalKloterFixture();
+    $student = Pengguna::factory()->create(['role' => 'user', 'status' => 'active']);
+    $plan = PaketPembayaran::create([
+        'name' => 'Mentor Global Approval',
+        'slug' => 'mentor-global-approval',
+        'scope_type' => 'kloter',
+        'program_pembelajaran_id' => $fixture['programB']->id,
+        'price' => 99000,
+        'duration_days' => 30,
+        'is_active' => true,
+    ]);
+    $transaction = Transaksi::create([
+        'transaction_code' => 'TRX-GLOBAL-APPROVAL',
+        'user_id' => $student->id,
+        'payment_plan_id' => $plan->id,
+        'scope_type' => 'kloter',
+        'program_pembelajaran_id' => $fixture['programB']->id,
+        'kloter_belajar_id' => $fixture['kloterB']->id,
+        'amount' => 99000,
+        'payment_method' => 'midtrans',
+        'status' => 'success',
+        'processed_at' => now(),
+    ]);
+    $membership = AnggotaKloter::create([
+        'kloter_belajar_id' => $fixture['kloterB']->id,
+        'user_id' => $student->id,
+        'transaction_id' => $transaction->id,
+        'joined_at' => now(),
+        'status' => 'paid_pending_approval',
+    ]);
+
+    $this->actingAs($fixture['globalAdmin'])
+        ->patch(route('admin.kloters.enrollments.approve', [$fixture['kloterB'], $membership]))
+        ->assertRedirect();
+
+    expect($membership->fresh()->status)->toBe('active')
+        ->and($transaction->fresh()->subscription_id)->not->toBeNull();
+});
+
+it('does not recreate a missing mentor reservation after payment succeeds', function () {
+    $fixture = createAdminGlobalKloterFixture();
+    $student = Pengguna::factory()->create(['role' => 'user', 'status' => 'active']);
+    $plan = PaketPembayaran::create([
+        'name' => 'Mentor Missing Reservation',
+        'slug' => 'mentor-missing-reservation',
+        'scope_type' => 'kloter',
+        'program_pembelajaran_id' => $fixture['programA']->id,
+        'price' => 99000,
+        'duration_days' => 30,
+        'is_active' => true,
+    ]);
+    $transaction = Transaksi::create([
+        'transaction_code' => 'TRX-MISSING-RESERVATION',
+        'user_id' => $student->id,
+        'payment_plan_id' => $plan->id,
+        'scope_type' => 'kloter',
+        'program_pembelajaran_id' => $fixture['programA']->id,
+        'kloter_belajar_id' => $fixture['kloterA']->id,
+        'amount' => 99000,
+        'payment_method' => 'midtrans',
+        'status' => 'success',
+        'processed_at' => now(),
+    ]);
+
+    expect(fn () => app(AksesLanggananService::class)->activateFromTransaction($transaction))
+        ->toThrow(ValidationException::class);
+
+    expect(AnggotaKloter::where('transaction_id', $transaction->id)->exists())->toBeFalse()
+        ->and($transaction->fresh()->subscription_id)->toBeNull();
+});
+
 it('shows every student to global admin and only assigned students to kloter admin', function () {
     $fixture = createAdminGlobalKloterFixture();
 
@@ -252,12 +325,32 @@ it('shows pending approvals from every managed cohort without requiring a cohort
         'status' => 'paid_pending_approval',
     ]);
 
+    $unpaidTransaction = Transaksi::create([
+        'transaction_code' => 'TRX-NOT-PAID-APPROVAL',
+        'user_id' => $fixture['studentB']->id,
+        'payment_plan_id' => $plan->id,
+        'scope_type' => 'kloter',
+        'program_pembelajaran_id' => $fixture['programA']->id,
+        'kloter_belajar_id' => $fixture['kloterA']->id,
+        'amount' => 99000,
+        'payment_method' => 'midtrans',
+        'status' => 'pending',
+    ]);
+    AnggotaKloter::create([
+        'kloter_belajar_id' => $fixture['kloterA']->id,
+        'user_id' => $fixture['studentB']->id,
+        'transaction_id' => $unpaidTransaction->id,
+        'joined_at' => now(),
+        'status' => 'paid_pending_approval',
+    ]);
+
     $this->actingAs($fixture['globalAdmin'])
         ->get(route('admin.users'))
         ->assertInertia(fn (Assert $page) => $page
             ->component('Admin/DataUser/DataUser')
             ->has('pendingEnrollments', 1)
             ->where('pendingEnrollments.0.kloter.id', $fixture['kloterA']->id)
+            ->where('pendingEnrollments.0.kloter.mentor.id', $fixture['kloterAdmin']->id)
             ->where('pendingEnrollments.0.user.id', $student->id));
 });
 
@@ -406,7 +499,7 @@ it('allows superadmin to provision scoped admins and lists active admins as inst
             ->where('admins.1.id', $fixture['globalAdmin']->id));
 });
 
-it('opens live classroom setup with cohorts assigned to the selected instructor', function () {
+it('opens live classroom setup with assigned cohorts for kloter admin and all cohorts for global admin', function () {
     $fixture = createAdminGlobalKloterFixture();
 
     $this->actingAs($fixture['kloterAdmin'])
@@ -423,7 +516,8 @@ it('opens live classroom setup with cohorts assigned to the selected instructor'
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('Admin/RuangKelas/Show')
-            ->has('setup.kloters', 0));
+            ->has('setup.kloters', 1)
+            ->where('setup.kloters.0.id', $fixture['kloterA']->id));
 });
 
 it('prevents removing kloter scope while an admin still owns a cohort', function () {
@@ -451,8 +545,8 @@ it('seeds global and kloter admins and assigns demo cohorts to the kloter admin'
         'status' => 'active',
     ]);
 
-    $this->seed(PenggunaSeeder::class);
-    $this->seed(PenggunaSeeder::class);
+    $this->seed(DemoDataSeeder::class);
+    $this->seed(DemoDataSeeder::class);
 
     $globalAdmin = Pengguna::where('email', 'admin@japanlingo.com')->firstOrFail();
     $kloterAdmin = Pengguna::where('email', 'admin.kloter@japanlingo.com')->firstOrFail();
@@ -461,11 +555,9 @@ it('seeds global and kloter admins and assigns demo cohorts to the kloter admin'
         ->and($kloterAdmin->admin_scope)->toBe(Pengguna::ADMIN_SCOPE_KLOTER)
         ->and($globalAdmin->hasVerifiedEmail())->toBeTrue()
         ->and($kloterAdmin->hasVerifiedEmail())->toBeTrue()
-        ->and(Hash::check('password-client', $globalAdmin->password))->toBeTrue()
+        ->and(Hash::check('JapanLingo#2026', $globalAdmin->password))->toBeTrue()
         ->and(Pengguna::where('email', 'admin.kloter@japanlingo.com')->count())->toBe(1);
 
-    $this->seed(KloterDemoSeeder::class);
-
-    expect(KloterBelajar::where('admin_id', $kloterAdmin->id)->count())->toBeGreaterThan(0)
+    expect(KloterBelajar::where('admin_id', $kloterAdmin->id)->count())->toBe(1)
         ->and(KloterBelajar::where('admin_id', $globalAdmin->id)->count())->toBe(0);
 });

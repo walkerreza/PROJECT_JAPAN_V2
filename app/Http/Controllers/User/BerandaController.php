@@ -3,21 +3,21 @@
 namespace App\Http\Controllers\User;
 
 use App\Http\Controllers\Controller;
-use App\Models\Modul;
 use App\Models\Berita;
 use App\Models\DeckPresentasi;
-use App\Models\Kosakata;
-use App\Models\LogReward;
 use App\Models\KodeAkses;
+use App\Models\Kosakata;
 use App\Models\Kuis;
+use App\Models\LogAktivitas;
+use App\Models\LogReward;
+use App\Models\Modul;
+use App\Models\PengerjaanKuis;
 use App\Models\PenukaranKodeAkses;
 use App\Models\ProgramPembelajaran;
-use App\Models\SetFlashcard;
-use App\Models\LogAktivitas;
-use App\Models\PengerjaanKuis;
 use App\Models\ProgresHariModul;
-use App\Services\AksesLanggananService;
+use App\Models\SetFlashcard;
 use App\Services\AksesKuisPenggunaService;
+use App\Services\AksesLanggananService;
 use App\Services\AksesPremiumService;
 use App\Services\KloterBelajarService;
 use App\Services\NotifikasiPenggunaService;
@@ -25,6 +25,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class BerandaController extends Controller
 {
@@ -32,10 +33,9 @@ class BerandaController extends Controller
         AksesKuisPenggunaService $aksesKuis,
         AksesPremiumService $aksesPremium,
         KloterBelajarService $kloterBelajar
-    )
-    {
+    ) {
         $user = Auth::user();
-        
+
         $news = Berita::query()
             ->with('attachments')
             ->where('status', 'published')
@@ -108,6 +108,19 @@ class BerandaController extends Controller
             ->filter(fn (ProgramPembelajaran $program) => $aksesPremium->punyaAksesKelas($user, $program->id))
             ->values();
 
+        $activeAccessByProgram = $user->subscriptions()
+            ->where('status', 'active')
+            ->whereDate('end_date', '>=', now()->toDateString())
+            ->whereIn('scope_type', [
+                AksesLanggananService::SCOPE_PROGRAM,
+                AksesLanggananService::SCOPE_KLOTER,
+            ])
+            ->whereIn('program_pembelajaran_id', $programs->pluck('id'))
+            ->latest('end_date')
+            ->get(['id', 'scope_type', 'program_pembelajaran_id', 'end_date'])
+            ->groupBy('program_pembelajaran_id')
+            ->map(fn ($subscriptions) => $subscriptions->first());
+
         $moduleIds = $programs->flatMap(fn (ProgramPembelajaran $program) => $program->modules->pluck('id'));
         $completedModuleIds = $moduleIds->isEmpty()
             ? collect()
@@ -126,9 +139,11 @@ class BerandaController extends Controller
                 ->pluck('module_day_id')
                 ->unique();
 
-        $activePrograms = $programs->map(function (ProgramPembelajaran $program) use ($user, $aksesPremium, $kloterBelajar, $completedModuleIds, $completedDayIds) {
+        $activePrograms = $programs->map(function (ProgramPembelajaran $program) use ($user, $aksesPremium, $kloterBelajar, $activeAccessByProgram, $completedModuleIds, $completedDayIds) {
             $kloter = $kloterBelajar->kloterAktifUser($user, $program->id);
-            $waitingForKloter = ! $kloter;
+            $activeAccess = $activeAccessByProgram->get($program->id);
+            $waitingForKloter = $activeAccess?->scope_type === AksesLanggananService::SCOPE_KLOTER
+                && ! $kloter;
             $modules = $waitingForKloter
                 ? collect()
                 : $program->modules
@@ -229,11 +244,11 @@ class BerandaController extends Controller
             return $thumbnailUrl;
         }
 
-        $relativePath = '/' . ltrim($thumbnailUrl, '/');
+        $relativePath = '/'.ltrim($thumbnailUrl, '/');
         $publicFile = public_path(ltrim($relativePath, '/'));
 
         return is_file($publicFile)
-            ? $relativePath . '?v=' . filemtime($publicFile)
+            ? $relativePath.'?v='.filemtime($publicFile)
             : $relativePath;
     }
 
@@ -247,6 +262,7 @@ class BerandaController extends Controller
 
         $presentationExists = DeckPresentasi::query()
             ->where('module_id', $module->id)
+            ->shared()
             ->where('status', 'published')
             ->whereHas('slides')
             ->exists();
@@ -344,7 +360,7 @@ class BerandaController extends Controller
 
             return [
                 'id' => $quiz->id,
-                'title' => 'Week ' . ($module?->week_number ?? '-') . ' - ' . ($module?->title ?? 'Kuis Aktif'),
+                'title' => 'Week '.($module?->week_number ?? '-').' - '.($module?->title ?? 'Kuis Aktif'),
                 'score' => $bestScore,
                 'questions_count' => $quiz->questions_count,
                 'url' => route('user.quizzes.show', $quiz->id),
@@ -379,7 +395,7 @@ class BerandaController extends Controller
         $quiz = $attempt->quiz;
         $module = $quiz->module;
         $title = $module
-            ? 'Week ' . ($module->week_number ?? '-') . ' - ' . $module->title
+            ? 'Week '.($module->week_number ?? '-').' - '.$module->title
             : 'Kuis Terakhir';
 
         return [
@@ -477,7 +493,7 @@ class BerandaController extends Controller
                     true
                 );
             });
-        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
+        } catch (HttpException $exception) {
             return back()->withErrors(['access_key' => $exception->getMessage()]);
         }
 

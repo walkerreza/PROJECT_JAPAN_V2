@@ -98,19 +98,19 @@ Total file database dan test: 110.
 |---|---|---|
 | `database/seeders/AchievementSeeder.php` | `AchievementSeeder` | Mengisi data referensi/demo: Achievement Seeder. |
 | `database/seeders/DatabaseSeeder.php` | `DatabaseSeeder` | Mengisi data referensi/demo: Database Seeder. |
-| `database/seeders/DemoDataSeeder.php` | `DemoDataSeeder` | Mengisi data referensi/demo: Demo Data Seeder. |
-| `database/seeders/KelasDemoSeeder.php` | `KelasDemoSeeder` | Mengisi data referensi/demo: Kelas Demo Seeder. |
-| `database/seeders/KloterDemoSeeder.php` | `KloterDemoSeeder` | Mengisi data referensi/demo: Kloter Demo Seeder. |
-| `database/seeders/N3CourseSeeder.php` | `N3CourseSeeder` | Mengisi data referensi/demo: N3 Course Seeder. |
+| `database/seeders/DemoDataSeeder.php` | `DemoDataSeeder` | Orkestrator reset dan pembuatan ulang dataset demo yang dikenali. |
+| `database/seeders/KelasDemoSeeder.php` | `KelasDemoSeeder` | Membuat kelas mandiri dan mentor dengan 3 Week x 3 Day beserta materi lengkap. |
+| `database/seeders/KloterDemoSeeder.php` | `KloterDemoSeeder` | Membuat kloter mentor, akses siswa mandiri, transaksi, dan keanggotaan siswa mentor. |
 | `database/seeders/NewsPortalSeeder.php` | `NewsPortalSeeder` | Mengisi data referensi/demo: News Portal Seeder. |
-| `database/seeders/PenggunaSeeder.php` | `PenggunaSeeder` | Mengisi data referensi/demo: Pengguna Seeder. |
-| `database/seeders/ProgramPaymentPlanSeeder.php` | `ProgramPaymentPlanSeeder` | Mengisi data referensi/demo: Program Payment Plan Seeder. |
+| `database/seeders/PenggunaSeeder.php` | `PenggunaSeeder` | Membuat akun tetap superadmin, admin global, mentor, dan dua siswa demo. |
+| `database/seeders/ProgramPaymentPlanSeeder.php` | `ProgramPaymentPlanSeeder` | Membuat paket pembayaran kelas mandiri dan kelas mentor. |
 
 ## Feature test
 
 | File | Symbol utama | Tujuan |
 |---|---|---|
 | `tests/Feature/AdminGlobalKloterTest.php` | `-` | Regresi HTTP/domain: Admin Global Kloter Test. |
+| `tests/Feature/DemoSeederTest.php` | `-` | Memastikan seeder demo idempotent, kredensial valid, dan akses kedua kelas benar. |
 | `tests/Feature/AdminLegacyContentRoutesTest.php` | `-` | Regresi HTTP/domain: Admin Legacy Content Routes Test. |
 | `tests/Feature/Auth/AuthenticationTest.php` | `-` | Regresi HTTP/domain: Authentication Test. |
 | `tests/Feature/Auth/EmailVerificationTest.php` | `-` | Regresi HTTP/domain: Email Verification Test. |

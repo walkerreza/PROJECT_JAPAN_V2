@@ -541,16 +541,22 @@ export default function BuilderPresentasi({
     module = null,
     createMode = false,
     activePlacement = 'opening',
+    audienceScope = 'shared',
+    canEdit = true,
+    canCreate = true,
+    returnUrl = null,
+    returnContext = null,
 }) {
     const moduleContext = module || deck?.module || {};
     const programId = moduleContext.program?.id || deck?.module?.program_pembelajaran_id;
-    const builderReturnUrl = programId
+    const builderReturnUrl = returnUrl || (programId
         ? route('admin.modules.index', {
             program_id: programId,
             week_id: moduleContext.id || deck.module.id,
             focus: 'presentation',
         })
-        : route('admin.programs.index');
+        : route('admin.programs.index'));
+    const isMentorDeck = audienceScope === 'mentor_session' || deck?.audience_scope === 'mentor_session';
     const [slides, setSlides] = useState(mapDeckSlides(deck?.slides || []));
     const [activeIndex, setActiveIndex] = useState(0);
     const [status, setStatus] = useState(deck?.status || 'draft');
@@ -655,6 +661,9 @@ export default function BuilderPresentasi({
 
         router.get(route('admin.modules.presentations.builder', moduleContext.id), {
             deck_id: deckId,
+            audience_scope: audienceScope,
+            return_context: returnContext?.type,
+            kloter_id: returnContext?.kloter_id,
         }, {
             preserveScroll: true,
             preserveState: false,
@@ -669,6 +678,9 @@ export default function BuilderPresentasi({
         router.get(route('admin.modules.presentations.builder', moduleContext.id), {
             create: 1,
             placement: nextPlacement,
+            audience_scope: audienceScope,
+            return_context: returnContext?.type,
+            kloter_id: returnContext?.kloter_id,
         }, {
             preserveScroll: true,
             preserveState: false,
@@ -775,6 +787,9 @@ export default function BuilderPresentasi({
             week_slot: target.week_slot,
             sort_order: Number(draftSortOrder || 0),
             status: 'draft',
+            audience_scope: audienceScope,
+            return_context: returnContext?.type,
+            kloter_belajar_id: returnContext?.kloter_id,
         });
     };
 
@@ -1133,7 +1148,7 @@ export default function BuilderPresentasi({
                 <header className="sticky top-16 z-30 border-b border-gray-200 bg-white px-3 py-2 dark:border-gray-800 dark:bg-gray-900 lg:top-0 lg:px-4">
                     <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                         <div className="flex min-w-0 items-center gap-3">
-                            <button type="button" onClick={leaveWorkspace} title="Kembali ke Roadmap" aria-label="Kembali ke Roadmap" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-gray-200 text-gray-600 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-orange-950/30">
+                            <button type="button" onClick={leaveWorkspace} title={returnUrl ? 'Kembali ke setup ruang' : 'Kembali ke Roadmap'} aria-label={returnUrl ? 'Kembali ke setup ruang' : 'Kembali ke Roadmap'} className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-gray-200 text-gray-600 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-orange-950/30">
                                 <ArrowBackIcon sx={{ fontSize: 19 }} />
                             </button>
                             <span className="hidden h-10 w-10 shrink-0 place-items-center rounded-xl bg-orange-600 text-white sm:grid">
@@ -1141,17 +1156,17 @@ export default function BuilderPresentasi({
                             </span>
                             <div className="min-w-0">
                                 <h1 className="truncate text-base font-black text-gray-900 dark:text-white sm:text-lg">
-                                    Presentasi <span className="text-gray-400">/</span> Minggu {moduleContext.week_number || '-'}
+                                    {isMentorDeck ? 'PPT Sesi Mentor' : 'Materi Presentasi'} <span className="text-gray-400">/</span> Week {moduleContext.week_number || '-'}
                                 </h1>
                                 <p className="truncate text-[11px] font-bold text-gray-400">
-                                    {moduleContext.program?.title || 'Kelas'} - {moduleContext.title || 'Roadmap Mingguan'}
+                                    {isMentorDeck ? 'Hanya digunakan di Ruang Kelas Live' : 'Tampil pada materi kelas setelah diterbitkan'}
                                 </p>
                             </div>
                         </div>
                         <div className="flex items-center justify-end gap-1.5 overflow-x-auto pb-1 md:overflow-visible md:pb-0">
-                            {deck && (
+                            {deck && canEdit && (
                                 <>
-                            <div className="relative">
+                            {!isMentorDeck && <div className="relative">
                                 <button type="button" onClick={() => { setShowDeckSettings((value) => !value); setShowDeckActions(false); setShowImportMenu(false); }} title="Pengaturan presentasi" className={`flex h-9 shrink-0 items-center gap-2 rounded-xl border px-2.5 text-xs font-black transition sm:px-3 ${showDeckSettings ? 'border-orange-300 bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-300' : 'border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800'}`}>
                                     <TuneIcon sx={{ fontSize: 17 }} /><span className="hidden sm:inline">Pengaturan</span>
                                 </button>
@@ -1171,7 +1186,7 @@ export default function BuilderPresentasi({
                                         </label>
                                     </div>
                                 )}
-                            </div>
+                            </div>}
                             <div className="relative">
                                 <button type="button" onClick={() => { setShowImportMenu((value) => !value); setShowDeckSettings(false); setShowDeckActions(false); }} title="Import presentasi" className="flex h-9 shrink-0 items-center gap-2 rounded-xl border border-orange-200 px-2.5 text-xs font-black text-orange-700 dark:border-orange-900/50 dark:text-orange-300 sm:px-3">
                                     <FileUploadOutlinedIcon sx={{ fontSize: 17 }} /><span className="hidden sm:inline">{isImporting ? 'Import...' : 'Import'}</span>
@@ -1194,7 +1209,7 @@ export default function BuilderPresentasi({
                                         <form onSubmit={importPdf} className="space-y-2 border-t border-gray-100 pt-4 dark:border-gray-800">
                                             <div>
                                                 <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-600">PDF Final</p>
-                                                <p className="text-xs font-bold text-gray-500">Maks 50 MB. Disimpan private dan ditampilkan ke user lewat canvas viewer.</p>
+                                            <p className="text-xs font-bold text-gray-500">Maks 50 MB. Disimpan private dan ditampilkan melalui viewer presentasi.</p>
                                             </div>
                                             <input
                                                 type="file"
@@ -1255,6 +1270,9 @@ export default function BuilderPresentasi({
                         </div>
                     </div>
                     <div className="mt-2 flex items-center gap-2 overflow-x-auto pb-1">
+                        <span className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-black ${isMentorDeck ? 'bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300' : 'bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300'}`}>
+                            {isMentorDeck ? 'PPT SESI MENTOR' : 'MATERI KELAS'}
+                        </span>
                         {(decks || []).map((summary) => {
                             const selected = deck?.id === summary.id;
                             const placementLabel = summary.week_slot === 'closing'
@@ -1283,24 +1301,24 @@ export default function BuilderPresentasi({
                                 </button>
                             );
                         })}
-                        <button
+                        {canCreate && <button
                             type="button"
                             onClick={() => openCreateDeck('opening')}
                             title="Tambah presentasi"
                             aria-label="Tambah presentasi"
-                            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-dashed border-orange-300 text-orange-700 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-300 dark:hover:bg-orange-950/20"
+                            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-dashed border-orange-300 text-orange-700 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-300 dark:hover:bg-orange-950/20"
                         >
                             <AddIcon sx={{ fontSize: 19 }} />
-                        </button>
+                        </button>}
                     </div>
                 </header>
 
                 {!deck ? (
-                    <main className="mx-auto grid max-w-6xl gap-8 px-4 py-7 lg:grid-cols-[320px_minmax(0,1fr)] lg:px-6">
+                    <main className={`mx-auto grid max-w-6xl gap-8 px-4 py-7 lg:px-6 ${isMentorDeck ? 'max-w-xl' : 'lg:grid-cols-[320px_minmax(0,1fr)]'}`}>
                         <section className="lg:sticky lg:top-28 lg:self-start">
-                            <p className="text-xs font-black uppercase text-orange-600">Presentasi baru</p>
-                            <h2 className="mt-1 text-xl font-black text-gray-950 dark:text-white">Buat dan letakkan di Week</h2>
-                            <p className="mt-2 text-sm font-medium leading-6 text-gray-600 dark:text-gray-400">Isi judul, lalu geser kartu presentasi baru ke celah yang diinginkan.</p>
+                            <p className="text-xs font-black text-orange-600">{isMentorDeck ? 'PPT Sesi Mentor' : 'Presentasi baru'}</p>
+                            <h2 className="mt-1 text-xl font-black text-gray-950 dark:text-white">{isMentorDeck ? 'Buat presentasi untuk sesi ini' : 'Buat dan letakkan di Week'}</h2>
+                            <p className="mt-2 text-sm font-medium leading-6 text-gray-600 dark:text-gray-400">{isMentorDeck ? 'PPT ini menjadi milik Anda dan tidak tampil di materi kelas mandiri.' : 'Isi judul, lalu geser kartu presentasi baru ke celah yang diinginkan.'}</p>
 
                             <label className="mt-5 block">
                                 <span className="mb-1.5 block text-xs font-bold text-gray-600 dark:text-gray-300">Judul presentasi</span>
@@ -1311,21 +1329,21 @@ export default function BuilderPresentasi({
                                     className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm font-bold text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
                                 />
                             </label>
-                            <div className="mt-4 rounded-lg bg-gray-100 px-3 py-2.5 dark:bg-gray-900">
+                            {!isMentorDeck && <div className="mt-4 rounded-lg bg-gray-100 px-3 py-2.5 dark:bg-gray-900">
                                 <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400">Posisi terpilih</p>
                                 <p className="mt-0.5 text-xs font-black text-gray-900 dark:text-white">{slotLabel(draftSlotKey, days, weeklyExams.length > 0)}</p>
-                            </div>
+                            </div>}
                             <button
                                 type="button"
                                 onClick={createDeck}
                                 disabled={!newDeckTitle.trim()}
                                 className="mt-4 h-11 w-full rounded-lg bg-orange-600 px-5 text-sm font-black text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                                Buat Presentasi
+                                {isMentorDeck ? 'Buat dan buka editor' : 'Buat Presentasi'}
                             </button>
                         </section>
 
-                        <section aria-label="Alur presentasi dalam Week" className="min-w-0">
+                        {!isMentorDeck && <section aria-label="Alur presentasi dalam Week" className="min-w-0">
                             <div className="mb-4 flex items-end justify-between gap-3 border-b border-gray-200 pb-4 dark:border-gray-800">
                                 <div>
                                     <p className="text-xs font-black uppercase text-gray-400">Alur Week {moduleContext.week_number || '-'}</p>
@@ -1343,7 +1361,7 @@ export default function BuilderPresentasi({
                                 onMoveDraft={moveDraft}
                                 onOpenDeck={visitDeck}
                             />
-                        </section>
+                        </section>}
                     </main>
                 ) : (
                     <>

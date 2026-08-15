@@ -44,9 +44,10 @@ MIDTRANS_CLIENT_KEY=
 MIDTRANS_IS_PRODUCTION=false
 MIDTRANS_IS_SANITIZED=true
 MIDTRANS_IS_3DS=true
+MIDTRANS_SNAP_EXPIRY_HOURS=24
 ```
 
-Server key tidak pernah dikirim ke frontend. Client key memang dipakai Snap di browser.
+Server key tidak pernah dikirim ke frontend. Client key memang dipakai Snap di browser. `MIDTRANS_SNAP_EXPIRY_HOURS` menentukan masa berlaku checkout Snap dan batas checkout pending lokal sebelum dapat diganti dengan pesanan baru.
 
 ## Email dan Mailtrap
 

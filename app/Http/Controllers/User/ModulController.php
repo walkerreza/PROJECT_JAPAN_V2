@@ -52,6 +52,7 @@ class ModulController extends Controller
                             ->where('status', 'completed'),
                     ]),
                 'presentationDecks' => fn ($query) => $query
+                    ->shared()
                     ->whereIn('week_slot', ['opening', 'after_day', 'closing'])
                     ->where('status', 'published')
                     ->whereHas('slides')
@@ -75,6 +76,7 @@ class ModulController extends Controller
                             ]),
                         'quizzes' => fn ($query) => $query->where('status', 'published')->withCount('questions'),
                         'presentationDecks' => fn ($query) => $query
+                            ->shared()
                             ->where('status', 'published')
                             ->withCount('slides')
                             ->with(['slides' => fn ($slideQuery) => $slideQuery
@@ -434,7 +436,7 @@ class ModulController extends Controller
                 'description' => $program->description,
                 'level' => $program->level?->level_name,
                 'resources' => [
-                    'presentations_count' => DeckPresentasi::whereIn('module_id', $accessibleModuleIds)->where('status', 'published')->count(),
+                    'presentations_count' => DeckPresentasi::whereIn('module_id', $accessibleModuleIds)->shared()->where('status', 'published')->count(),
                     'vocabulary_count' => $this->vocabularyQueryForModules($accessibleModuleIds)->count('vocabulary_bank.id'),
                     'flashcard_count' => Flashcard::whereHas('set', fn ($query) => $query
                         ->whereIn('module_id', $accessibleModuleIds)
@@ -560,6 +562,7 @@ class ModulController extends Controller
             ? DeckPresentasi::query()
                 ->whereKey($selectedDeckId)
                 ->whereIn('module_id', $moduleIds)
+                ->shared()
                 ->where('status', 'published')
                 ->whereHas('slides')
                 ->firstOrFail()
@@ -591,6 +594,7 @@ class ModulController extends Controller
         $decks = DeckPresentasi::with(['module:id,title,week_number', 'slides'])
             ->withCount('slides')
             ->whereIn('module_id', $selectedDeck ? collect([$selectedDeck->module_id]) : $queryModuleIds)
+            ->shared()
             ->when($selectedDeck, fn ($query) => $query->whereKey($selectedDeck->id))
             ->when(! $selectedDeck && $selectedDayId, fn ($query) => $query->where('module_day_id', $selectedDayId))
             ->when(! $selectedDeck && $selectedModuleId && ! $selectedDayId && $selectedSlot === '', fn ($query) => $query->whereNull('module_day_id'))

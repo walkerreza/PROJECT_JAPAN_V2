@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import ConfirmActionDialog from '@/Components/UI/ConfirmActionDialog';
@@ -17,6 +17,7 @@ import SlideshowIcon from '@mui/icons-material/Slideshow';
 import QuizOutlinedIcon from '@mui/icons-material/QuizOutlined';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import VideoCameraFrontIcon from '@mui/icons-material/VideoCameraFront';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 
 const emptyForm = {
     level_id: '',
@@ -68,15 +69,19 @@ const optionCardTones = {
     },
 };
 
-function OptionCard({ href, icon, label, tone = 'orange' }) {
+function OptionCard({ href, icon, label, description, tone = 'orange' }) {
     const colors = optionCardTones[tone] || optionCardTones.orange;
-    const className = `flex min-h-14 w-full cursor-pointer items-center justify-start rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm transition duration-200 dark:border-gray-700 dark:bg-gray-900 sm:p-4 ${colors.card}`;
+    const className = `group flex min-h-16 w-full cursor-pointer items-center justify-start rounded-lg border border-gray-200 bg-white p-3 text-left transition duration-200 dark:border-gray-700 dark:bg-gray-900 sm:p-4 ${colors.card}`;
     const content = (
         <>
-            <span className={`mr-3 grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white shadow-sm ${colors.icon}`}>
+            <span className={`mr-3 grid h-9 w-9 shrink-0 place-items-center rounded-lg text-white ${colors.icon}`}>
                 {icon}
             </span>
-            <span className="min-w-0 truncate text-sm font-bold text-gray-900 dark:text-white">{label}</span>
+            <span className="min-w-0 flex-1">
+                <span className="block text-sm font-black text-gray-900 dark:text-white">{label}</span>
+                <span className="mt-0.5 block text-xs font-medium leading-5 text-gray-500 dark:text-gray-400">{description}</span>
+            </span>
+            <ChevronRightIcon className="shrink-0 text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-gray-600 dark:text-gray-600" sx={{ fontSize: 20 }} />
         </>
     );
 
@@ -86,6 +91,8 @@ function OptionCard({ href, icon, label, tone = 'orange' }) {
 }
 
 export default function ManajemenKelas({ programs = {}, levels = [], filters = {} }) {
+    const { auth } = usePage().props;
+    const isAdminGlobal = auth?.user?.admin_scope !== 'kloter';
     const rows = programs.data || [];
     const [search, setSearch] = useState(filters.search || '');
     const [status, setStatus] = useState(filters.status || 'all');
@@ -301,11 +308,12 @@ export default function ManajemenKelas({ programs = {}, levels = [], filters = {
                             </button>
                         </div>
 
-                        <div className="mt-6 grid grid-cols-2 gap-3">
+                        <div className="mt-6 space-y-2">
                             <OptionCard
                                 href={route('admin.modules.index', { program_id: managingProgram.id, focus: 'roadmap' })}
                                 icon={<AccountTreeIcon sx={{ fontSize: 20 }} />}
-                                label="Roadmap"
+                                label="Roadmap Kelas"
+                                description="Susun Week, Day, urutan belajar, dan ujian."
                                 tone="orange"
                             />
 
@@ -313,20 +321,23 @@ export default function ManajemenKelas({ programs = {}, levels = [], filters = {
                                 href={route('admin.live-classes.create', { program_id: managingProgram.id })}
                                 icon={<VideoCameraFrontIcon sx={{ fontSize: 20 }} />}
                                 label="Ruang Kelas"
+                                description="Jadwalkan atau mulai sesi live bersama kloter."
                                 tone="charcoal"
                             />
 
-                            <OptionCard
+                            {isAdminGlobal && <OptionCard
                                 href={route('admin.modules.index', { program_id: managingProgram.id, focus: 'presentation' })}
                                 icon={<SlideshowIcon sx={{ fontSize: 20 }} />}
-                                label="Presentasi Mingguan"
+                                label="Materi Presentasi"
+                                description="Kelola PPT resmi yang tampil pada materi kelas."
                                 tone="sky"
-                            />
+                            />}
 
                             <OptionCard
                                 href={route('admin.modules.index', { program_id: managingProgram.id, focus: 'flashcard' })}
                                 icon={<QuizOutlinedIcon sx={{ fontSize: 20 }} />}
                                 label="Kuis & Repetisi"
+                                description="Kelola soal, repetisi, dan latihan menulis kanji."
                                 tone="teal"
                             />
                         </div>

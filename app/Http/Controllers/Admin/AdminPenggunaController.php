@@ -18,6 +18,7 @@ use App\Services\NotifikasiPenggunaService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -82,8 +83,7 @@ class AdminPenggunaController extends Controller
         Pengguna $user,
         KloterBelajarService $kloterService,
         ChartDataService $chartData
-    ): Response
-    {
+    ): Response {
         /** @var Pengguna $admin */
         $admin = $request->user();
         $kloterService->abortJikaSiswaDiLuarCakupan($admin, $user);
@@ -174,7 +174,7 @@ class AdminPenggunaController extends Controller
                     'program' => $kloter->programPembelajaran?->title,
                     'status' => $kloter->pivot?->status,
                     'joined_at' => $kloter->pivot?->joined_at
-                        ? \Illuminate\Support\Carbon::parse($kloter->pivot->joined_at)->format('d M Y')
+                        ? Carbon::parse($kloter->pivot->joined_at)->format('d M Y')
                         : null,
                 ])->values(),
                 'subscriptions' => $user->subscriptions->map(fn ($subscription) => [
@@ -322,7 +322,14 @@ class AdminPenggunaController extends Controller
                 $validated['catatan'] ?? 'Ditambahkan melalui dashboard admin.'
             );
 
-            $this->logActivity($request, $admin, 'kloter.user_assigned', $kloter, "Menambahkan {$student->username} ke kloter {$kloter->nama}");
+            $this->logActivity(
+                $request,
+                $admin,
+                'kloter.user_assigned',
+                $kloter,
+                "Menambahkan {$student->username} ke kloter {$kloter->nama}",
+                ['enrollment_mode' => 'manual', 'user_id' => $student->id]
+            );
         });
 
         return back()->with('success', 'Siswa berhasil dimasukkan ke kloter.');
@@ -480,17 +487,18 @@ class AdminPenggunaController extends Controller
         Pengguna $admin,
         KloterBelajarService $kloterService,
         ?KloterBelajar $selectedKloter
-    ): Collection
-    {
+    ): Collection {
         return AnggotaKloter::query()
             ->with([
                 'user:id,username,email',
                 'transaction:id,transaction_code,amount,status,processed_at',
                 'kloterBelajar.programPembelajaran:id,title',
+                'kloterBelajar.admin:id,username,email',
             ])
             ->whereIn('kloter_belajar_id', $kloterService->kloterDikelola($admin)->select('id'))
             ->when($selectedKloter, fn (Builder $query) => $query->where('kloter_belajar_id', $selectedKloter->id))
             ->where('status', 'paid_pending_approval')
+            ->whereHas('transaction', fn (Builder $query) => $query->where('status', 'success'))
             ->oldest('updated_at')
             ->get()
             ->map(fn (AnggotaKloter $membership) => [
@@ -506,6 +514,11 @@ class AdminPenggunaController extends Controller
                     'program_name' => $membership->kloterBelajar?->programPembelajaran?->title,
                     'tanggal_mulai' => optional($membership->kloterBelajar?->tanggal_mulai)->format('d M Y'),
                     'tanggal_selesai' => optional($membership->kloterBelajar?->tanggal_selesai)->format('d M Y'),
+                    'mentor' => $membership->kloterBelajar?->admin ? [
+                        'id' => $membership->kloterBelajar->admin->id,
+                        'username' => $membership->kloterBelajar->admin->username,
+                        'email' => $membership->kloterBelajar->admin->email,
+                    ] : null,
                 ],
                 'transaction_code' => $membership->transaction?->transaction_code,
                 'amount_formatted' => 'Rp '.number_format((int) $membership->transaction?->amount),

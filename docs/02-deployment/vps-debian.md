@@ -81,6 +81,14 @@ npm run build
 
 Jangan memakai `--force` atau `--legacy-peer-deps` sebagai kebiasaan. Jika `npm ci` gagal karena lockfile tidak sinkron, perbaiki dan commit lockfile dari development dengan versi Node/npm yang sama.
 
+Build production belum selesai sampai Vite menampilkan `built in ...` dan manifest tersedia:
+
+```bash
+ls -lh public/build/manifest.json
+```
+
+Jangan menjalankan optimasi Laravel ketika proses build masih berjalan atau gagal karena `public/build` dapat berada dalam kondisi sementara tanpa manifest.
+
 ## 5. Environment Production
 
 ```bash
@@ -168,6 +176,7 @@ git pull origin main
 composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction
 npm ci
 npm run build
+test -f public/build/manifest.json
 php artisan migrate --force
 php artisan optimize:clear
 php artisan optimize

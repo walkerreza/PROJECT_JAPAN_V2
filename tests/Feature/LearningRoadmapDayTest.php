@@ -1414,23 +1414,30 @@ it('seeds handwriting demo content idempotently', function () {
         ->and(Flashcard::query()->where('vocabulary_id', $vocabulary->id)->count())->toBe(1);
 })->skip('Seeder sekarang menyimpan sumber handwriting sebagai flashcard.');
 
-it('seeds an idempotent two-Day roadmap for every demo Week', function () {
+it('seeds an idempotent three-Day roadmap for every demo Week', function () {
     $this->seed(KelasDemoSeeder::class);
     $this->seed(KelasDemoSeeder::class);
 
-    expect(ProgramPembelajaran::count())->toBe(4)
-        ->and(Modul::count())->toBe(12)
-        ->and(HariModul::count())->toBe(24)
-        ->and(SetFlashcard::count())->toBe(12)
-        ->and(Kuis::count())->toBe(12);
+    expect(ProgramPembelajaran::count())->toBe(2)
+        ->and(Modul::count())->toBe(6)
+        ->and(HariModul::count())->toBe(18)
+        ->and(SetFlashcard::count())->toBe(18)
+        ->and(Kuis::count())->toBe(24);
 
     Modul::with(['days', 'flashcardSets', 'quizzes', 'presentationDecks'])
         ->get()
         ->each(function (Modul $module) {
-            expect($module->days->pluck('day_number')->sort()->values()->all())->toBe([1, 2])
-                ->and($module->flashcardSets->first()?->module_day_id)->toBe($module->days->firstWhere('day_number', 1)?->id)
-                ->and($module->presentationDecks->first()?->module_day_id)->toBe($module->days->firstWhere('day_number', 1)?->id)
-                ->and($module->quizzes->first()?->module_day_id)->toBe($module->days->firstWhere('day_number', 2)?->id)
-                ->and($module->days->firstWhere('day_number', 2)?->checkpoint_quiz_id)->toBe($module->quizzes->first()?->id);
+            expect($module->days->pluck('day_number')->sort()->values()->all())->toBe([1, 2, 3])
+                ->and($module->flashcardSets)->toHaveCount(3)
+                ->and($module->quizzes)->toHaveCount(4)
+                ->and($module->presentationDecks->where('audience_scope', 'shared'))->toHaveCount(3);
+
+            $module->days->each(function (HariModul $day) use ($module) {
+                expect($module->flashcardSets->where('module_day_id', $day->id))->toHaveCount(1)
+                    ->and($day->checkpoint_quiz_id)->not->toBeNull()
+                    ->and($module->quizzes->firstWhere('id', $day->checkpoint_quiz_id)?->module_day_id)->toBe($day->id);
+            });
+
+            expect($module->quizzes->whereNotNull('exam_order'))->toHaveCount(1);
         });
 });

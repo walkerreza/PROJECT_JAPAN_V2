@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\DeckPresentasi;
 use App\Models\LogAktivitas;
 use App\Models\Modul;
+use App\Models\Pengguna;
 use App\Models\SlidePresentasi;
 use App\Services\AksesPremiumService;
 use App\Services\ImportPresentasiGambarService;
@@ -17,6 +18,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class AdminPresentasiController extends Controller
@@ -24,11 +26,41 @@ class AdminPresentasiController extends Controller
     public function store(Request $request, NotifikasiPenggunaService $notifikasi)
     {
         $validated = $this->validateDeck($request);
+        $context = $request->validate([
+            'audience_scope' => ['nullable', Rule::in([DeckPresentasi::AUDIENCE_SHARED, DeckPresentasi::AUDIENCE_MENTOR_SESSION])],
+            'source_deck_id' => ['nullable', 'integer', 'exists:presentation_decks,id'],
+            'return_context' => ['nullable', Rule::in(['live_class'])],
+            'kloter_belajar_id' => ['nullable', 'integer', 'exists:kloter_belajar,id'],
+        ]);
+        $user = $request->user();
+        $module = Modul::query()
+            ->with('programPembelajaran:id')
+            ->findOrFail($validated['module_id']);
+        $audienceScope = $context['audience_scope'] ?? DeckPresentasi::AUDIENCE_SHARED;
 
-        $deck = DB::transaction(function () use ($validated) {
+        $this->assertCanCreateDeck($user, $module, $audienceScope);
+
+        $sourceDeck = filled($context['source_deck_id'] ?? null)
+            ? DeckPresentasi::query()->with('slides')->findOrFail($context['source_deck_id'])
+            : null;
+
+        if ($sourceDeck) {
+            $this->assertCanViewDeck($user, $sourceDeck);
+            abort_unless($sourceDeck->module_id === $module->id, 422, 'Presentasi sumber harus berasal dari Week yang dipilih.');
+        }
+
+        $validated['created_by'] = $user->id;
+        $validated['audience_scope'] = $audienceScope;
+
+        if ($audienceScope === DeckPresentasi::AUDIENCE_MENTOR_SESSION) {
+            $validated['status'] = 'draft';
+        }
+
+        $deck = DB::transaction(function () use ($validated, $sourceDeck) {
             Modul::query()->lockForUpdate()->findOrFail($validated['module_id']);
             $slotQuery = DeckPresentasi::query()
                 ->where('module_id', $validated['module_id'])
+                ->where('audience_scope', $validated['audience_scope'])
                 ->where('week_slot', $validated['week_slot'])
                 ->when(
                     $validated['week_slot'] === 'after_day',
@@ -46,14 +78,24 @@ class AdminPresentasiController extends Controller
             }
 
             $deck = DeckPresentasi::create($validated);
-            $deck->slides()->create([
-                'title' => $deck->title,
-                'layout' => 'title',
-                'content' => $deck->description ?: 'Tulis pembuka presentasi di sini.',
-                'background' => 'sunrise',
-                'accent_color' => '#E64A19',
-                'order' => 0,
-            ]);
+            if ($sourceDeck) {
+                foreach ($sourceDeck->slides as $slide) {
+                    $deck->slides()->create($slide->only([
+                        'title', 'layout', 'content', 'media_url', 'background', 'accent_color',
+                        'speaker_notes', 'order', 'source_type', 'canvas_json', 'jamboard_data',
+                        'jamboard_snapshot', 'snapshot_url', 'source_meta',
+                    ]));
+                }
+            } else {
+                $deck->slides()->create([
+                    'title' => $deck->title,
+                    'layout' => 'title',
+                    'content' => $deck->description ?: 'Tulis pembuka presentasi di sini.',
+                    'background' => 'sunrise',
+                    'accent_color' => '#E64A19',
+                    'order' => 0,
+                ]);
+            }
 
             return $deck;
         });
@@ -62,13 +104,32 @@ class AdminPresentasiController extends Controller
             $this->kirimNotifikasiPresentasiTerbit($deck, $notifikasi);
         }
 
-        return redirect()->route('admin.presentations.builder', $deck)->with('success', 'Presentasi berhasil dibuat.');
+        $builderParameters = ['presentationDeck' => $deck];
+
+        if (($context['return_context'] ?? null) === 'live_class') {
+            $builderParameters += [
+                'return_context' => 'live_class',
+                'program_id' => $module->program_pembelajaran_id,
+                'kloter_id' => $context['kloter_belajar_id'] ?? null,
+                'week_id' => $module->id,
+                'deck_id' => $deck->id,
+            ];
+        }
+
+        return redirect()->route('admin.presentations.builder', $builderParameters)->with('success', 'Presentasi berhasil dibuat.');
     }
 
     public function update(Request $request, DeckPresentasi $presentationDeck, NotifikasiPenggunaService $notifikasi)
     {
+        $this->assertCanEditDeck($request->user(), $presentationDeck);
         $oldStatus = $presentationDeck->status;
-        $presentationDeck->update($this->validateDeck($request, $presentationDeck));
+        $validated = $this->validateDeck($request, $presentationDeck);
+
+        if ($presentationDeck->isMentorSession()) {
+            $validated['status'] = 'draft';
+        }
+
+        $presentationDeck->update($validated);
 
         if ($oldStatus !== 'published' && $presentationDeck->status === 'published' && $presentationDeck->module_id) {
             $this->kirimNotifikasiPresentasiTerbit($presentationDeck, $notifikasi);
@@ -81,8 +142,8 @@ class AdminPresentasiController extends Controller
         Request $request,
         DeckPresentasi $presentationDeck,
         PresentasiStorageService $storage
-    )
-    {
+    ) {
+        $this->assertCanEditDeck($request->user(), $presentationDeck);
         $moduleId = $presentationDeck->module_id;
         $deckId = $presentationDeck->id;
 
@@ -111,22 +172,30 @@ class AdminPresentasiController extends Controller
             $module,
             $request->integer('deck_id'),
             $request->boolean('create'),
-            $request->string('placement')->toString()
+            $request->string('placement')->toString(),
+            $request->string('audience_scope')->toString(),
+            $request
         );
     }
 
-    public function builder(DeckPresentasi $presentationDeck)
+    public function builder(Request $request, DeckPresentasi $presentationDeck)
     {
         abort_unless($presentationDeck->module_id, 404);
+        $this->assertCanViewDeck($request->user(), $presentationDeck);
 
         return $this->renderWorkspace(
             $presentationDeck->module()->firstOrFail(),
-            $presentationDeck->id
+            $presentationDeck->id,
+            false,
+            $presentationDeck->week_slot,
+            $presentationDeck->audience_scope,
+            $request
         );
     }
 
     public function reorder(Request $request, Modul $module)
     {
+        abort_unless($request->user()->isAdminGlobal(), 403, 'Hanya admin global yang dapat mengatur materi kelas.');
         $validated = $request->validate([
             'positions' => ['required', 'array', 'max:500'],
             'positions.*.deck_id' => [
@@ -146,7 +215,7 @@ class AdminPresentasiController extends Controller
 
         foreach ($validated['positions'] as $index => $position) {
             if ($position['week_slot'] === 'after_day' && empty($position['module_day_id'])) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
+                throw ValidationException::withMessages([
                     "positions.{$index}.module_day_id" => 'Day tujuan wajib dipilih.',
                 ]);
             }
@@ -154,6 +223,7 @@ class AdminPresentasiController extends Controller
 
         $expectedDeckIds = DeckPresentasi::query()
             ->where('module_id', $module->id)
+            ->shared()
             ->whereIn('week_slot', ['opening', 'after_day', 'closing'])
             ->pluck('id')
             ->sort()
@@ -164,7 +234,7 @@ class AdminPresentasiController extends Controller
             ->values();
 
         if ($expectedDeckIds->all() !== $providedDeckIds->all()) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            throw ValidationException::withMessages([
                 'positions' => 'Daftar presentasi tidak lengkap. Muat ulang halaman lalu coba kembali.',
             ]);
         }
@@ -173,6 +243,7 @@ class AdminPresentasiController extends Controller
             $module->newQuery()->lockForUpdate()->findOrFail($module->id);
             $decks = DeckPresentasi::query()
                 ->where('module_id', $module->id)
+                ->shared()
                 ->whereIn('id', collect($validated['positions'])->pluck('deck_id'))
                 ->lockForUpdate()
                 ->get()
@@ -196,6 +267,7 @@ class AdminPresentasiController extends Controller
 
     public function updateSlides(Request $request, DeckPresentasi $presentationDeck, NotifikasiPenggunaService $notifikasi, PresentasiStorageService $storage)
     {
+        $this->assertCanEditDeck($request->user(), $presentationDeck);
         $validated = $request->validate([
             'status' => ['required', 'in:draft,published'],
             'week_slot' => ['required', Rule::in(['opening', 'after_day', 'closing'])],
@@ -225,13 +297,17 @@ class AdminPresentasiController extends Controller
         ]);
 
         if ($validated['week_slot'] === 'after_day' && empty($validated['module_day_id'])) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            throw ValidationException::withMessages([
                 'module_day_id' => 'Pilih Day tempat presentasi ditampilkan.',
             ]);
         }
 
         $ids = [];
         $oldStatus = $presentationDeck->status;
+
+        if ($presentationDeck->isMentorSession()) {
+            $validated['status'] = 'draft';
+        }
 
         DB::transaction(function () use ($presentationDeck, $validated, $storage, &$ids) {
             $presentationDeck->update([
@@ -286,6 +362,7 @@ class AdminPresentasiController extends Controller
 
     public function importPptx(Request $request, DeckPresentasi $presentationDeck, ImportPresentasiPptxService $importer)
     {
+        $this->assertCanEditDeck($request->user(), $presentationDeck);
         $validated = $request->validate([
             'pptx_file' => ['required', 'file', 'mimes:pptx', 'max:25600'],
         ]);
@@ -297,6 +374,7 @@ class AdminPresentasiController extends Controller
 
     public function importImages(Request $request, DeckPresentasi $presentationDeck, ImportPresentasiGambarService $importer)
     {
+        $this->assertCanEditDeck($request->user(), $presentationDeck);
         $validated = $request->validate([
             'image_files' => ['required', 'array', 'min:1', 'max:60'],
             'image_files.*' => ['required', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
@@ -309,6 +387,7 @@ class AdminPresentasiController extends Controller
 
     public function importPdf(Request $request, DeckPresentasi $presentationDeck, ImportPresentasiPdfService $importer)
     {
+        $this->assertCanEditDeck($request->user(), $presentationDeck);
         $validated = $request->validate([
             'pdf_file' => ['required', 'file', 'mimes:pdf', 'max:51200'],
         ]);
@@ -368,6 +447,7 @@ class AdminPresentasiController extends Controller
 
     public function uploadBackgroundImage(Request $request, DeckPresentasi $presentationDeck, PresentasiStorageService $storage)
     {
+        $this->assertCanEditDeck($request->user(), $presentationDeck);
         $validated = $request->validate([
             'background_image' => ['required', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ]);
@@ -385,6 +465,7 @@ class AdminPresentasiController extends Controller
 
     public function uploadMedia(Request $request, DeckPresentasi $presentationDeck, PresentasiStorageService $storage)
     {
+        $this->assertCanEditDeck($request->user(), $presentationDeck);
         $validated = $request->validate([
             'media' => ['required', 'file', 'mimes:mp4', 'mimetypes:video/mp4', 'max:51200'],
         ]);
@@ -406,6 +487,7 @@ class AdminPresentasiController extends Controller
 
     public function saveSlideBoard(Request $request, DeckPresentasi $presentationDeck, SlidePresentasi $presentationSlide)
     {
+        $this->assertCanEditDeck($request->user(), $presentationDeck);
         abort_unless($presentationSlide->presentation_deck_id === $presentationDeck->id, 404);
 
         $validated = $request->validate([
@@ -419,13 +501,16 @@ class AdminPresentasiController extends Controller
             'jamboard_snapshot' => $validated['snapshot_data'] ?? null,
         ]);
 
-        $presentationDeck->update(['status' => $validated['status']]);
+        $presentationDeck->update([
+            'status' => $presentationDeck->isMentorSession() ? 'draft' : $validated['status'],
+        ]);
 
         return redirect()->back()->with('success', 'Jamboard presentasi berhasil disimpan.');
     }
 
-    public function presenter(DeckPresentasi $presentationDeck)
+    public function presenter(Request $request, DeckPresentasi $presentationDeck)
     {
+        $this->assertCanViewDeck($request->user(), $presentationDeck);
         $presentationDeck->load(['module:id,title', 'slides']);
 
         return Inertia::render('Admin/Presentasi/ModePresentasi', [
@@ -455,7 +540,7 @@ class AdminPresentasiController extends Controller
 
         if ($validated['week_slot'] === 'after_day') {
             if (empty($validated['module_day_id'])) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
+                throw ValidationException::withMessages([
                     'module_day_id' => 'Pilih Day tempat presentasi ditampilkan.',
                 ]);
             }
@@ -470,12 +555,18 @@ class AdminPresentasiController extends Controller
         Modul $module,
         int $activeDeckId = 0,
         bool $createMode = false,
-        string $placement = 'opening'
-    )
-    {
+        string $placement = 'opening',
+        string $audienceScope = '',
+        ?Request $request = null
+    ) {
+        $request ??= request();
+        $user = $request->user();
         $placement = in_array($placement, ['opening', 'after_day', 'closing'], true)
             ? $placement
             : 'opening';
+        $requestedScope = in_array($audienceScope, [DeckPresentasi::AUDIENCE_SHARED, DeckPresentasi::AUDIENCE_MENTOR_SESSION], true)
+            ? $audienceScope
+            : DeckPresentasi::AUDIENCE_SHARED;
 
         $module->loadMissing([
             'level:id,level_name',
@@ -486,11 +577,17 @@ class AdminPresentasiController extends Controller
 
         $decks = DeckPresentasi::query()
             ->where('module_id', $module->id)
+            ->where('audience_scope', $requestedScope)
+            ->when(
+                $requestedScope === DeckPresentasi::AUDIENCE_MENTOR_SESSION && ! $user->isAdminGlobal(),
+                fn ($query) => $query->where('created_by', $user->id)
+            )
             ->whereIn('week_slot', ['opening', 'after_day', 'closing'])
             ->with([
                 'level:id,level_name',
                 'module:id,program_pembelajaran_id,title,week_number',
                 'day:id,module_id,day_number,title',
+                'creator:id,username',
                 'slides',
             ])
             ->withCount('slides')
@@ -507,6 +604,24 @@ class AdminPresentasiController extends Controller
             ? null
             : ($decks->firstWhere('id', $activeDeckId) ?? $decks->first());
 
+        if ($activeDeck) {
+            $this->assertCanViewDeck($user, $activeDeck);
+        }
+
+        $canCreate = $requestedScope === DeckPresentasi::AUDIENCE_MENTOR_SESSION
+            ? $this->canCreateMentorDeck($user, $module)
+            : $user->isAdminGlobal();
+        $canEdit = $activeDeck ? $this->canEditDeck($user, $activeDeck) : $canCreate;
+        $returnToLiveClass = $request->string('return_context')->toString() === 'live_class';
+        $returnUrl = $returnToLiveClass
+            ? route('admin.live-classes.create', array_filter([
+                'program_id' => $module->program_pembelajaran_id,
+                'kloter_id' => $request->integer('kloter_id') ?: null,
+                'week_id' => $module->id,
+                'deck_id' => $activeDeck?->id ?? ($request->integer('deck_id') ?: null),
+            ]), absolute: false)
+            : null;
+
         return Inertia::render('Admin/Presentasi/BuilderPresentasi', [
             'module' => [
                 'id' => $module->id,
@@ -521,6 +636,8 @@ class AdminPresentasiController extends Controller
                 'id' => $deck->id,
                 'title' => $deck->title,
                 'status' => $deck->status,
+                'audience_scope' => $deck->audience_scope,
+                'creator_name' => $deck->creator?->username,
                 'slides_count' => $deck->slides_count,
                 'week_slot' => $deck->week_slot,
                 'module_day_id' => $deck->module_day_id,
@@ -533,13 +650,25 @@ class AdminPresentasiController extends Controller
                 'exam_order' => $exam->exam_order,
                 'status' => $exam->status,
             ])->values(),
-            'createMode' => $createMode || $decks->isEmpty(),
+            'createMode' => $canCreate && ($createMode || $decks->isEmpty()),
             'activePlacement' => $createMode ? $placement : ($activeDeck?->week_slot ?? $placement),
+            'audienceScope' => $requestedScope,
+            'canEdit' => $canEdit,
+            'canCreate' => $canCreate,
+            'returnUrl' => $returnUrl,
+            'returnContext' => $returnToLiveClass ? [
+                'type' => 'live_class',
+                'kloter_id' => $request->integer('kloter_id') ?: null,
+            ] : null,
         ]);
     }
 
     private function kirimNotifikasiPresentasiTerbit(DeckPresentasi $deck, NotifikasiPenggunaService $notifikasi): void
     {
+        if ($deck->audience_scope !== DeckPresentasi::AUDIENCE_SHARED) {
+            return;
+        }
+
         $deck->loadMissing('module.programPembelajaran');
 
         if (! $deck->module) {
@@ -560,6 +689,59 @@ class AdminPresentasiController extends Controller
         );
     }
 
+    private function assertCanCreateDeck(Pengguna $user, Modul $module, string $audienceScope): void
+    {
+        $allowed = $audienceScope === DeckPresentasi::AUDIENCE_SHARED
+            ? $user->isAdminGlobal()
+            : $this->canCreateMentorDeck($user, $module);
+
+        abort_unless($allowed, 403, $audienceScope === DeckPresentasi::AUDIENCE_SHARED
+            ? 'Hanya admin global yang dapat membuat materi kelas.'
+            : 'Anda tidak mengampu kelas ini.');
+    }
+
+    private function canCreateMentorDeck(Pengguna $user, Modul $module): bool
+    {
+        if ($user->isAdminGlobal()) {
+            return true;
+        }
+
+        return $user->isAdminKloter()
+            && $user->kloterDikelola()
+                ->where('program_pembelajaran_id', $module->program_pembelajaran_id)
+                ->exists();
+    }
+
+    private function canViewDeck(Pengguna $user, DeckPresentasi $deck): bool
+    {
+        if ($deck->audience_scope === DeckPresentasi::AUDIENCE_SHARED) {
+            return $user->role === 'admin';
+        }
+
+        return $user->isAdminGlobal() || $deck->created_by === $user->id;
+    }
+
+    private function assertCanViewDeck(Pengguna $user, DeckPresentasi $deck): void
+    {
+        abort_unless($this->canViewDeck($user, $deck), 403, 'Presentasi ini berada di luar cakupan akun Anda.');
+    }
+
+    private function canEditDeck(Pengguna $user, DeckPresentasi $deck): bool
+    {
+        if ($deck->audience_scope === DeckPresentasi::AUDIENCE_SHARED) {
+            return $user->isAdminGlobal();
+        }
+
+        return $deck->created_by === $user->id;
+    }
+
+    private function assertCanEditDeck(Pengguna $user, DeckPresentasi $deck): void
+    {
+        abort_unless($this->canEditDeck($user, $deck), 403, $deck->isMentorSession()
+            ? 'PPT sesi ini hanya dapat diubah oleh mentor pembuatnya.'
+            : 'Materi kelas hanya dapat diubah oleh admin global.');
+    }
+
     private function bolehAksesPdf(Request $request, DeckPresentasi $deck, AksesPremiumService $aksesPremium): bool
     {
         $user = $request->user();
@@ -568,11 +750,15 @@ class AdminPresentasiController extends Controller
             return false;
         }
 
-        if (in_array($user->role, ['admin', 'superadmin'], true)) {
+        if ($user->role === 'admin') {
+            return $this->canViewDeck($user, $deck);
+        }
+
+        if ($user->role === 'superadmin') {
             return true;
         }
 
-        if ($user->role !== 'user' || $deck->status !== 'published' || ! $deck->module) {
+        if ($user->role !== 'user' || $deck->audience_scope !== DeckPresentasi::AUDIENCE_SHARED || $deck->status !== 'published' || ! $deck->module) {
             return false;
         }
 

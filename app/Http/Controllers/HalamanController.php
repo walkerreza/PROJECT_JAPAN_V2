@@ -310,7 +310,7 @@ class HalamanController extends Controller
                         'transaction_code' => $rejectedEnrollment->transaction?->transaction_code,
                     ] : null,
                     'resource_summary' => [
-                        'presentations' => DeckPresentasi::whereIn('module_id', $moduleIds)->where('status', 'published')->count(),
+                        'presentations' => DeckPresentasi::whereIn('module_id', $moduleIds)->shared()->where('status', 'published')->count(),
                         'vocabulary' => Kosakata::query()
                             ->where('status', 'published')
                             ->whereHas('flashcards.set', fn ($query) => $query
@@ -436,7 +436,7 @@ class HalamanController extends Controller
             ->with(['modules' => fn ($query) => $query
                 ->where('status', 'published')
                 ->withCount([
-                    'presentationDecks' => fn ($relation) => $relation->where('status', 'published'),
+                    'presentationDecks' => fn ($relation) => $relation->shared()->where('status', 'published'),
                     'flashcardSets' => fn ($relation) => $relation->where('status', 'published'),
                     'quizzes' => fn ($relation) => $relation->where('status', 'published'),
                 ])

@@ -88,6 +88,28 @@ sudo chown root:livekit /etc/livekit/livekit.yaml
 sudo chmod 640 /etc/livekit/livekit.yaml
 ```
 
+### VPS di Belakang NAT/OPNsense
+
+Jika interface VPS memakai IP privat, jangan mengandalkan deteksi STUN yang dapat menemukan IP publik gateway yang berbeda. Gunakan IP publik yang benar:
+
+```yaml
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50199
+  use_external_ip: false
+  node_ip: "IP_PUBLIK_VPS"
+```
+
+Admin jaringan harus membuat destination NAT/port forwarding ke IP privat VPS:
+
+```text
+TCP 7881          -> IP_PRIVAT_VPS:7881
+UDP 50000-50199   -> IP_PRIVAT_VPS:50000-50199
+```
+
+`ss` pada VPS hanya membuktikan LiveKit mendengarkan port lokal; keberhasilan forwarding harus diuji dari perangkat di jaringan eksternal saat room mengirim media.
+
 ## 4. systemd LiveKit
 
 `/etc/systemd/system/livekit.service`:
@@ -129,6 +151,15 @@ sudo certbot --nginx -d live.rezawalker.web.id
 
 Konfigurasi Reverb WSS pada domain utama dijelaskan di [Nginx dan service](../02-deployment/nginx-ssl-services.md).
 
+Verifikasi sertifikat yang dilayani Nginx lokal dan IP publik secara terpisah:
+
+```bash
+echo | openssl s_client -connect 127.0.0.1:443 -servername live.rezawalker.web.id 2>/dev/null | openssl x509 -noout -subject -issuer -dates
+echo | openssl s_client -connect IP_PUBLIK_VPS:443 -servername live.rezawalker.web.id 2>/dev/null | openssl x509 -noout -subject -issuer -dates
+```
+
+Jika koneksi lokal menunjukkan Let's Encrypt tetapi IP publik menunjukkan sertifikat self-signed OPNsense, TLS berhenti di gateway dan belum diteruskan ke Nginx yang benar. Perbaikannya berada pada NAT/virtual host OPNsense, bukan dengan menerbitkan ulang sertifikat Nginx berulang kali.
+
 ## 6. Firewall
 
 ```bash
@@ -141,6 +172,15 @@ sudo ufw deny 8080/tcp
 ```
 
 Buka aturan yang sama pada firewall provider. `7880` dan `8080` internal saja.
+
+Sebelum mengaktifkan UFW lewat SSH, pastikan port SSH aktual sudah diizinkan. Untuk konfigurasi standar:
+
+```bash
+sudo sshd -T | grep '^port'
+sudo ufw allow 22/tcp
+sudo ufw enable
+sudo ufw status verbose
+```
 
 ## 7. Batas TURN Single IP
 

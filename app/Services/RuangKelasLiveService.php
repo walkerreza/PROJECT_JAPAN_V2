@@ -34,6 +34,13 @@ class RuangKelasLiveService
         if ($deck) {
             $deck->loadMissing('module:id,program_pembelajaran_id');
             abort_unless($deck->module?->program_pembelajaran_id === $kloter->program_pembelajaran_id, 422, 'Presentasi tidak berasal dari kelas kloter ini.');
+            abort_unless(
+                ($deck->audience_scope === DeckPresentasi::AUDIENCE_SHARED && $deck->status === 'published')
+                    || ($deck->audience_scope === DeckPresentasi::AUDIENCE_MENTOR_SESSION
+                        && ($mentor->isAdminGlobal() || $deck->created_by === $mentor->id)),
+                403,
+                'Presentasi ini tidak dapat digunakan pada sesi Anda.'
+            );
         }
 
         return DB::transaction(function () use ($mentor, $kloter, $deck, $scheduledAt) {
