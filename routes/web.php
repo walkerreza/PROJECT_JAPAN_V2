@@ -34,6 +34,7 @@ use App\Http\Controllers\User\RuangKelasLiveController as UserRuangKelasLiveCont
 use App\Http\Controllers\User\PapanPeringkatController;
 use App\Http\Controllers\User\PembelajaranController;
 use App\Http\Controllers\User\ProgresController;
+use App\Http\Controllers\User\QuickQuizController;
 use App\Http\Controllers\User\SertifikatController;
 use App\Http\Controllers\User\TargetUjianPenggunaController;
 use App\Http\Controllers\User\UmpanBalikPembelajaranController;
@@ -261,6 +262,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::get('/quizzes', [PembelajaranController::class, 'quizLobby'])->name('quizzes.index');
         Route::get('/quizzes/{quiz}', [PembelajaranController::class, 'showQuiz'])->name('quizzes.show');
+        Route::post('/quick-quiz/start', [QuickQuizController::class, 'start'])->middleware('throttle:quick-quiz')->name('quick-quiz.start');
+        Route::get('/quick-quiz/{session}', [QuickQuizController::class, 'show'])->name('quick-quiz.show');
+        Route::post('/quick-quiz/{session}/answer', [QuickQuizController::class, 'answer'])->middleware('throttle:quick-quiz')->name('quick-quiz.answer');
+        Route::post('/quick-quiz/reset', [QuickQuizController::class, 'reset'])->middleware('throttle:quick-quiz')->name('quick-quiz.reset');
         Route::post('/quizzes/{quiz}/feedback', [UmpanBalikPembelajaranController::class, 'store'])->middleware('throttle:learning-actions')->name('quizzes.feedback.store');
         Route::get('/flashcards/{flashcardSet}', [FlashcardController::class, 'show'])->name('flashcards.show');
         Route::post('/flashcards/review/{flashcard}', [FlashcardController::class, 'review'])->middleware('throttle:learning-actions')->name('flashcards.review');

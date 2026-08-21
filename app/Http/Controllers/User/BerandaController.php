@@ -15,12 +15,12 @@ use App\Models\PengerjaanKuis;
 use App\Models\PenukaranKodeAkses;
 use App\Models\ProgramPembelajaran;
 use App\Models\ProgresHariModul;
-use App\Models\SetFlashcard;
 use App\Services\AksesKuisPenggunaService;
 use App\Services\AksesLanggananService;
 use App\Services\AksesPremiumService;
 use App\Services\KloterBelajarService;
 use App\Services\NotifikasiPenggunaService;
+use App\Services\QuickQuizSessionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -32,7 +32,8 @@ class BerandaController extends Controller
     public function index(
         AksesKuisPenggunaService $aksesKuis,
         AksesPremiumService $aksesPremium,
-        KloterBelajarService $kloterBelajar
+        KloterBelajarService $kloterBelajar,
+        QuickQuizSessionService $quickQuiz
     ) {
         $user = Auth::user();
 
@@ -82,7 +83,7 @@ class BerandaController extends Controller
                 ->where('status', 'active')
                 ->latest('end_date')
                 ->first(),
-            'quickQuiz' => $this->quickQuizPayload($user, $aksesKuis),
+            'quickQuiz' => $quickQuiz->summary($user),
             'lastCompletedQuiz' => $this->lastCompletedQuizPayload($user->id),
             'dailyGoal' => $this->dailyGoalPayload($user->id),
         ]);
@@ -275,12 +276,6 @@ class BerandaController extends Controller
                         ->where('status', 'published'));
             })
             ->exists();
-        $flashcardSet = SetFlashcard::query()
-            ->where('module_id', $module->id)
-            ->where('status', 'published')
-            ->whereHas('flashcards')
-            ->orderBy('id')
-            ->first();
         $quiz = Kuis::query()
             ->where('module_id', $module->id)
             ->where('status', 'published')
@@ -307,14 +302,6 @@ class BerandaController extends Controller
                 'message' => $vocabularyExists ? null : 'Kosakata belum tersedia untuk minggu ini.',
             ],
             [
-                'category' => 'flashcard',
-                'title' => 'Flashcard',
-                'description' => 'Latihan kartu sebelum mengerjakan kuis.',
-                'available' => $flashcardSet !== null,
-                'href' => $flashcardSet ? route('user.modul.lesson', $module->id) : null,
-                'message' => $flashcardSet ? null : 'Flashcard belum tersedia untuk minggu ini.',
-            ],
-            [
                 'category' => 'kuis',
                 'title' => 'Kuis',
                 'description' => 'Evaluasi pemahaman setelah materi selesai.',
@@ -325,49 +312,6 @@ class BerandaController extends Controller
                     : 'Kuis belum tersedia untuk minggu ini.',
             ],
         ];
-    }
-
-    private function quickQuizPayload($user, AksesKuisPenggunaService $aksesKuis): ?array
-    {
-        $quizzes = Kuis::query()
-            ->with(['module:id,title,week_number,status,program_pembelajaran_id'])
-            ->withCount('questions')
-            ->where('quizzes.status', 'published')
-            ->whereHas('questions')
-            ->whereHas('module', fn ($query) => $query->where('modules.status', 'published'))
-            ->join('modules', 'modules.id', '=', 'quizzes.module_id')
-            ->orderBy('modules.week_number')
-            ->orderBy('quizzes.id')
-            ->select('quizzes.*')
-            ->get();
-
-        foreach ($quizzes as $quiz) {
-            $status = $aksesKuis->status($user, $quiz);
-
-            if (! $status['allowed']) {
-                continue;
-            }
-
-            $bestScore = PengerjaanKuis::where('user_id', $user->id)
-                ->where('quiz_id', $quiz->id)
-                ->max('score');
-
-            if ($bestScore !== null && (int) $bestScore >= (int) ($quiz->passing_score ?? 70)) {
-                continue;
-            }
-
-            $module = $quiz->module;
-
-            return [
-                'id' => $quiz->id,
-                'title' => 'Week '.($module?->week_number ?? '-').' - '.($module?->title ?? 'Kuis Aktif'),
-                'score' => $bestScore,
-                'questions_count' => $quiz->questions_count,
-                'url' => route('user.quizzes.show', $quiz->id),
-            ];
-        }
-
-        return null;
     }
 
     private function lastCompletedQuizPayload(int $userId): ?array

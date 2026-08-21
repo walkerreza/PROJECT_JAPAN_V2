@@ -35,6 +35,8 @@ class AppServiceProvider extends ServiceProvider
             ->by((string) ($request->user()?->id ?? $request->ip())));
         RateLimiter::for('learning-actions', fn (Request $request) => Limit::perMinute(60)
             ->by(($request->user()?->id ?? 'guest').':'.$request->ip()));
+        RateLimiter::for('quick-quiz', fn (Request $request) => Limit::perMinute(60)
+            ->by(($request->user()?->id ?? 'guest').':'.$request->ip()));
         RateLimiter::for('live-room-create', fn (Request $request) => Limit::perMinute(5)
             ->by(($request->user()?->id ?? 'guest').':'.$request->ip()));
         RateLimiter::for('live-room-token', fn (Request $request) => Limit::perMinute(15)

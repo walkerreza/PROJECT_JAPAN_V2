@@ -88,6 +88,7 @@ export default function BerandaUser({
     const [searchQuery, setSearchQuery] = useState('');
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
+    const [isStartingQuickQuiz, setIsStartingQuickQuiz] = useState(false);
 
     const authUser = usePage().props.auth?.user || {};
     const accessStatus = authUser.access_status || user.access_status || {};
@@ -98,8 +99,6 @@ export default function BerandaUser({
     const nextAction = learningDashboard?.next_action || null;
     const totalModules = ownedPrograms.reduce((total, program) => total + Number(program.total_modules || 0), 0);
     const recentActivities = recentProgress.length > 0 ? recentProgress.slice(0, 4) : rewardHistory.slice(0, 4);
-    const quickQuizUrl = quickQuiz?.url || lastCompletedQuiz?.url || activeLearning?.roadmap_url || route('user.kelas.index');
-    const quickQuizTitle = quickQuiz?.title || lastCompletedQuiz?.title || 'Masuk ke kelas aktif';
 
     const resourceVisuals = {
         presentasi: { icon: SlideshowIcon, tone: 'from-red-500 to-rose-600' },
@@ -115,7 +114,7 @@ export default function BerandaUser({
     const resourceByCategory = Object.fromEntries(visibleResourceCards.map((item) => [item.category, item]));
     const quizShortcutUrl = resourceByCategory.kuis?.available && resourceByCategory.kuis?.href
         ? resourceByCategory.kuis.href
-        : quickQuiz?.url || lastCompletedQuiz?.url || null;
+        : lastCompletedQuiz?.url || null;
     const quickLinks = [
         { label: 'Kelas Saya', href: activeLearning?.roadmap_url || route('user.kelas.index'), icon: SchoolIcon },
         resourceByCategory.presentasi?.available && resourceByCategory.presentasi?.href
@@ -164,22 +163,13 @@ export default function BerandaUser({
                     icon: item.icon,
                     searchText: `${item.category} ${item.title} ${item.description}`,
                 })),
-            ...(quickQuiz ? [{
-                id: `quiz-${quickQuiz.id}`,
-                type: 'Kuis',
-                title: quickQuiz.title,
-                subtitle: 'Kuis aktif',
-                href: quickQuiz.url,
-                icon: QuizIcon,
-                searchText: `kuis ${quickQuiz.title}`,
-            }] : []),
         ];
 
         return items
             .filter((item) => item.searchText.toLowerCase().includes(query))
             .filter((item, index, list) => list.findIndex((candidate) => candidate.href === item.href) === index)
             .slice(0, 6);
-    }, [activeLearning, ownedPrograms, quickQuiz, searchQuery, visibleResourceCards]);
+    }, [activeLearning, ownedPrograms, searchQuery, visibleResourceCards]);
 
     const isSearchReady = searchQuery.trim().length >= 2;
 
@@ -191,6 +181,20 @@ export default function BerandaUser({
         if (result) {
             router.visit(result.href);
         }
+    };
+
+    const openQuickQuiz = () => {
+        if (quickQuiz?.active && quickQuiz?.resume_url) {
+            router.visit(quickQuiz.resume_url);
+            return;
+        }
+
+        if (!quickQuiz?.available || !quickQuiz?.start_url || isStartingQuickQuiz) return;
+
+        setIsStartingQuickQuiz(true);
+        router.post(quickQuiz.start_url, {}, {
+            onFinish: () => setIsStartingQuickQuiz(false),
+        });
     };
 
     return (
@@ -516,40 +520,48 @@ export default function BerandaUser({
                                         Quick Quiz
                                     </p>
                                     <h2 className="text-xl font-black text-gray-900 dark:text-white">
-                                        {quickQuiz ? 'Lanjutkan kuis aktif' : (lastCompletedQuiz ? 'Ulang quiz terakhir' : 'Mulai dari kelas aktif')}
+                                        {quickQuiz?.active
+                                            ? 'Lanjutkan latihanmu'
+                                            : (quickQuiz?.available ? 'Latihan campuran siap' : 'Belum ada materi terbuka')}
                                     </h2>
                                     <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-600 dark:text-gray-300">
-                                        {quickQuiz
-                                            ? quickQuiz.title
-                                            : (lastCompletedQuiz
-                                                ? lastCompletedQuiz.title
-                                                : 'Belum ada kuis aktif yang terbuka. Masuk ke kelas untuk mengikuti roadmap mingguan.')}
+                                        {quickQuiz?.active
+                                            ? `${quickQuiz.remaining_count} target tersisa. Sesi ini dapat dilanjutkan selama 30 menit.`
+                                            : (quickQuiz?.available
+                                                ? 'Ulangi materi yang sudah terbuka dari seluruh kelasmu. Jawaban yang belum tepat akan muncul kembali.'
+                                                : 'Selesaikan materi pertama di roadmap agar Quick Kuis dapat menyusun latihan.')}
                                     </p>
-                                    {(quickQuiz || lastCompletedQuiz) && (
+                                    {quickQuiz?.available && (
                                         <div className="mt-4 flex flex-wrap gap-2 text-xs font-black">
-                                            {lastCompletedQuiz && (
-                                                <span className="rounded-full bg-red-50 px-3 py-1.5 text-red-700 dark:bg-red-950/40 dark:text-red-300">
-                                                    Skor terakhir {lastCompletedQuiz.score ?? 0}
-                                                </span>
-                                            )}
                                             <span className="rounded-full bg-amber-50 px-3 py-1.5 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-                                                {quickQuiz ? 'Siap dikerjakan' : `+${lastCompletedQuiz.xp_earned ?? 0} XP`}
+                                                Tanpa XP · fokus repetisi
                                             </span>
                                             <span className="rounded-full bg-gray-100 px-3 py-1.5 text-gray-600 dark:bg-gray-900 dark:text-gray-300">
-                                                {(quickQuiz?.questions_count ?? lastCompletedQuiz?.questions_count ?? 0)} soal
+                                                {quickQuiz.target_count} target
+                                            </span>
+                                            <span className="rounded-full bg-red-50 px-3 py-1.5 text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                                                {quickQuiz.program_count} kelas
                                             </span>
                                         </div>
                                     )}
                                 </div>
                             </div>
 
-                            <Link
-                                href={quickQuizUrl}
-                                className="inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-2xl bg-gray-900 px-6 py-3 text-sm font-black text-white shadow-lg shadow-gray-900/15 transition-all sm:w-auto lg:hover:-translate-y-0.5 lg:hover:bg-red-700 dark:bg-white dark:text-gray-950 lg:dark:hover:bg-red-100"
-                            >
-                                {quickQuiz ? 'Mulai Kuis' : (lastCompletedQuiz ? 'Quick Quiz' : 'Masuk Kelas')}
-                                <ArrowRightAltIcon sx={{ fontSize: 22 }} />
-                            </Link>
+                            {quickQuiz?.available ? (
+                                <button
+                                    type="button"
+                                    onClick={openQuickQuiz}
+                                    disabled={isStartingQuickQuiz}
+                                    className="inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-2xl bg-gray-900 px-6 py-3 text-sm font-black text-white shadow-lg shadow-gray-900/15 transition-all disabled:cursor-wait disabled:opacity-70 sm:w-auto lg:hover:-translate-y-0.5 lg:hover:bg-red-700 dark:bg-white dark:text-gray-950 lg:dark:hover:bg-red-100"
+                                >
+                                    {isStartingQuickQuiz ? 'Menyiapkan...' : (quickQuiz.active ? 'Lanjutkan' : 'Mulai latihan')}
+                                    <ArrowRightAltIcon sx={{ fontSize: 22 }} />
+                                </button>
+                            ) : (
+                                <Link href={activeLearning?.roadmap_url || route('user.kelas.index')} className="inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-2xl bg-gray-900 px-6 py-3 text-sm font-black text-white shadow-lg shadow-gray-900/15 transition-all sm:w-auto lg:hover:-translate-y-0.5 lg:hover:bg-red-700 dark:bg-white dark:text-gray-950 lg:dark:hover:bg-red-100">
+                                    Buka roadmap <ArrowRightAltIcon sx={{ fontSize: 22 }} />
+                                </Link>
+                            )}
                         </div>
                     </section>
 
