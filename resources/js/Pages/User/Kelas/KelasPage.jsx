@@ -12,7 +12,6 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import SchoolIcon from '@mui/icons-material/School';
 import SearchIcon from '@mui/icons-material/Search';
-import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium';
 
 const catalogFilters = [
     { value: 'all', label: 'Semua kelas' },
@@ -21,19 +20,6 @@ const catalogFilters = [
 ];
 
 const clampProgress = (value) => Math.max(0, Math.min(100, Number(value ?? 0)));
-
-const createCheckoutRequestKey = () => {
-    if (window.crypto?.randomUUID) {
-        return window.crypto.randomUUID();
-    }
-
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
-        const random = Math.floor(Math.random() * 16);
-        const value = character === 'x' ? random : ((random & 0x3) | 0x8);
-
-        return value.toString(16);
-    });
-};
 
 const accessMeta = (item) => {
     if (item.refund_required) {
@@ -220,17 +206,9 @@ function OwnedCourseCard({ item }) {
     );
 }
 
-function CatalogCourseCard({ item, index, onCheckout, checkoutPlanId, selectedPlanId }) {
+function CatalogCourseCard({ item, index }) {
     const meta = accessMeta(item);
     const MetaIcon = meta.icon;
-    const canBuyClass = Boolean(item.payment_plan);
-    const initialPlan = item.payment_plans?.find((plan) => Number(plan.id) === Number(selectedPlanId))
-        || item.payment_plans?.[0]
-        || item.payment_plan;
-    const [selectedPlan, setSelectedPlan] = useState(initialPlan);
-    const [selectedKloterId, setSelectedKloterId] = useState(item.available_kloters?.[0]?.id || '');
-    const isMentored = selectedPlan?.scope_type === 'kloter';
-    const canCheckout = selectedPlan && (!isMentored || selectedKloterId);
 
     return (
         <article className="group flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition duration-200 hover:border-slate-300 hover:shadow-lg dark:border-gray-800 dark:bg-gray-900 dark:hover:border-gray-700">
@@ -245,6 +223,11 @@ function CatalogCourseCard({ item, index, onCheckout, checkoutPlanId, selectedPl
                     <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600 dark:bg-gray-800 dark:text-gray-300">
                         {item.access_mode_label}
                     </span>
+                    {!item.has_class_access && !item.waiting_for_approval && !item.refund_required && (
+                        <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
+                            Preview Week 1 Gratis
+                        </span>
+                    )}
                 </div>
                 <h2 className="mt-4 text-xl font-black leading-snug text-slate-950 dark:text-white">{item.title}</h2>
                 {item.description && <p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-500 dark:text-gray-400">{item.description}</p>}
@@ -257,88 +240,33 @@ function CatalogCourseCard({ item, index, onCheckout, checkoutPlanId, selectedPl
                 </div>
 
                 <div className="mt-auto pt-5">
-                    {canBuyClass ? (
-                        <div className="border-t border-slate-100 pt-4 dark:border-gray-800">
-                            <div className="flex items-end justify-between gap-4">
-                                <div>
-                                    <p className="text-xs font-bold text-slate-500 dark:text-gray-400">Akses kelas</p>
-                                    <p className="mt-1 text-lg font-black text-slate-950 dark:text-white">{selectedPlan?.price_formatted}</p>
-                                    <p className="mt-1 text-xs text-slate-500 dark:text-gray-400">
-                                        {Number(selectedPlan?.duration_days) > 0
-                                            ? `Aktif selama ${selectedPlan.duration_days} hari`
-                                            : 'Masa akses mengikuti paket'}
-                                    </p>
-                                </div>
-                                <WorkspacePremiumIcon className="text-rose-500 dark:text-rose-300" />
-                            </div>
-                            {item.payment_plans?.length > 1 && (
-                                <label className="mt-4 block text-xs font-bold text-slate-600 dark:text-gray-300">
-                                    Pilih paket
-                                    <select
-                                        value={selectedPlan?.id || ''}
-                                        onChange={(event) => setSelectedPlan(item.payment_plans.find((plan) => String(plan.id) === event.target.value))}
-                                        className="mt-1 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-900"
-                                    >
-                                        {item.payment_plans.map((plan) => (
-                                            <option key={plan.id} value={plan.id}>{plan.name} - {plan.price_formatted}</option>
-                                        ))}
-                                    </select>
-                                </label>
-                            )}
-                            {isMentored && (
-                                <label className="mt-4 block text-xs font-bold text-slate-600 dark:text-gray-300">
-                                    Pilih kloter dan mentor
-                                    <select
-                                        value={selectedKloterId}
-                                        onChange={(event) => setSelectedKloterId(event.target.value)}
-                                        className="mt-1 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-900"
-                                    >
-                                        {item.available_kloters?.length ? item.available_kloters.map((kloter) => (
-                                            <option key={kloter.id} value={kloter.id}>
-                                                {kloter.name} - {kloter.mentor_name} - mulai {kloter.start_date_label}
-                                                {kloter.remaining_seats !== null ? ` - sisa ${kloter.remaining_seats} kursi` : ''}
-                                            </option>
-                                        )) : <option value="">Belum ada kloter tersedia</option>}
-                                    </select>
-                                </label>
-                            )}
-                            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                <button
-                                    type="button"
-                                    onClick={() => onCheckout(selectedPlan, selectedKloterId || null)}
-                                    disabled={!canCheckout || checkoutPlanId === selectedPlan?.id}
-                                    className={`flex h-11 items-center justify-center gap-2 rounded-lg bg-gradient-to-r ${theme.ctaBg} px-4 text-sm font-black text-white shadow-sm transition hover:brightness-95 disabled:cursor-wait disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600`}
-                                >
-                                    {checkoutPlanId === selectedPlan?.id ? 'Membuka pembayaran...' : isMentored ? 'Daftar kelas mentor' : 'Buka akses'}
-                                </button>
-                                <Link
-                                    href={item.href}
-                                    className="flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-                                >
-                                    Lihat preview
-                                </Link>
-                            </div>
+                    {item.payment_plan && (
+                        <div className="mb-4 border-t border-slate-100 pt-4 dark:border-gray-800">
+                            <p className="text-xs font-bold text-slate-500 dark:text-gray-400">Mulai dari</p>
+                            <p className="mt-1 text-lg font-black text-slate-950 dark:text-white">{item.payment_plan.price_formatted}</p>
+                            <p className="mt-1 text-xs text-slate-500 dark:text-gray-400">
+                                {Number(item.payment_plan.duration_days) > 0
+                                    ? `Akses ${item.payment_plan.duration_days} hari`
+                                    : 'Masa akses mengikuti paket'}
+                            </p>
                         </div>
-                    ) : (
-                        <Link
-                            href={item.href}
-                            className={`flex h-11 items-center justify-center gap-2 rounded-lg bg-gradient-to-r ${theme.ctaBg} px-4 text-sm font-black text-white shadow-sm transition hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600`}
-                        >
-                            Lihat preview
-                            <PlayArrowIcon sx={{ fontSize: 18 }} />
-                        </Link>
                     )}
+                    <Link
+                        href={item.href}
+                        className={`flex h-11 items-center justify-center gap-2 rounded-lg bg-gradient-to-r ${theme.ctaBg} px-4 text-sm font-black text-white shadow-sm transition hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600`}
+                    >
+                        Lihat Kelas
+                        <PlayArrowIcon sx={{ fontSize: 18 }} />
+                    </Link>
                 </div>
             </div>
         </article>
     );
 }
 
-export default function KelasPage({ programs = [], selectedPlanId = null }) {
+export default function KelasPage({ programs = [] }) {
     const [keyword, setKeyword] = useState('');
     const [status, setStatus] = useState('all');
-    const [checkoutPlanId, setCheckoutPlanId] = useState(null);
-    const [checkoutError, setCheckoutError] = useState('');
 
     const ownedCourses = useMemo(
         () => programs.filter((item) => item.has_class_access || item.waiting_for_approval || item.refund_required),
@@ -377,54 +305,6 @@ export default function KelasPage({ programs = [], selectedPlanId = null }) {
     const resetCatalog = () => {
         setKeyword('');
         setStatus('all');
-    };
-
-    const startCheckout = async (plan, kloterId = null) => {
-        setCheckoutError('');
-
-        try {
-            setCheckoutPlanId(plan.id);
-            const storageKey = `midtrans:checkout-intent:${plan.id}:${kloterId || 'mandiri'}`;
-            const submitCheckout = (requestKey) => window.axios.post(route('payments.midtrans.checkout'), {
-                    payment_plan_id: plan.id,
-                    checkout_request_key: requestKey,
-                    kloter_belajar_id: kloterId,
-                });
-            let requestKey = window.sessionStorage?.getItem(storageKey) || createCheckoutRequestKey();
-            window.sessionStorage?.setItem(storageKey, requestKey);
-            let response;
-
-            try {
-                response = await submitCheckout(requestKey);
-            } catch (checkoutError) {
-                if (checkoutError.response?.status !== 410) throw checkoutError;
-
-                requestKey = createCheckoutRequestKey();
-                window.sessionStorage?.setItem(storageKey, requestKey);
-                response = await submitCheckout(requestKey);
-            }
-            const transactionCode = response.data?.transaction_code;
-
-            if (!transactionCode) {
-                throw new Error('Checkout tidak mengembalikan kode transaksi. Silakan coba lagi.');
-            }
-
-            window.sessionStorage?.removeItem(storageKey);
-            window.sessionStorage?.setItem(
-                `midtrans:${transactionCode}`,
-                JSON.stringify({ snapToken: response.data.snap_token, redirectUrl: response.data.redirect_url }),
-            );
-
-            window.location.href = route('user.checkout', { transactionCode });
-        } catch (error) {
-            if ([409, 410].includes(error.response?.status)) {
-                window.sessionStorage?.removeItem(storageKey);
-            }
-
-            setCheckoutError(error.response?.data?.message || error.message || 'Gagal memulai pembayaran Midtrans.');
-        } finally {
-            setCheckoutPlanId(null);
-        }
     };
 
     return (
@@ -519,10 +399,6 @@ export default function KelasPage({ programs = [], selectedPlanId = null }) {
                             </div>
                     </section>
 
-                    {checkoutError && (
-                        <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-300">{checkoutError}</p>
-                    )}
-
                     <section id="jelajahi-kelas" aria-labelledby="jelajahi-kelas-title" className={`${mobileSection === 'catalog' ? 'block' : 'hidden'} lg:block`}>
                         <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 dark:border-gray-800 lg:flex-row lg:items-end lg:justify-between">
                             <div>
@@ -563,7 +439,7 @@ export default function KelasPage({ programs = [], selectedPlanId = null }) {
 
                         {filteredCatalog.length > 0 ? (
                             <div className="mt-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-                                {filteredCatalog.map((item, index) => <CatalogCourseCard key={item.id} item={item} index={index} onCheckout={startCheckout} checkoutPlanId={checkoutPlanId} selectedPlanId={selectedPlanId} />)}
+                                {filteredCatalog.map((item, index) => <CatalogCourseCard key={item.id} item={item} index={index} />)}
                             </div>
                         ) : (
                             <div className="mt-6 border border-dashed border-slate-300 bg-white px-6 py-14 text-center dark:border-gray-700 dark:bg-gray-900">

@@ -20,6 +20,7 @@ use App\Models\TargetUjianPengguna;
 use App\Services\AksesKuisPenggunaService;
 use App\Services\AksesPremiumService;
 use App\Services\KloterBelajarService;
+use App\Services\KelasPenggunaPayloadService;
 use App\Services\PembelajaranPenggunaService;
 use App\Services\ProgresRoadmapService;
 use Illuminate\Http\Request;
@@ -33,11 +34,14 @@ class ModulController extends Controller
         ProgramPembelajaran $program,
         AksesPremiumService $aksesPremium,
         KloterBelajarService $kloterService,
-        AksesKuisPenggunaService $aksesKuis
+        AksesKuisPenggunaService $aksesKuis,
+        KelasPenggunaPayloadService $kelasPayload
     ) {
         $user = Auth::user();
 
         abort_unless($program->status === 'published', 404);
+
+        $classAccess = $kelasPayload->forProgram($user, $program);
 
         $moduls = $program->modules()
             ->with([
@@ -435,6 +439,12 @@ class ModulController extends Controller
                 'slug' => $program->slug,
                 'description' => $program->description,
                 'level' => $program->level?->level_name,
+                'lessons' => $moduls->count(),
+                'completed_lessons' => $completedWeekCount,
+                'progress' => $moduls->isNotEmpty()
+                    ? (int) round(($completedWeekCount / $moduls->count()) * 100)
+                    : 0,
+                ...$classAccess,
                 'resources' => [
                     'presentations_count' => DeckPresentasi::whereIn('module_id', $accessibleModuleIds)->shared()->where('status', 'published')->count(),
                     'vocabulary_count' => $this->vocabularyQueryForModules($accessibleModuleIds)->count('vocabulary_bank.id'),
@@ -450,14 +460,6 @@ class ModulController extends Controller
                     'vocabulary_url' => route('user.modul.program.kosakata', $program->slug),
                     'quizzes_url' => $resourceWeek['quiz_url'] ?? null,
                 ],
-                'kloter' => $kloterAktif ? [
-                    'id' => $kloterAktif->id,
-                    'nama' => $kloterAktif->nama,
-                    'kode' => $kloterAktif->kode,
-                    'admin_name' => $kloterAktif->admin?->username,
-                    'tanggal_mulai' => optional($kloterAktif->tanggal_mulai)->format('d M Y'),
-                    'minggu_aktif' => $mingguAktifKloter,
-                ] : null,
                 'exam_target' => $examTargetPayload,
             ],
             'back_url' => route('user.kelas.index'),

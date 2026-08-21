@@ -1177,7 +1177,10 @@ it('returns Week and Day hierarchy to the user roadmap', function () {
             ->where('weeks.0.days.0.completion_method', 'flashcard')
             ->where('weeks.0.days.0.flashcard_summary.total', 1)
             ->where('weeks.0.days.0.flashcard_summary.reviewed', 0)
-            ->where('weeks.0.days.1.status', 'locked'));
+            ->where('weeks.0.days.1.status', 'locked')
+            ->has('program.payment_plans')
+            ->has('program.available_kloters')
+            ->where('program.has_class_access', false));
 });
 
 it('returns a selected class as an admin Week and Day workspace', function () {
