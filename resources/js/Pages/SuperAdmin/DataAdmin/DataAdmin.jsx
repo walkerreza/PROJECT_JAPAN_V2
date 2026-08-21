@@ -79,10 +79,23 @@ export default function DataAdmin({
     };
 
     const updateScope = (admin, adminScope) => {
-        router.patch(route('superadmin.admins.scope', admin.id), {
-            admin_scope: adminScope,
-        }, {
-            preserveScroll: true,
+        const nextLabel = adminScope === 'kloter' ? 'Admin Kloter' : 'Admin Global';
+        openConfirm({
+            variant: 'warning',
+            title: 'Ubah Cakupan Admin?',
+            message: 'Cakupan menentukan data siswa dan kelas yang dapat dikelola akun ini.',
+            details: [
+                { label: 'Admin', value: admin.name },
+                { label: 'Cakupan saat ini', value: admin.scope },
+                { label: 'Cakupan baru', value: nextLabel },
+            ],
+            confirmLabel: 'Ubah Cakupan',
+            onConfirm: () => router.patch(route('superadmin.admins.scope', admin.id), {
+                admin_scope: adminScope,
+            }, {
+                preserveScroll: true,
+                onFinish: closeConfirm,
+            }),
         });
     };
 
@@ -182,12 +195,16 @@ export default function DataAdmin({
                                                     <option value="kloter">Kloter</option>
                                                 </select>
                                             )}
-                                            <button onClick={() => setStatusTarget(item)} className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 text-xs font-black text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">
-                                                {item.raw_status === 'suspended' ? 'Activate' : 'Suspend'}
-                                            </button>
-                                            <button onClick={() => resetPassword(item)} className="rounded-lg border border-red-100 dark:border-red-900/30 px-3 py-2 text-xs font-black text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">
-                                                Reset
-                                            </button>
+                                            {!item.is_self && (
+                                                <>
+                                                    <button onClick={() => setStatusTarget(item)} className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 text-xs font-black text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">
+                                                        {item.raw_status === 'suspended' ? 'Aktifkan' : 'Tangguhkan'}
+                                                    </button>
+                                                    <button onClick={() => resetPassword(item)} className="rounded-lg border border-red-100 dark:border-red-900/30 px-3 py-2 text-xs font-black text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">
+                                                        Reset Password
+                                                    </button>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                 </div>

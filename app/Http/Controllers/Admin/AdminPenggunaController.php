@@ -12,6 +12,7 @@ use App\Models\PengerjaanKuis;
 use App\Models\Pengguna;
 use App\Models\Progres;
 use App\Services\AksesLanggananService;
+use App\Services\AksesPremiumService;
 use App\Services\ChartDataService;
 use App\Services\KloterBelajarService;
 use App\Services\NotifikasiPenggunaService;
@@ -82,7 +83,8 @@ class AdminPenggunaController extends Controller
         Request $request,
         Pengguna $user,
         KloterBelajarService $kloterService,
-        ChartDataService $chartData
+        ChartDataService $chartData,
+        AksesPremiumService $aksesPremium
     ): Response {
         /** @var Pengguna $admin */
         $admin = $request->user();
@@ -99,6 +101,10 @@ class AdminPenggunaController extends Controller
         }
 
         $programIds = $kloterService->programIdsDikelola($admin, $selectedKloter);
+        $studentProgramIds = collect($aksesPremium->statusAkses($user)['active_program_ids']);
+        $visibleStudentProgramIds = $programIds === null
+            ? $studentProgramIds
+            : $programIds->intersect($studentProgramIds)->values();
         $period = $chartData->resolvePeriod($request);
         $fromDate = $chartData->fromDate($period);
 
@@ -135,7 +141,7 @@ class AdminPenggunaController extends Controller
                 ->pluck('total', 'day'),
         ]);
         $levels = LevelPembelajaran::with([
-            'modules' => fn ($relation) => $this->batasiModuleProgram($relation->getQuery(), $programIds),
+            'modules' => fn ($relation) => $this->batasiModuleProgram($relation->getQuery(), $visibleStudentProgramIds),
         ])->orderBy('stage')->get();
 
         $levelProgress = $levels->map(function (LevelPembelajaran $level) use ($completedModuleIds) {

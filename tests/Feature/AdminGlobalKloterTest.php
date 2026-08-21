@@ -537,6 +537,21 @@ it('prevents removing kloter scope while an admin still owns a cohort', function
     expect($fixture['kloterAdmin']->fresh()->admin_scope)->toBe(Pengguna::ADMIN_SCOPE_KLOTER);
 });
 
+it('prevents a superadmin from resetting their own password', function () {
+    $superadmin = Pengguna::factory()->create([
+        'role' => 'superadmin',
+        'admin_scope' => null,
+        'status' => 'active',
+    ]);
+    $passwordHash = $superadmin->password;
+
+    $this->actingAs($superadmin)
+        ->post(route('superadmin.admins.reset-password', $superadmin))
+        ->assertUnprocessable();
+
+    expect($superadmin->fresh()->password)->toBe($passwordHash);
+});
+
 it('seeds global and kloter admins and assigns demo cohorts to the kloter admin', function () {
     Pengguna::factory()->unverified()->create([
         'email' => 'admin@japanlingo.com',

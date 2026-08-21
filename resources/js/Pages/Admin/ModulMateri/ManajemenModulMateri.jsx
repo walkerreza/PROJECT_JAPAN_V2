@@ -274,7 +274,7 @@ export default function ModulesIndex({ modules, levels = [], programs = [], filt
         title: '',
         week_number: '',
         description: '',
-        status: 'published',
+        status: 'draft',
     });
 
     useEffect(() => {
@@ -337,7 +337,7 @@ export default function ModulesIndex({ modules, levels = [], programs = [], filt
             title: '',
             week_number: currentModules.length ? Math.max(...currentModules.map((module) => Number(module.week_number))) + 1 : 1,
             description: '',
-            status: 'published',
+            status: 'draft',
         });
         moduleForm.clearErrors();
         setShowModuleDialog(true);

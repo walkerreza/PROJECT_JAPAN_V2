@@ -25,7 +25,7 @@ const emptyForm = {
     description: '',
     instructor_name: '',
     thumbnail_url: '',
-    status: 'published',
+    status: 'draft',
     sort_order: 1,
 };
 

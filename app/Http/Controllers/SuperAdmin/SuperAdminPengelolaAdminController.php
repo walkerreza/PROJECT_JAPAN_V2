@@ -54,6 +54,7 @@ class SuperAdminPengelolaAdminController extends SuperAdminDasarController
                 'raw_role' => $user->role,
                 'raw_scope' => $user->admin_scope,
                 'raw_status' => $user->status,
+                'is_self' => $request->user()->is($user),
                 'role' => ucfirst($user->role),
                 'scope' => $user->role === 'superadmin'
                     ? 'Role terpisah'
@@ -182,6 +183,7 @@ class SuperAdminPengelolaAdminController extends SuperAdminDasarController
     public function resetPassword(Request $request, Pengguna $user)
     {
         abort_if(! in_array($user->role, ['admin', 'superadmin'], true), 404);
+        abort_if($request->user()->is($user), 422, 'Tidak bisa mereset password akun sendiri dari halaman ini.');
 
         $password = Str::password(10, true, true, false, false);
 
