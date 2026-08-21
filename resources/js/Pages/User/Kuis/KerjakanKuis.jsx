@@ -834,8 +834,8 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                         <div className="relative border-b border-orange-100 bg-gradient-to-r from-orange-50 to-lime-50 px-4 py-3 dark:border-gray-800 dark:from-orange-950/40 dark:to-lime-950/30 sm:px-8 sm:py-5">
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
-                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-600 sm:text-xs sm:tracking-[0.3em]">Mini Lesson</p>
-                                    <h1 className="mt-1 text-lg font-black text-gray-900 dark:text-white sm:mt-2 sm:text-2xl">Kosakata sebelum lanjut soal</h1>
+                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-600 sm:text-xs sm:tracking-[0.3em]">Latihan Repetisi</p>
+                                    <h1 className="mt-1 text-lg font-black text-gray-900 dark:text-white sm:mt-2 sm:text-2xl">Penguatan materi dari Hari ini</h1>
                                 </div>
                                 <span className="w-fit rounded-full bg-white px-3 py-1.5 text-[11px] font-black uppercase tracking-wider text-orange-700 shadow-sm dark:bg-gray-900 dark:text-orange-300 dark:ring-1 dark:ring-orange-900/60 sm:px-4 sm:py-2 sm:text-xs">
                                     {flashcardIndex + 1}/{flashcardSchedule.length}
@@ -970,7 +970,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                         <div className="mb-6 w-full text-center md:mb-8">
                             <h2 className="mb-2 break-words px-1 text-lg font-black text-gray-900 dark:text-white sm:text-xl md:text-3xl">{currentQ.question}</h2>
                             <p className="text-xs font-bold uppercase tracking-widest text-gray-600 dark:text-gray-300">
-                                {currentQ.isRepeat ? 'Penguatan' : `Soal ${Math.min(completedOriginalQuestionIds.size + 1, originalQuestionCount)} dari ${originalQuestionCount}`}
+                                {currentQ.isRepeat ? 'Penguatan' : `Soal ${Math.min((currentQ.originalIndex ?? 0) + 1, originalQuestionCount)} dari ${originalQuestionCount}`}
                             </p>
                         </div>
 

@@ -13,6 +13,7 @@ use App\Models\Soal;
 use App\Services\AksesKuisPenggunaService;
 use App\Services\AksesPremiumService;
 use App\Services\GamifikasiConfigService;
+use App\Services\PenilaianJawabanKuisService;
 use App\Services\ProgresRoadmapService;
 use App\Services\RepetisiPembelajaranService;
 use App\Services\RingkasanProgresPenggunaService;
@@ -23,6 +24,10 @@ use Inertia\Inertia;
 
 class ProgresController extends Controller
 {
+    public function __construct(
+        private readonly PenilaianJawabanKuisService $penilaian
+    ) {}
+
     public function index(RingkasanProgresPenggunaService $summary)
     {
         return Inertia::render('User/Progress/Progress', $summary->summary(Auth::user()));
@@ -165,7 +170,7 @@ class ProgresController extends Controller
             ->where('source_id', $quiz->id)
             ->exists();
 
-        $attempt = DB::transaction(function () use ($validated, $quiz, $user, $repetisi, $gamifikasiConfig, $isWeeklyExam, &$wrongAttemptCount, &$answeredUniqueCount, &$attemptAlreadyCompleted) {
+        $attempt = DB::transaction(function () use ($validated, $quiz, $user, $repetisi, $gamifikasiConfig, $isWeeklyExam, $rewardAlreadyGranted, &$wrongAttemptCount, &$answeredUniqueCount, &$attemptAlreadyCompleted) {
             $attempt = null;
 
             if ($isWeeklyExam) {
@@ -193,7 +198,7 @@ class ProgresController extends Controller
                 ->keyBy(fn ($answer) => (int) $answer['question_id'])
                 ->values();
             $questionMap = $quiz->questions->keyBy('id');
-            $scoredQuestionMap = $questionMap->reject(fn ($question) => $this->isPracticeQuestion($question));
+            $scoredQuestionMap = $questionMap->reject(fn ($question) => $this->penilaian->soalLatihan($question));
             $scoredAnswers = $answers->filter(
                 fn ($answer) => $scoredQuestionMap->has((int) $answer['question_id'])
             );
@@ -206,12 +211,12 @@ class ProgresController extends Controller
             $earnedPoints = (int) $scoredAnswers->sum(function ($answer) use ($scoredQuestionMap) {
                 $question = $scoredQuestionMap->get((int) $answer['question_id']);
 
-                return $question && $this->isAnswerCorrect($answer['answer_text'] ?? '', $question->correct_answer)
+                return $question && $this->penilaian->jawabanSama($answer['answer_text'] ?? '', $question->correct_answer)
                     ? max(1, (int) ($question->points ?? 1))
                     : 0;
             });
             $score = $totalPoints > 0 ? (int) round(($earnedPoints / $totalPoints) * 100) : 0;
-            $xpEarned = $isWeeklyExam
+            $xpEarned = $isWeeklyExam || $rewardAlreadyGranted
                 ? 0
                 : $gamifikasiConfig->quizXpForScore($correctCount, $totalQuestions);
             $wrongAttemptCount = $answerEvents
@@ -219,8 +224,8 @@ class ProgresController extends Controller
                     $question = $questionMap->get((int) $answer['question_id']);
 
                     return $question
-                        && ! $this->isPracticeQuestion($question)
-                        && ! $this->isAnswerCorrect($answer['answer_text'] ?? '', $question->correct_answer);
+                        && ! $this->penilaian->soalLatihan($question)
+                        && ! $this->penilaian->jawabanSama($answer['answer_text'] ?? '', $question->correct_answer);
                 })
                 ->count();
 
@@ -251,10 +256,10 @@ class ProgresController extends Controller
                 }
 
                 $answerText = $answer['answer_text'] ?? '';
-                $isPractice = $this->isPracticeQuestion($question);
+                $isPractice = $this->penilaian->soalLatihan($question);
                 $isCorrect = $isPractice
-                    ? $this->isHandwritingMastered($answer['answer_payload'] ?? [])
-                    : $this->isAnswerCorrect($answerText, $question->correct_answer);
+                    ? $this->penilaian->handwritingDikuasai($answer['answer_payload'] ?? [], $question)
+                    : $this->penilaian->jawabanSama($answerText, $question->correct_answer);
 
                 $attempt->answers()->create([
                     'question_id' => $question->id,
@@ -276,9 +281,9 @@ class ProgresController extends Controller
                     $repetisi->catatJawabanSoal(
                         $user,
                         $question,
-                        $this->isPracticeQuestion($question)
-                            ? $this->isHandwritingMastered($answer['answer_payload'] ?? [])
-                            : $this->isAnswerCorrect($answer['answer_text'] ?? '', $question->correct_answer),
+                        $this->penilaian->soalLatihan($question)
+                            ? $this->penilaian->handwritingDikuasai($answer['answer_payload'] ?? [], $question)
+                            : $this->penilaian->jawabanSama($answer['answer_text'] ?? '', $question->correct_answer),
                         $quiz
                     );
                 });
@@ -442,27 +447,11 @@ class ProgresController extends Controller
     {
         return $answers
             ->filter(fn ($answer) => $questionMap->has((int) $answer['question_id']))
-            ->filter(fn ($answer) => $this->isAnswerCorrect(
+            ->filter(fn ($answer) => $this->penilaian->jawabanSama(
                 $answer['answer_text'] ?? '',
                 $questionMap->get((int) $answer['question_id'])->correct_answer
             ))
             ->count();
-    }
-
-    private function isPracticeQuestion(Soal $question): bool
-    {
-        return $question->type === 'handwriting'
-            || (bool) data_get($question->options, 'practice_only', false);
-    }
-
-    private function isHandwritingMastered(array $payload): bool
-    {
-        $completed = (int) ($payload['completed_strokes'] ?? 0);
-        $total = (int) ($payload['total_strokes'] ?? 0);
-
-        return $total > 0
-            && $completed >= $total
-            && ! (bool) ($payload['revealed'] ?? false);
     }
 
     private function attemptReview(PengerjaanKuis $attempt, Kuis $quiz): array
@@ -502,13 +491,4 @@ class ProgresController extends Controller
         };
     }
 
-    private function isAnswerCorrect(string $answer, string $correctAnswer): bool
-    {
-        return $this->normalizeAnswer($answer) === $this->normalizeAnswer($correctAnswer);
-    }
-
-    private function normalizeAnswer(string $value): string
-    {
-        return mb_strtolower(trim(preg_replace('/\s+/u', ' ', $value)));
-    }
 }

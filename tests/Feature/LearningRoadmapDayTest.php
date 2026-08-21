@@ -7,6 +7,7 @@ use App\Models\Kosakata;
 use App\Models\Kuis;
 use App\Models\LevelPembelajaran;
 use App\Models\LogReward;
+use App\Models\Progres;
 use App\Models\Modul;
 use App\Models\PengerjaanKuis;
 use App\Models\Pengguna;
@@ -1254,6 +1255,34 @@ it('rejects direct resource URLs for a locked Day', function () {
     $this->actingAs($user)
         ->get(route('user.modul.program.presentasi', $fixture['program']->slug).'?'.http_build_query($query))
         ->assertForbidden();
+});
+
+it('keeps the next Week locked until the previous Week is complete', function () {
+    $fixture = createDayRoadmapFixture();
+    $user = Pengguna::factory()->create(['role' => 'user']);
+    $nextModule = Modul::create([
+        'level_id' => $fixture['module']->level_id,
+        'program_pembelajaran_id' => $fixture['program']->id,
+        'title' => 'Penerapan Pola Kalimat',
+        'week_number' => 2,
+        'description' => 'Week lanjutan.',
+        'status' => 'published',
+    ]);
+    $roadmap = app(ProgresRoadmapService::class);
+
+    expect($roadmap->statusAksesModul($user, $nextModule))
+        ->toMatchArray([
+            'allowed' => false,
+            'reason' => 'previous_week_required',
+        ]);
+
+    Progres::create([
+        'user_id' => $user->id,
+        'module_id' => $fixture['module']->id,
+        'completed_at' => now(),
+    ]);
+
+    expect($roadmap->statusAksesModul($user, $nextModule)['allowed'])->toBeTrue();
 });
 
 it('stores handwriting practice without changing quiz score or Day requirements', function () {

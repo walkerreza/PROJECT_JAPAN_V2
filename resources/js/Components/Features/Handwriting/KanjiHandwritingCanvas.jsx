@@ -305,9 +305,9 @@ export default function KanjiHandwritingCanvas({
     };
 
     const reveal = async () => {
-        const nextResult = { ...resultRef.current, completed: true, revealed: true };
+        const nextResult = { ...resultRef.current, completed: false, revealed: true };
         resultRef.current = nextResult;
-        setCompleted(true);
+        setCompleted(false);
         setEvaluation({
             success: false,
             correct: writerRef.current?.currentStrokeIndex || 0,
@@ -320,17 +320,11 @@ export default function KanjiHandwritingCanvas({
         } catch {
             setMessage('Panduan tidak dapat diputar.');
         }
-        setMessage('Panduan ditampilkan. Hasil dicatat sebagai masih belajar.');
-        onCompleteRef.current?.({
-            character,
-            completed_strokes: writerRef.current?.currentStrokeIndex || 0,
-            total_strokes: strokeData?.stroke_count || 0,
-            attempts_by_stroke: nextResult.attemptsByStroke,
-            mistakes: nextResult.mistakes,
-            hints_used: nextResult.hintsUsed,
-            duration_ms: Date.now() - startedAtRef.current,
-            revealed: true,
-        });
+        writerRef.current?.clear();
+        setDrawnStrokes(0);
+        setProgress(0);
+        setEvaluation(null);
+        setMessage('Panduan selesai. Sekarang coba tulis kembali dengan tanganmu sendiri.');
     };
 
     return (

@@ -23,6 +23,11 @@ class ProgresRoadmapService
     {
         $day->loadMissing('module');
 
+        $moduleAccess = $this->statusAksesModul($user, $day->module);
+        if (! $moduleAccess['allowed']) {
+            return $moduleAccess;
+        }
+
         if ($day->status !== 'published') {
             return ['allowed' => false, 'reason' => 'day_unavailable', 'message' => 'Day ini belum tersedia.'];
         }
@@ -36,6 +41,37 @@ class ProgresRoadmapService
 
         if ($previousDay && ! $this->hariSelesai($user, $previousDay)) {
             return ['allowed' => false, 'reason' => 'previous_day_required', 'message' => 'Selesaikan Day sebelumnya terlebih dahulu.'];
+        }
+
+        return ['allowed' => true, 'reason' => null, 'message' => null];
+    }
+
+    public function statusAksesModul(Pengguna $user, ?Modul $module): array
+    {
+        if (! $module || $module->status !== 'published') {
+            return ['allowed' => false, 'reason' => 'week_unavailable', 'message' => 'Minggu ini belum tersedia.'];
+        }
+
+        $previousModule = Modul::query()
+            ->where('program_pembelajaran_id', $module->program_pembelajaran_id)
+            ->where('status', 'published')
+            ->where(function ($query) use ($module) {
+                $query->where('week_number', '<', $module->week_number)
+                    ->orWhere(function ($query) use ($module) {
+                        $query->where('week_number', $module->week_number)
+                            ->where('id', '<', $module->id);
+                    });
+            })
+            ->orderByDesc('week_number')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($previousModule && ! Progres::query()
+            ->where('user_id', $user->id)
+            ->where('module_id', $previousModule->id)
+            ->whereNotNull('completed_at')
+            ->exists()) {
+            return ['allowed' => false, 'reason' => 'previous_week_required', 'message' => 'Selesaikan Minggu sebelumnya terlebih dahulu.'];
         }
 
         return ['allowed' => true, 'reason' => null, 'message' => null];

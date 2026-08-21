@@ -22,6 +22,7 @@ use App\Services\AksesPremiumService;
 use App\Services\KloterBelajarService;
 use App\Services\KelasPenggunaPayloadService;
 use App\Services\PembelajaranPenggunaService;
+use App\Services\PenilaianJawabanKuisService;
 use App\Services\ProgresRoadmapService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -476,7 +477,7 @@ class ModulController extends Controller
 
         abort_unless($program->status === 'published', 404);
 
-        $moduleIds = $this->accessibleModuleIdsForProgram($program, $user, $aksesPremium);
+        $moduleIds = $this->accessibleModuleIdsForProgram($program, $user, $aksesPremium, $progresRoadmap);
         $selectedModuleId = $this->selectedAccessibleModuleId($request, $moduleIds);
         $queryModuleIds = $selectedModuleId ? collect([$selectedModuleId]) : $moduleIds;
         $query = $this->vocabularyQueryForModules($queryModuleIds);
@@ -550,7 +551,7 @@ class ModulController extends Controller
 
         abort_unless($program->status === 'published', 404);
 
-        $moduleIds = $this->accessibleModuleIdsForProgram($program, $user, $aksesPremium);
+        $moduleIds = $this->accessibleModuleIdsForProgram($program, $user, $aksesPremium, $progresRoadmap);
         $selectedModuleId = $this->selectedAccessibleModuleId($request, $moduleIds);
         $queryModuleIds = $selectedModuleId ? collect([$selectedModuleId]) : $moduleIds;
         $selectedDayId = $this->selectedAccessibleDayId($request, $queryModuleIds, $user, $progresRoadmap);
@@ -710,7 +711,7 @@ class ModulController extends Controller
         ]);
     }
 
-    public function checkQuestion(Request $request, Soal $question, AksesKuisPenggunaService $aksesKuis)
+    public function checkQuestion(Request $request, Soal $question, AksesKuisPenggunaService $aksesKuis, PenilaianJawabanKuisService $penilaian)
     {
         $question->load('quiz.module');
 
@@ -730,9 +731,7 @@ class ModulController extends Controller
                 'answer_payload.revealed' => ['required', 'boolean'],
             ]);
             $payload = $validated['answer_payload'];
-            $expectedStrokes = (int) data_get($question->options, 'stroke_count', $payload['total_strokes']);
-            $completed = (int) $payload['completed_strokes'] >= $expectedStrokes;
-            $mastered = $completed && ! $payload['revealed'];
+            $mastered = $penilaian->benar($question, $validated['answer'] ?? null, $payload);
 
             return response()->json([
                 'is_correct' => $mastered,
@@ -751,7 +750,7 @@ class ModulController extends Controller
         ]);
 
         return response()->json([
-            'is_correct' => $this->isAnswerCorrect($validated['answer'], (string) $question->correct_answer),
+            'is_correct' => $penilaian->jawabanSama($validated['answer'], (string) $question->correct_answer),
             'practice_only' => false,
             'explanation' => $question->explanation,
         ]);
@@ -826,12 +825,18 @@ class ModulController extends Controller
         ];
     }
 
-    private function accessibleModuleIdsForProgram(ProgramPembelajaran $program, $user, AksesPremiumService $aksesPremium)
+    private function accessibleModuleIdsForProgram(
+        ProgramPembelajaran $program,
+        $user,
+        AksesPremiumService $aksesPremium,
+        ProgresRoadmapService $progresRoadmap
+    )
     {
         return $program->modules()
             ->where('status', 'published')
             ->get()
-            ->filter(fn (Modul $modul) => $aksesPremium->bolehAksesModul($user, $modul))
+            ->filter(fn (Modul $modul) => $aksesPremium->bolehAksesModul($user, $modul)
+                && $progresRoadmap->statusAksesModul($user, $modul)['allowed'])
             ->pluck('id');
     }
 
@@ -865,7 +870,9 @@ class ModulController extends Controller
 
         $moduleId = $request->integer('module');
 
-        return $moduleIds->contains($moduleId) ? $moduleId : null;
+        abort_unless($moduleIds->contains($moduleId), 403, 'Selesaikan Minggu sebelumnya terlebih dahulu.');
+
+        return $moduleId;
     }
 
     private function vocabularyQueryForModules($moduleIds)
@@ -883,13 +890,4 @@ class ModulController extends Controller
             ->distinct();
     }
 
-    private function isAnswerCorrect(string $answer, string $correctAnswer): bool
-    {
-        return $this->normalizeAnswer($answer) === $this->normalizeAnswer($correctAnswer);
-    }
-
-    private function normalizeAnswer(string $value): string
-    {
-        return mb_strtolower(trim(preg_replace('/\s+/u', ' ', $value)));
-    }
 }

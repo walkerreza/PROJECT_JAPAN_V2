@@ -134,6 +134,19 @@ it('stores quiz attempt once while processing repeated answer events for reviews
         ->and($review->wrong_count)->toBe(1)
         ->and($review->review_count)->toBe(2)
         ->and($review->mastery_level)->toBe(1);
+
+    $this->actingAs($user)->post(route('user.attempts.store'), [
+        'quiz_id' => $quiz->id,
+        'module_flow' => true,
+        'answers' => [[
+            'question_id' => $question->id,
+            'answer_text' => 'makan',
+        ]],
+    ])->assertRedirect();
+
+    expect(PengerjaanKuis::where('user_id', $user->id)->count())->toBe(2)
+        ->and(PengerjaanKuis::where('user_id', $user->id)->latest('id')->value('xp_earned'))->toBe(0)
+        ->and(LogReward::where('user_id', $user->id)->where('source_type', 'quiz')->where('source_id', $quiz->id)->count())->toBe(1);
 });
 
 it('stores an empty timeout quiz attempt without awarding xp', function () {
