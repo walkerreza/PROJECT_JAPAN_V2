@@ -5,6 +5,7 @@ import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 import RestartAltRoundedIcon from '@mui/icons-material/RestartAltRounded';
 import UndoRoundedIcon from '@mui/icons-material/UndoRounded';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
+import { playSoundEffect } from '@/Components/UI/SoundEffects';
 import { loadStrokeCharacter } from './strokeData';
 
 const initialResult = {
@@ -15,10 +16,35 @@ const initialResult = {
     revealed: false,
 };
 
+function StrokeComparisonPreview({ label, paths, strokeColor = '#334155', userStrokes = false }) {
+    return (
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-2 dark:border-gray-700 dark:bg-gray-950/50">
+            <p className="mb-1.5 text-center text-[10px] font-black uppercase tracking-[0.14em] text-gray-500 dark:text-gray-400">
+                {label}
+            </p>
+            <svg viewBox="0 0 109 109" className="mx-auto block w-full max-w-[138px]" role="img" aria-label={label}>
+                <path d="M54.5 5V104M5 54.5H104" stroke="currentColor" strokeWidth="0.75" opacity="0.13" />
+                {paths.map((path, index) => (
+                    <path
+                        key={`${label}-${index}`}
+                        d={typeof path === 'string' ? path : path.d}
+                        fill="none"
+                        stroke={userStrokes ? path.color : strokeColor}
+                        strokeWidth={userStrokes ? 5 : 4.2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                    />
+                ))}
+            </svg>
+        </div>
+    );
+}
+
 export default function KanjiHandwritingCanvas({
     character,
     mode = 'practice',
     compact = false,
+    selfEvaluation = false,
     onChange,
     onComplete,
     onError,
@@ -39,6 +65,7 @@ export default function KanjiHandwritingCanvas({
     const [mistakesOnStroke, setMistakesOnStroke] = useState(0);
     const [failedChecks, setFailedChecks] = useState(0);
     const [evaluation, setEvaluation] = useState(null);
+    const [evaluationPreview, setEvaluationPreview] = useState(null);
     const [completed, setCompleted] = useState(false);
     const [strokeFeedback, setStrokeFeedback] = useState(null);
 
@@ -100,10 +127,12 @@ export default function KanjiHandwritingCanvas({
         setMistakesOnStroke(0);
         setFailedChecks(0);
         setEvaluation(null);
+        setEvaluationPreview(null);
         setCompleted(false);
         setStrokeFeedback(null);
 
         const isQuizMode = mode === 'quiz';
+        const usesSelfEvaluation = isQuizMode && selfEvaluation;
         const writer = new KanjiWriter(containerId, strokeData.paths, {
             width: 109,
             height: 109,
@@ -176,6 +205,14 @@ export default function KanjiHandwritingCanvas({
                 }
 
                 userStroke.path.setAttribute('stroke', writer.options.incorrectColor);
+                if (usesSelfEvaluation) {
+                    setStrokeFeedback(null);
+                    setMessage(nextTotal >= strokeData.stroke_count
+                        ? 'Semua goresan sudah dibuat. Tekan Periksa Tulisan untuk membandingkan hasil.'
+                        : 'Stroke ini belum tepat. Kamu bisa menghapusnya atau lanjutkan lalu periksa di akhir.');
+                    return;
+                }
+
                 writer.svg.style.pointerEvents = 'none';
                 setStrokeFeedback({
                     stroke: strokeIndex + 1,
@@ -252,7 +289,7 @@ export default function KanjiHandwritingCanvas({
             writer.destroy();
             writerRef.current = null;
         };
-    }, [containerId, mode, status, strokeData]);
+    }, [containerId, mode, selfEvaluation, status, strokeData]);
 
     const reset = () => {
         writerRef.current?.clear();
@@ -263,6 +300,7 @@ export default function KanjiHandwritingCanvas({
         setDrawnStrokes(0);
         setMistakesOnStroke(0);
         setEvaluation(null);
+        setEvaluationPreview(null);
         if (mode !== 'quiz') setFailedChecks(0);
         setCompleted(false);
         setStrokeFeedback(null);
@@ -308,26 +346,43 @@ export default function KanjiHandwritingCanvas({
             incorrect: incorrectStrokes,
             total: strokeData?.stroke_count || checkResult.results.length,
         });
+        if (selfEvaluation) {
+            setEvaluationPreview({
+                userPaths: writer.userStrokes
+                    .map((stroke) => ({
+                        d: stroke.path?.getAttribute('d') || '',
+                        color: stroke.path?.getAttribute('stroke') || writer.options.strokeColor,
+                    }))
+                    .filter((stroke) => stroke.d),
+                targetPaths: strokeData?.paths || [],
+            });
+            writer.svg.style.pointerEvents = 'none';
+        }
         emitResult(nextResult, correctStrokes);
 
         if (!checkResult.success) {
             setFailedChecks((count) => count + 1);
             setMessage(`${correctStrokes} stroke tepat, ${incorrectStrokes} perlu diperbaiki.`);
+            playSoundEffect(selfEvaluation ? 'warning' : 'incorrect');
             return;
         }
 
         setCompleted(true);
         setProgress(strokeData.stroke_count);
         setMessage('Tulisan sudah sesuai. Tekan Lanjut untuk meneruskan.');
+        playSoundEffect('correct');
     };
 
-    const continueAfterSuccess = () => {
-        if (mode !== 'quiz' || !completed || !evaluation?.success) return;
+    const continueAfterEvaluation = () => {
+        if (mode !== 'quiz' || !evaluation || (!selfEvaluation && (!completed || !evaluation.success))) return;
 
         const result = resultRef.current;
+        const outcome = evaluation.success ? 'completed' : 'skipped';
+        playSoundEffect('confirm');
         onCompleteRef.current?.({
             character,
-            completed_strokes: strokeData.stroke_count,
+            outcome,
+            completed_strokes: outcome === 'completed' ? strokeData.stroke_count : evaluation.correct,
             total_strokes: strokeData.stroke_count,
             attempts_by_stroke: result.attemptsByStroke,
             mistakes: result.mistakes,
@@ -335,6 +390,11 @@ export default function KanjiHandwritingCanvas({
             duration_ms: Date.now() - startedAtRef.current,
             revealed: result.revealed,
         });
+    };
+
+    const retryEvaluation = () => {
+        playSoundEffect('select');
+        reset();
     };
 
     const hint = () => {
@@ -412,7 +472,7 @@ export default function KanjiHandwritingCanvas({
             <p className={`mt-2 min-h-5 text-center text-xs font-bold ${status === 'error' ? 'text-red-600' : 'text-gray-500 dark:text-gray-400'}`}>
                 {message}
             </p>
-            {mode === 'quiz' && evaluation && (
+            {mode === 'quiz' && evaluation && !selfEvaluation && (
                 <div
                     role="status"
                     aria-live="polite"
@@ -429,6 +489,57 @@ export default function KanjiHandwritingCanvas({
                             : `${evaluation.correct} stroke tepat, ${evaluation.incorrect} perlu diperbaiki.`}
                     </p>
                 </div>
+            )}
+            {mode === 'quiz' && selfEvaluation && evaluation && evaluationPreview && (
+                <section
+                    role="dialog"
+                    aria-modal="false"
+                    aria-labelledby={`${containerId}-evaluation-title`}
+                    className="mt-3 rounded-2xl border border-gray-200 bg-white p-3 shadow-lg shadow-gray-900/10 dark:border-gray-700 dark:bg-gray-900 dark:shadow-black/30 sm:p-4"
+                >
+                    <div className="text-center">
+                        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-orange-600 dark:text-orange-300">Evaluasi tulisan</p>
+                        <h3 id={`${containerId}-evaluation-title`} className="mt-1 text-base font-black text-gray-900 dark:text-white">
+                            Bandingkan hasil tulisanmu
+                        </h3>
+                        <p className={`mt-1 text-sm font-black ${evaluation.success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                            {evaluation.success ? 'Tepat' : 'Perlu diperbaiki'}
+                        </p>
+                        <p className="mt-0.5 text-xs font-semibold text-gray-600 dark:text-gray-300">
+                            {evaluation.success
+                                ? `Semua ${evaluation.total} stroke sudah sesuai.`
+                                : `${evaluation.correct} dari ${evaluation.total} stroke sudah sesuai panduan.`}
+                        </p>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-2.5">
+                        <StrokeComparisonPreview label="Tulisanmu" paths={evaluationPreview.userPaths} userStrokes />
+                        <StrokeComparisonPreview label="Target" paths={evaluationPreview.targetPaths} />
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                        <button
+                            type="button"
+                            data-sound="none"
+                            onClick={retryEvaluation}
+                            className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-orange-200 bg-orange-50 px-3 text-xs font-black text-orange-700 transition hover:bg-orange-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-300/50 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-300 dark:hover:bg-orange-900/60"
+                        >
+                            <RestartAltRoundedIcon sx={{ fontSize: 18 }} /> Coba Lagi
+                        </button>
+                        <button
+                            type="button"
+                            data-sound="none"
+                            onClick={continueAfterEvaluation}
+                            className={`inline-flex h-11 items-center justify-center rounded-xl px-3 text-xs font-black text-white shadow-sm transition focus-visible:outline-none focus-visible:ring-4 dark:text-gray-950 ${
+                                evaluation.success
+                                    ? 'bg-green-600 hover:bg-green-700 focus-visible:ring-green-300/60 dark:bg-green-500 dark:hover:bg-green-400'
+                                    : 'bg-gray-900 hover:bg-gray-800 focus-visible:ring-gray-300/60 dark:bg-gray-100 dark:hover:bg-white'
+                            }`}
+                        >
+                            {evaluation.success ? 'Lanjut latihan' : 'Lewati latihan'}
+                        </button>
+                    </div>
+                </section>
             )}
             {mode === 'quiz' && strokeFeedback && (
                 <div role="alert" className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-left text-red-800 dark:border-red-900/60 dark:bg-red-950/35 dark:text-red-200">
@@ -454,17 +565,18 @@ export default function KanjiHandwritingCanvas({
                             <PlayArrowRoundedIcon sx={{ fontSize: 18 }} /> Putar
                         </button>
                     )}
-                    <button type="button" onClick={reset} disabled={mode === 'quiz' && drawnStrokes === 0} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white text-xs font-black text-gray-700 transition hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-gray-300/50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700">
+                    <button type="button" onClick={reset} disabled={mode === 'quiz' && (drawnStrokes === 0 || (selfEvaluation && evaluation))} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white text-xs font-black text-gray-700 transition hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-gray-300/50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700">
                         <RestartAltRoundedIcon sx={{ fontSize: 18 }} /> Ulangi
                     </button>
-                    {mode === 'quiz' && !completed && (
+                    {mode === 'quiz' && !completed && !(selfEvaluation && evaluation) && (
                         <button type="button" onClick={undoLastStroke} disabled={drawnStrokes === 0} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-orange-200 bg-orange-50 text-xs font-black text-orange-700 transition hover:bg-orange-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-300/50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-300 dark:hover:bg-orange-900/60">
                             <UndoRoundedIcon sx={{ fontSize: 18 }} /> Hapus
                         </button>
                     )}
-                    {mode === 'quiz' && !completed && (
+                    {mode === 'quiz' && !completed && !(selfEvaluation && evaluation) && (
                         <button
                             type="button"
+                            data-sound="none"
                             onClick={checkWriting}
                             disabled={drawnStrokes === 0}
                             className="col-span-1 inline-flex h-10 items-center justify-center rounded-xl bg-orange-600 px-3 text-xs font-black text-white shadow-sm transition hover:bg-orange-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-300/60 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-orange-500 dark:text-gray-950 dark:hover:bg-orange-400 sm:col-span-2"
@@ -472,15 +584,15 @@ export default function KanjiHandwritingCanvas({
                             Periksa Tulisan
                         </button>
                     )}
-                    {(mode === 'practice' || mode === 'quiz') && !completed && (
+                    {(mode === 'practice' || mode === 'quiz') && !completed && !(selfEvaluation && evaluation) && (
                         <button type="button" onClick={hint} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 text-xs font-black text-amber-700 transition hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300/50 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300 dark:hover:bg-amber-900/60">
                             <LightbulbOutlinedIcon sx={{ fontSize: 17 }} /> Hint
                         </button>
                     )}
-                    {mode === 'quiz' && completed && evaluation?.success && (
+                    {mode === 'quiz' && !selfEvaluation && completed && evaluation?.success && (
                         <button
                             type="button"
-                            onClick={continueAfterSuccess}
+                            onClick={continueAfterEvaluation}
                             className="col-span-1 inline-flex h-10 items-center justify-center rounded-xl bg-green-600 px-3 text-xs font-black text-white shadow-sm transition hover:bg-green-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-green-300/60 dark:bg-green-500 dark:text-gray-950 dark:hover:bg-green-400 sm:col-span-3"
                         >
                             Lanjut

@@ -533,14 +533,19 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
         continueAfterFlashcard();
     };
 
-    const finishHandwritingRemediation = () => {
+    const finishHandwritingRemediation = (result = {}) => {
         const nextIndex = (handwritingPractice?.character_index ?? 0) + 1;
+        const currentOutcome = {
+            character: result.character || handwritingPractice?.characters?.[handwritingPractice.character_index]?.character,
+            outcome: result.outcome === 'skipped' ? 'skipped' : 'completed',
+        };
 
         if (nextIndex < (handwritingPractice?.characters?.length ?? 0)) {
-            playSoundEffect('correct');
+            playSoundEffect(currentOutcome.outcome === 'completed' ? 'correct' : 'select');
             setHandwritingPractice((current) => ({
                 ...current,
                 character_index: nextIndex,
+                outcomes: [...(current.outcomes || []), currentOutcome],
             }));
             return;
         }
@@ -760,12 +765,27 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
         return (
             <div className="flex min-h-[100dvh] flex-col items-center bg-orange-50 px-4 py-6 font-sans dark:bg-gray-950 sm:py-10">
                 <Head title="Latihan Menulis" />
-                <header className="mb-5 flex w-full max-w-3xl items-center gap-3">
+                <header className="mb-5 flex w-full max-w-3xl items-start gap-3">
                     <button type="button" onClick={confirmExit} aria-label="Keluar dari kuis" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-600 transition hover:bg-white hover:text-gray-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-300/50 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white">
                         <CloseIcon />
                     </button>
                     <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-orange-600">Penguatan setelah flashcard</p>
+                        <div className="flex items-center gap-2">
+                            <div className="h-3 min-w-0 flex-1 overflow-hidden rounded-full bg-orange-100 dark:bg-gray-800">
+                                <motion.div
+                                    className="h-full rounded-full"
+                                    style={{ backgroundColor: theme.activeColor }}
+                                    initial={false}
+                                    animate={{ width: `${progressPercentage}%` }}
+                                    transition={{ duration: 0.5, ease: 'easeOut' }}
+                                />
+                            </div>
+                            <div className="flex h-9 shrink-0 items-center justify-center gap-1 rounded-full bg-white px-2.5 text-sm font-black text-red-500 shadow-sm ring-1 ring-red-100 dark:bg-gray-900 dark:ring-red-900/60">
+                                <FavoriteIcon sx={{ fontSize: 19, color: lives > 0 ? '#EF4444' : '#D1D5DB' }} />
+                                <span className="tabular-nums">{lives}</span>
+                            </div>
+                        </div>
+                        <p className="mt-2 text-[10px] font-black uppercase tracking-[0.22em] text-orange-600">Penguatan setelah flashcard</p>
                         <h1 className="truncate text-lg font-black text-gray-900 dark:text-white">Tulis {activeWritingCharacter.character}</h1>
                         {handwritingTotal > 1 && <p className="text-xs font-bold text-gray-700 dark:text-gray-300">Karakter {handwritingStep} dari {handwritingTotal}</p>}
                     </div>
@@ -790,6 +810,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                         key={`${handwritingPractice.flashcard_id}-${activeWritingCharacter.character}`}
                         character={activeWritingCharacter.character}
                         mode="quiz"
+                        selfEvaluation
                         onComplete={finishHandwritingRemediation}
                     />
                 </main>
