@@ -10,6 +10,7 @@ import { playSoundEffect } from '@/Components/UI/SoundEffects';
 import KanjiHandwritingCanvas from '@/Components/Features/Handwriting/KanjiHandwritingCanvas';
 import StrokeCharacterPreview from '@/Components/Features/Handwriting/StrokeCharacterPreview';
 import { loadStrokeCharacter, resolveAvailableCharacters } from '@/Components/Features/Handwriting/strokeData';
+import HighlightedLearningText from '@/Components/Features/Learning/HighlightedLearningText';
 
 // MUI Icons
 import CloseIcon from '@mui/icons-material/Close';
@@ -908,9 +909,17 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
 
                             {(activeFlashcard.example_sentence || activeFlashcard.example_meaning) && (
                                 <div className="mx-auto mt-5 max-w-2xl rounded-2xl bg-gray-50 p-3 text-left sm:mt-8 sm:p-5">
-                                    <p className="break-words text-base font-bold text-gray-700">{activeFlashcard.example_sentence}</p>
-                                    {activeFlashcard.example_reading && <p className="mt-1 break-words text-sm font-semibold text-gray-500">{activeFlashcard.example_reading}</p>}
-                                    <p className="mt-2 break-words text-sm italic text-gray-500">{activeFlashcard.example_meaning}</p>
+                                    <p className="break-words text-base font-bold text-gray-700">
+                                        <HighlightedLearningText text={activeFlashcard.example_sentence} term={activeFlashcard.front_text} />
+                                    </p>
+                                    {activeFlashcard.example_reading && (
+                                        <p className="mt-1 break-words text-sm font-semibold text-gray-500">
+                                            <HighlightedLearningText text={activeFlashcard.example_reading} term={activeFlashcard.reading} />
+                                        </p>
+                                    )}
+                                    <p className="mt-2 break-words text-sm italic text-gray-500">
+                                        <HighlightedLearningText text={activeFlashcard.example_meaning} term={activeFlashcard.back_text} />
+                                    </p>
                                 </div>
                             )}
                             {activeFlashcard.notes && <p className="mx-auto mt-3 max-w-2xl text-left text-xs font-semibold text-gray-500">{activeFlashcard.notes}</p>}

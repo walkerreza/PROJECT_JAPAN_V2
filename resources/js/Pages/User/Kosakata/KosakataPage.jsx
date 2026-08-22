@@ -3,6 +3,8 @@ import { Head, Link, router } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import HighlightedLearningText from '@/Components/Features/Learning/HighlightedLearningText';
+import JapaneseSpeechButton from '@/Components/UI/JapaneseSpeechButton';
 
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -10,7 +12,6 @@ import CloseIcon from '@mui/icons-material/Close';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import SearchIcon from '@mui/icons-material/Search';
-import VolumeUpIcon from '@mui/icons-material/VolumeUp';
 
 const CONTENT_TYPES = [
     { value: 'all', label: 'Semua' },
@@ -31,7 +32,7 @@ const typeTones = {
     bunpo: 'bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300',
 };
 
-function MaterialDetail({ item, onClose, onPlayAudio }) {
+function MaterialDetail({ item, onClose }) {
     const tags = Array.isArray(item.tags) ? item.tags : [];
     const [desktopPanel, setDesktopPanel] = useState(() => (
         typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches
@@ -124,16 +125,13 @@ function MaterialDetail({ item, onClose, onPlayAudio }) {
                                     <p className="mt-1 break-words text-base font-bold text-gray-500 dark:text-gray-400">{item.reading}</p>
                                 )}
                             </div>
-                            {item.audio_url && (
-                                <button
-                                    type="button"
-                                    onClick={() => onPlayAudio(item.audio_url)}
-                                    aria-label={`Dengarkan ${item.word}`}
-                                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-600 text-white shadow-sm transition hover:bg-red-500 active:scale-95"
-                                >
-                                    <VolumeUpIcon sx={{ fontSize: 21 }} />
-                                </button>
-                            )}
+                            <JapaneseSpeechButton
+                                text={item.word || item.reading}
+                                audioUrl={item.audio_url}
+                                title={`Dengarkan ${item.word || 'kata ini'}`}
+                                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-600 text-white shadow-sm transition hover:bg-red-500 active:scale-95"
+                                iconClassName="text-[21px]"
+                            />
                         </div>
                     </div>
 
@@ -149,15 +147,27 @@ function MaterialDetail({ item, onClose, onPlayAudio }) {
 
                     {(item.example_sentence || item.example_meaning || item.example_reading) && (
                         <section className="border-t border-gray-200 pt-5 dark:border-gray-800">
-                            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-gray-400">Contoh penggunaan</p>
+                            <div className="flex items-center justify-between gap-3">
+                                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-gray-400">Contoh penggunaan</p>
+                                <JapaneseSpeechButton
+                                    text={item.example_sentence || item.example_reading}
+                                    title="Dengarkan contoh kalimat"
+                                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-500 transition hover:bg-red-50 hover:text-red-600 dark:text-gray-400 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+                                    iconClassName="text-[19px]"
+                                />
+                            </div>
                             <p className="mt-2 break-words text-base font-black leading-7 text-gray-900 dark:text-white">
-                                {item.example_sentence || '-'}
+                                <HighlightedLearningText text={item.example_sentence || '-'} term={item.word} />
                             </p>
                             {item.example_reading && (
-                                <p className="mt-1 break-words text-sm font-semibold text-gray-500 dark:text-gray-400">{item.example_reading}</p>
+                                <p className="mt-1 break-words text-sm font-semibold text-gray-500 dark:text-gray-400">
+                                    <HighlightedLearningText text={item.example_reading} term={item.reading} />
+                                </p>
                             )}
                             {item.example_meaning && (
-                                <p className="mt-2 break-words text-sm leading-6 text-gray-600 dark:text-gray-300">{item.example_meaning}</p>
+                                <p className="mt-2 break-words text-sm leading-6 text-gray-600 dark:text-gray-300">
+                                    <HighlightedLearningText text={item.example_meaning} term={item.meaning_id || item.meaning_en} />
+                                </p>
                             )}
                         </section>
                     )}
@@ -241,12 +251,6 @@ export default function KosakataPage({
         jlptLevel !== 'all',
         String(moduleFilter) !== 'all',
     ].filter(Boolean).length;
-
-    const playAudio = (url) => {
-        if (!url || typeof window === 'undefined') return;
-        const audio = new window.Audio(url);
-        audio.play().catch(() => {});
-    };
 
     return (
         <AuthenticatedLayout header={false}>
@@ -415,16 +419,13 @@ export default function KosakataPage({
                                             </span>
                                         </button>
 
-                                        {item.audio_url && (
-                                            <button
-                                                type="button"
-                                                onClick={() => playAudio(item.audio_url)}
-                                                aria-label={`Dengarkan ${item.word}`}
-                                                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-gray-400 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
-                                            >
-                                                <VolumeUpIcon sx={{ fontSize: 20 }} />
-                                            </button>
-                                        )}
+                                        <JapaneseSpeechButton
+                                            text={item.word || item.reading}
+                                            audioUrl={item.audio_url}
+                                            title={`Dengarkan ${item.word || 'kata ini'}`}
+                                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-gray-400 transition hover:bg-red-50 hover:text-red-600 dark:text-gray-400 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+                                            iconClassName="text-[20px]"
+                                        />
                                     </article>
                                 ))}
                             </div>
@@ -463,7 +464,6 @@ export default function KosakataPage({
                         <MaterialDetail
                             item={selectedItem}
                             onClose={() => setSelectedItem(null)}
-                            onPlayAudio={playAudio}
                         />
                     )}
                 </AnimatePresence>
