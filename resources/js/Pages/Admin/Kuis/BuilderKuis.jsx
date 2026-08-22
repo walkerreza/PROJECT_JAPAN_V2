@@ -76,7 +76,7 @@ export default function QuizBuilder({
     const { data, setData, post, processing, recentlySuccessful, errors, clearErrors } = useForm(initialForm);
     const vocabularyForm = useForm({
         content_type: 'all',
-        jlpt_level: 'N3',
+        jlpt_level: quiz?.module?.level?.level_name || 'all',
         category: 'all',
         count: 10,
         mode: 'word_to_meaning',
@@ -423,10 +423,6 @@ export default function QuizBuilder({
                                 className="h-8 w-20 rounded-lg border border-gray-200 bg-white px-2 text-sm font-black text-gray-800 outline-none focus:border-red-400 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
                             />
                         </label>
-                        <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Scope Saat Ini</span>
-                            <span className="text-xs font-black text-[#E64A19] bg-orange-50 px-2 py-0.5 rounded">N3</span>
-                        </div>
                         <button onClick={() => removeQuestion(activeIndex)} className="text-gray-300 hover:text-red-500 transition-colors">
                             <DeleteOutlineIcon sx={{ fontSize: 20 }} />
                         </button>
@@ -1155,8 +1151,8 @@ export default function QuizBuilder({
                 <div className="fixed inset-0 z-[110] flex items-end overflow-y-auto bg-gray-950/50 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4">
                     <form onSubmit={handleGenerateVocabularyQuestions} className="w-full max-w-lg rounded-t-3xl bg-white p-4 shadow-2xl dark:bg-gray-900 sm:rounded-3xl sm:p-6">
                         <div className="mb-5">
-                            <p className="text-xs font-black uppercase tracking-[0.25em] text-orange-600">Bank Konten N3</p>
-                            <h2 className="text-xl font-black text-gray-900 dark:text-white">Generate Soal dari Konten N3</h2>
+                        <p className="text-xs font-black uppercase tracking-[0.25em] text-orange-600">Bank Konten</p>
+                        <h2 className="text-xl font-black text-gray-900 dark:text-white">Generate Soal dari Materi</h2>
                             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Soal baru akan ditambahkan ke akhir quiz ini.</p>
                         </div>
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -1170,12 +1166,14 @@ export default function QuizBuilder({
                                 </select>
                             </label>
                             <label className="space-y-1">
-                                <span className="text-xs font-black text-gray-500 dark:text-gray-400">JLPT</span>
+                                <span className="text-xs font-black text-gray-500 dark:text-gray-400">Level</span>
                                 <select value={vocabularyForm.data.jlpt_level} onChange={(e) => vocabularyForm.setData('jlpt_level', e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white">
                                     <option value="all">Semua Level</option>
                                     <option value="N5">N5</option>
                                     <option value="N4">N4</option>
                                     <option value="N3">N3</option>
+                                    <option value="N2">N2</option>
+                                    <option value="N1">N1</option>
                                 </select>
                             </label>
                             <label className="space-y-1">

@@ -49,7 +49,7 @@ export default function DaftarKuis({ quizzes = [] }) {
 
     return (
         <AuthenticatedLayout>
-            <Head title="Arena Kuis JLPT N3" />
+            <Head title="Arena Kuis" />
 
             <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-300">
 
@@ -68,7 +68,7 @@ export default function DaftarKuis({ quizzes = [] }) {
                         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
                             className={`mb-5 inline-flex items-center gap-2 rounded-full ${theme.landingBadgeBg} dark:bg-red-500/20 border dark:border-red-500/30 px-4 py-1.5 text-xs font-black uppercase tracking-[0.2em] ${theme.landingBadgeText} dark:text-red-400 transition-colors duration-300`}>
                             <span className={`w-2 h-2 rounded-full ${theme.landingBadgeDot} dark:bg-red-400 animate-pulse transition-colors duration-300`} />
-                            ARENA EVALUASI · JLPT N3
+                                    ARENA EVALUASI
                         </motion.div>
 
                         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:gap-8">
@@ -183,7 +183,7 @@ export default function DaftarKuis({ quizzes = [] }) {
                                                             {meta.label}
                                                         </span>
                                                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 uppercase transition-colors duration-300">
-                                                            {quiz.level || 'N3'}
+                                                    {quiz.level || 'Latihan'}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -195,7 +195,7 @@ export default function DaftarKuis({ quizzes = [] }) {
 
                                                 {/* Desc */}
                                                 <p className="text-xs text-gray-500 dark:text-gray-400 font-medium leading-relaxed line-clamp-2 mb-4 min-h-[2.5rem] transition-colors duration-300">
-                                                    {quiz.description || `Evaluasi pemahaman ${meta.label.toLowerCase()} materi JLPT N3.`}
+                                            {quiz.description || `Evaluasi pemahaman ${meta.label.toLowerCase()} materi kelas.`}
                                                 </p>
 
                                                 {/* Stats row */}

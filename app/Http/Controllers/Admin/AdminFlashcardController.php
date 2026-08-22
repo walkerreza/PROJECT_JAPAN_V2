@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Kosakata;
 use App\Models\Kuis;
-use App\Models\Modul;
 use App\Models\SetFlashcard;
 use App\Models\Soal;
 use App\Services\ImportSpreadsheetService;
@@ -63,7 +62,10 @@ class AdminFlashcardController extends Controller
     {
         $flashcardSet->load([
             'level:id,level_name',
-            'module:id,program_pembelajaran_id,title,week_number',
+            'module:id,program_pembelajaran_id,title,week_number,level_id',
+            'module.level:id,level_name',
+            'module.programPembelajaran:id,curriculum_track_id,level_id,title',
+            'module.programPembelajaran.curriculumTrack:id,code,name',
             'day:id,module_id,day_number,title',
             'flashcards.vocabulary',
         ]);
@@ -191,7 +193,13 @@ class AdminFlashcardController extends Controller
             return redirect()->back()->withErrors(['import_file' => 'File kosong atau header tidak valid.']);
         }
 
-        $flashcardSet->loadMissing(['module:id,week_number', 'day:id,module_id,day_number']);
+        $flashcardSet->loadMissing([
+            'module:id,program_pembelajaran_id,week_number',
+            'module.programPembelajaran:id,level_id,curriculum_track_id',
+            'module.programPembelajaran.level:id,level_name',
+            'module.programPembelajaran.curriculumTrack:id,code,name',
+            'day:id,module_id,day_number',
+        ]);
         abort_unless(
             $flashcardSet->module
             && $flashcardSet->day
@@ -253,7 +261,7 @@ class AdminFlashcardController extends Controller
             return redirect()->back()->withErrors(['import_file' => 'Tidak ada kartu valid. Pastikan kolom front_text atau word terisi.']);
         }
 
-        return redirect()->back()->with('success', "{$processed} flashcard berhasil disinkronkan dengan Bank Konten N3.");
+        return redirect()->back()->with('success', "{$processed} flashcard berhasil disinkronkan dengan Bank Konten.");
     }
 
     public function downloadImportTemplate(
@@ -489,7 +497,7 @@ class AdminFlashcardController extends Controller
             'reading' => $reading !== '' ? $reading : null,
             'meaning_id' => $data['back_text'] ?? $vocabulary?->meaning_id,
             'meaning_en' => $data['meaning_en'] ?? $vocabulary?->meaning_en,
-            'jlpt_level' => $data['jlpt_level'] ?? $vocabulary?->jlpt_level ?? 'N3',
+            'jlpt_level' => $this->resolvedJlptLevel($flashcardSet, $data['jlpt_level'] ?? $vocabulary?->jlpt_level),
             'category' => $data['hint'] ?? $vocabulary?->category,
             'example_sentence' => $data['example_sentence'] ?? $vocabulary?->example_sentence,
             'example_reading' => $data['example_reading'] ?? $vocabulary?->example_reading,
@@ -585,9 +593,16 @@ class AdminFlashcardController extends Controller
 
     private function flashcardTemplateRows(SetFlashcard $flashcardSet): array
     {
-        $flashcardSet->loadMissing(['module:id,week_number', 'day:id,day_number']);
+        $flashcardSet->loadMissing([
+            'module:id,program_pembelajaran_id,week_number',
+            'module.programPembelajaran:id,level_id,curriculum_track_id',
+            'module.programPembelajaran.level:id,level_name',
+            'module.programPembelajaran.curriculumTrack:id,code,name',
+            'day:id,day_number',
+        ]);
         $week = $flashcardSet->module?->week_number;
         $day = $flashcardSet->day?->day_number;
+        $level = $this->resolvedJlptLevel($flashcardSet, null);
         $rows = [
             ['', '会議', 'かいぎ', 'rapat', 'noun / kantor', '今日は一時から会議があります。', 'Hari ini ada rapat mulai jam satu.', ''],
             ['', '一つ', 'ひとつ', 'satu buah', 'counter', '机の上にりんごが一つあります。', 'Ada satu apel di atas meja.', ''],
@@ -608,7 +623,7 @@ class AdminFlashcardController extends Controller
                 $row[6],
                 $row[7],
                 'kosakata',
-                'N3',
+                $level,
                 '',
                 '',
                 '',
@@ -617,5 +632,31 @@ class AdminFlashcardController extends Controller
             ],
             $rows
         );
+    }
+
+    private function resolvedJlptLevel(SetFlashcard $flashcardSet, mixed $value): ?string
+    {
+        $flashcardSet->loadMissing([
+            'module.programPembelajaran.level:id,level_name',
+            'module.programPembelajaran.curriculumTrack:id,code,name',
+        ]);
+        $program = $flashcardSet->module?->programPembelajaran;
+
+        if ($program?->curriculumTrack?->code !== 'jlpt') {
+            return null;
+        }
+
+        preg_match('/N[1-5]/i', (string) $program->level?->level_name, $expectedMatch);
+        preg_match('/N[1-5]/i', (string) $value, $givenMatch);
+        $expected = isset($expectedMatch[0]) ? strtoupper($expectedMatch[0]) : null;
+        $given = isset($givenMatch[0]) ? strtoupper($givenMatch[0]) : $expected;
+
+        if (! $expected || $given !== $expected) {
+            throw ValidationException::withMessages([
+                'jlpt_level' => 'Level flashcard harus sama dengan level kelas tujuan.',
+            ]);
+        }
+
+        return $expected;
     }
 }

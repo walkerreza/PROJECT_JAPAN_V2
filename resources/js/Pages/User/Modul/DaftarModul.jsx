@@ -1280,7 +1280,7 @@ function LibraryShortcut({ program }) {
             </span>
             <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-black text-gray-900 dark:text-white">
-                    Pustaka {program.level || 'N3'}
+                    Pustaka Materi
                 </span>
                 <span className="block truncate text-[10px] font-semibold text-gray-600 dark:text-gray-400 min-[360px]:text-[11px]">
                     Kosakata, kanji, dan bunpo
@@ -1325,7 +1325,7 @@ function DesktopLibraryPanel({ program, open, onToggle }) {
                             </span>
                             <span className="min-w-0 flex-1">
                                 <span className="block truncate text-sm font-black text-gray-900 dark:text-white">
-                                    Pustaka {program.level || 'N3'}
+                                    Pustaka Materi
                                 </span>
                                 <span className="mt-0.5 block text-[11px] font-semibold leading-4 text-gray-500 dark:text-gray-400">
                                     Referensi pendukung roadmap
@@ -1392,9 +1392,9 @@ function DesktopLibraryPanel({ program, open, onToggle }) {
                         exit={{ opacity: 0, scale: 0.92 }}
                         transition={{ duration: 0.16 }}
                         className="group flex w-full flex-col items-center gap-2 rounded-2xl border border-amber-200/80 bg-white/90 px-1 py-3 text-amber-900 shadow-lg shadow-amber-950/5 backdrop-blur-md transition hover:border-amber-300 hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300/40 dark:border-amber-900/60 dark:bg-gray-900/90 dark:text-amber-200 dark:hover:border-amber-700 dark:hover:bg-amber-950/40"
-                        aria-label={`Buka Pustaka ${program.level || 'N3'}`}
+                        aria-label="Buka Pustaka Materi"
                         aria-expanded="false"
-                        title={`Buka Pustaka ${program.level || 'N3'}`}
+                        title="Buka Pustaka Materi"
                     >
                         <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-400 text-amber-950 shadow-[0_2px_0_#b45309] transition-transform group-hover:-translate-y-0.5">
                             <AutoStoriesIcon sx={{ fontSize: 20 }} />
@@ -1552,7 +1552,7 @@ export default function DaftarModul({ weeks = [], program = null, back_url = nul
                             ) : <span />}
                             <span className="inline-flex min-h-9 items-center gap-2 rounded-full bg-red-600/10 px-3 text-[11px] font-black uppercase tracking-[0.12em] text-red-600">
                                 <AutoStoriesIcon sx={{ fontSize: 15 }} />
-                                {program?.level ? `Kurikulum ${program.level}` : 'Kurikulum JLPT N3'}
+                                {[program?.curriculum?.name, program?.level].filter(Boolean).join(' ') || 'Program belajar'}
                             </span>
                         </div>
 

@@ -170,7 +170,7 @@ class SoalKuisService
 
         if ($created === 0) {
             throw ValidationException::withMessages([
-                'generate' => 'Tidak ada konten N3 valid yang bisa dijadikan soal.',
+                'generate' => 'Tidak ada konten valid yang bisa dijadikan soal.',
             ]);
         }
 
@@ -255,7 +255,7 @@ class SoalKuisService
 
         if ($pool->count() < 2) {
             throw ValidationException::withMessages([
-                'generate' => 'Bank Konten N3 belum cukup untuk membuat soal. Minimal butuh 2 item valid.',
+                'generate' => 'Bank Konten belum cukup untuk membuat soal. Minimal butuh 2 item valid.',
             ]);
         }
 

@@ -11,7 +11,14 @@ class QuickQuizController extends Controller
 {
     public function start(Request $request, QuickQuizSessionService $sessions)
     {
-        $state = $sessions->start($request->user());
+        $validated = $request->validate([
+            'program_id' => ['nullable', 'integer', 'exists:program_pembelajaran,id'],
+        ]);
+        $state = $sessions->start(
+            $request->user(),
+            false,
+            isset($validated['program_id']) ? (int) $validated['program_id'] : null
+        );
 
         if (! $state) {
             return redirect()->route('user.dashboard')
@@ -33,7 +40,11 @@ class QuickQuizController extends Controller
         $payload = $sessions->payload($request->user(), $state);
 
         if (! $payload['completed'] && ! $payload['current_question']) {
-            $state = $sessions->start($request->user(), true);
+            $state = $sessions->start(
+                $request->user(),
+                true,
+                isset($state['selected_program_id']) ? (int) $state['selected_program_id'] : null
+            );
 
             if (! $state) {
                 return redirect()->route('user.dashboard')
@@ -71,7 +82,12 @@ class QuickQuizController extends Controller
 
     public function reset(Request $request, QuickQuizSessionService $sessions)
     {
-        $state = $sessions->start($request->user(), true);
+        $active = $sessions->active($request->user());
+        $state = $sessions->start(
+            $request->user(),
+            true,
+            isset($active['selected_program_id']) ? (int) $active['selected_program_id'] : null
+        );
 
         if (! $state) {
             return redirect()->route('user.dashboard')

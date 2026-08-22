@@ -2,7 +2,7 @@
 
 > Dibangkitkan oleh `scripts/generate-code-reference.ps1`. Jangan mengedit tabel secara manual; perbarui catatan arsitektur terpisah bila tanggung jawab domain berubah.
 
-Total file PHP dalam `app/`: 142.
+Total file PHP dalam `app/`: 147.
 
 ## Artisan command
 
@@ -93,6 +93,7 @@ Total file PHP dalam `app/`: 142.
 | `app/Http/Controllers/User/PapanPeringkatController.php` | `PapanPeringkatController` | Endpoint dan orkestrasi HTTP untuk Papan Peringkat Controller. |
 | `app/Http/Controllers/User/PembelajaranController.php` | `PembelajaranController` | Endpoint dan orkestrasi HTTP untuk Pembelajaran Controller. |
 | `app/Http/Controllers/User/ProgresController.php` | `ProgresController` | Endpoint dan orkestrasi HTTP untuk Progres Controller. |
+| `app/Http/Controllers/User/QuickQuizController.php` | `QuickQuizController` | Endpoint dan orkestrasi HTTP untuk Quick Quiz Controller. |
 | `app/Http/Controllers/User/RuangKelasLiveController.php` | `RuangKelasLiveController` | Endpoint dan orkestrasi HTTP untuk Ruang Kelas Live Controller. |
 | `app/Http/Controllers/User/SertifikatController.php` | `SertifikatController` | Endpoint dan orkestrasi HTTP untuk Sertifikat Controller. |
 | `app/Http/Controllers/User/TargetUjianPenggunaController.php` | `TargetUjianPenggunaController` | Endpoint dan orkestrasi HTTP untuk Target Ujian Pengguna Controller. |
@@ -127,6 +128,7 @@ Total file PHP dalam `app/`: 142.
 |---|---|---|
 | `app/Models/AnggotaKloter.php` | `AnggotaKloter` | Representasi dan relasi data Anggota Kloter. |
 | `app/Models/Berita.php` | `Berita` | Representasi dan relasi data Berita. |
+| `app/Models/CurriculumTrack.php` | `CurriculumTrack` | Representasi dan relasi data Curriculum Track. |
 | `app/Models/DeckPresentasi.php` | `DeckPresentasi` | Representasi dan relasi data Deck Presentasi. |
 | `app/Models/Flashcard.php` | `Flashcard` | Representasi dan relasi data Flashcard. |
 | `app/Models/HariModul.php` | `HariModul` | Representasi dan relasi data Hari Modul. |
@@ -203,6 +205,7 @@ Total file PHP dalam `app/`: 142.
 | `app/Services/ImportPresentasiPdfService.php` | `ImportPresentasiPdfService` | Aturan domain dan proses reusable untuk Import Presentasi Pdf Service. |
 | `app/Services/ImportPresentasiPptxService.php` | `ImportPresentasiPptxService` | Aturan domain dan proses reusable untuk Import Presentasi Pptx Service. |
 | `app/Services/ImportSpreadsheetService.php` | `ImportSpreadsheetService` | Aturan domain dan proses reusable untuk Import Spreadsheet Service. |
+| `app/Services/KelasPenggunaPayloadService.php` | `KelasPenggunaPayloadService` | Aturan domain dan proses reusable untuk Kelas Pengguna Payload Service. |
 | `app/Services/KloterBelajarService.php` | `KloterBelajarService` | Aturan domain dan proses reusable untuk Kloter Belajar Service. |
 | `app/Services/LeaderboardService.php` | `LeaderboardService` | Aturan domain dan proses reusable untuk Leaderboard Service. |
 | `app/Services/MailtrapTemplateService.php` | `MailtrapTemplateService` | Aturan domain dan proses reusable untuk Mailtrap Template Service. |
@@ -210,8 +213,10 @@ Total file PHP dalam `app/`: 142.
 | `app/Services/PasswordResetOtpService.php` | `PasswordResetOtpService` | Aturan domain dan proses reusable untuk Password Reset Otp Service. |
 | `app/Services/PembelajaranPenggunaService.php` | `PembelajaranPenggunaService` | Aturan domain dan proses reusable untuk Pembelajaran Pengguna Service. |
 | `app/Services/PencapaianService.php` | `PencapaianService` | Aturan domain dan proses reusable untuk Pencapaian Service. |
+| `app/Services/PenilaianJawabanKuisService.php` | `PenilaianJawabanKuisService` | Aturan domain dan proses reusable untuk Penilaian Jawaban Kuis Service. |
 | `app/Services/PresentasiStorageService.php` | `PresentasiStorageService` | Aturan domain dan proses reusable untuk Presentasi Storage Service. |
 | `app/Services/ProgresRoadmapService.php` | `ProgresRoadmapService` | Aturan domain dan proses reusable untuk Progres Roadmap Service. |
+| `app/Services/QuickQuizSessionService.php` | `QuickQuizSessionService` | Aturan domain dan proses reusable untuk Quick Quiz Session Service. |
 | `app/Services/RepetisiPembelajaranService.php` | `RepetisiPembelajaranService` | Aturan domain dan proses reusable untuk Repetisi Pembelajaran Service. |
 | `app/Services/RingkasanProgresPenggunaService.php` | `RingkasanProgresPenggunaService` | Aturan domain dan proses reusable untuk Ringkasan Progres Pengguna Service. |
 | `app/Services/RuangKelasLiveService.php` | `RuangKelasLiveService` | Aturan domain dan proses reusable untuk Ruang Kelas Live Service. |

@@ -4,13 +4,13 @@ use App\Models\HariModul;
 use App\Models\Kuis;
 use App\Models\Langganan;
 use App\Models\LevelPembelajaran;
+use App\Models\Modul;
 use App\Models\PaketPembayaran;
 use App\Models\Pengguna;
 use App\Models\ProgramPembelajaran;
 use App\Models\ProgresHariModul;
 use App\Models\ReviewSoal;
 use App\Models\Soal;
-use App\Models\Modul;
 use App\Services\QuickQuizSessionService;
 use Illuminate\Support\Facades\Cache;
 
@@ -183,4 +183,25 @@ it('resumes the same cached session and rejects another user', function () {
     $this->actingAs($other)
         ->get(route('user.quick-quiz.show', $state['id']))
         ->assertRedirect(route('user.dashboard'));
+});
+
+it('can limit a quick quiz session to one owned class', function () {
+    Cache::flush();
+    $user = Pengguna::factory()->create(['role' => 'user']);
+    $first = quickQuizProgram($user, 'Pilihan A');
+    $second = quickQuizProgram($user, 'Pilihan B');
+    $firstQuestion = quickQuizDayQuestion($first['module'], 1, 'satu')['question'];
+    $secondQuestion = quickQuizDayQuestion($second['module'], 1, 'dua')['question'];
+    $sessions = app(QuickQuizSessionService::class);
+
+    $summary = $sessions->summary($user);
+    $state = $sessions->start($user, true, $second['program']->id);
+
+    expect($summary['programs'])->toHaveCount(2)
+        ->and(collect($summary['programs'])->pluck('id')->all())
+        ->toContain($first['program']->id, $second['program']->id)
+        ->and($state['selected_program_id'])->toBe($second['program']->id)
+        ->and(array_keys($state['items']))
+        ->toContain($secondQuestion->id)
+        ->not->toContain($firstQuestion->id);
 });

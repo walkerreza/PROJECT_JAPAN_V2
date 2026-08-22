@@ -24,7 +24,7 @@ Program/Kelas
 3. Atur Week dan Day di Roadmap.
 4. Kelola presentasi mingguan.
 5. Kelola Kuis & Repetisi untuk flashcard, soal, dan handwriting.
-6. Kelola Bank Konten N3 secara terpisah sebagai sumber kosakata/kanji/bunpo.
+6. Kelola Bank Konten dalam konteks kelas sebagai sumber kosakata/kanji/bunpo.
 7. Publish hanya setelah preview dan scoping Week/Day diperiksa.
 
 Route lama manajemen terpisah dapat tetap sebagai redirect kompatibilitas, tetapi UI utama harus melalui konteks kelas agar admin tidak salah memilih Week/Day.

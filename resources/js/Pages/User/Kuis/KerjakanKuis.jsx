@@ -586,6 +586,10 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
         });
     };
 
+    const exitConfirmation = (
+        <ConfirmActionDialog {...confirmState} onCancel={closeConfirm} />
+    );
+
     const continueAfterResult = async (continueLearning = true) => {
         if (!learningFeedback && feedbackRating) {
             setFeedbackSubmitting(true);
@@ -757,7 +761,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
             <div className="flex min-h-[100dvh] flex-col items-center bg-orange-50 px-4 py-6 font-sans dark:bg-gray-950 sm:py-10">
                 <Head title="Latihan Menulis" />
                 <header className="mb-5 flex w-full max-w-3xl items-center gap-3">
-                    <button onClick={confirmExit} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-600 transition hover:bg-white hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white">
+                    <button type="button" onClick={confirmExit} aria-label="Keluar dari kuis" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-600 transition hover:bg-white hover:text-gray-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-300/50 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white">
                         <CloseIcon />
                     </button>
                     <div className="min-w-0 flex-1">
@@ -789,6 +793,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                         onComplete={finishHandwritingRemediation}
                     />
                 </main>
+                {exitConfirmation}
             </div>
         );
     }
@@ -798,7 +803,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
             <div className="flex min-h-[100dvh] flex-col items-center overflow-x-hidden bg-gradient-to-br from-orange-50 via-white to-lime-50 px-4 pb-8 pt-6 font-sans dark:from-gray-950 dark:via-gray-950 dark:to-gray-900 sm:pb-10 sm:pt-8">
                 <Head title="Kosakata Baru" />
                 <header className="relative z-10 mb-4 flex w-full max-w-4xl items-center gap-3 px-2 sm:mb-6 md:mb-8 md:gap-5 md:px-4">
-                    <button onClick={confirmExit} className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-white">
+                    <button type="button" onClick={confirmExit} aria-label="Keluar dari kuis" className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-300/50 dark:hover:bg-gray-800 dark:hover:text-white">
                         <CloseIcon />
                     </button>
                     <div className="h-3 min-w-0 flex-1 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-800">
@@ -920,7 +925,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
 
             {/* Top Progress & Lives */}
             <header className="relative z-10 mb-6 flex w-full max-w-4xl items-center gap-3 px-2 md:mb-12 md:gap-5 md:px-4">
-                <button onClick={confirmExit} className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-white">
+                <button type="button" onClick={confirmExit} aria-label="Keluar dari kuis" className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-300/50 dark:hover:bg-gray-800 dark:hover:text-white">
                     <CloseIcon />
                 </button>
                 <div className="h-3 min-w-0 flex-1 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-800">
@@ -1168,7 +1173,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                     </motion.div>
                 )}
             </AnimatePresence>
-            <ConfirmActionDialog {...confirmState} onCancel={closeConfirm} />
+            {exitConfirmation}
         </div>
     );
 }

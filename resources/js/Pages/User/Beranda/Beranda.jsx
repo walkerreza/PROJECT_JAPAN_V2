@@ -89,6 +89,7 @@ export default function BerandaUser({
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
     const [isStartingQuickQuiz, setIsStartingQuickQuiz] = useState(false);
+    const [quickQuizProgramId, setQuickQuizProgramId] = useState('');
 
     const authUser = usePage().props.auth?.user || {};
     const accessStatus = authUser.access_status || user.access_status || {};
@@ -192,7 +193,9 @@ export default function BerandaUser({
         if (!quickQuiz?.available || !quickQuiz?.start_url || isStartingQuickQuiz) return;
 
         setIsStartingQuickQuiz(true);
-        router.post(quickQuiz.start_url, {}, {
+        router.post(quickQuiz.start_url, {
+            program_id: quickQuizProgramId || null,
+        }, {
             onFinish: () => setIsStartingQuickQuiz(false),
         });
     };
@@ -532,7 +535,7 @@ export default function BerandaUser({
                                                 : 'Selesaikan materi pertama di roadmap agar Quick Kuis dapat menyusun latihan.')}
                                     </p>
                                     {quickQuiz?.available && (
-                                        <div className="mt-4 flex flex-wrap gap-2 text-xs font-black">
+                                        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs font-black">
                                             <span className="rounded-full bg-amber-50 px-3 py-1.5 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
                                                 Tanpa XP · fokus repetisi
                                             </span>
@@ -542,6 +545,23 @@ export default function BerandaUser({
                                             <span className="rounded-full bg-red-50 px-3 py-1.5 text-red-700 dark:bg-red-950/40 dark:text-red-300">
                                                 {quickQuiz.program_count} kelas
                                             </span>
+                                            {!quickQuiz.active && quickQuiz.programs?.length > 1 && (
+                                                <label className="flex min-h-10 items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 text-gray-700 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-200">
+                                                    <span className="sr-only">Pilih kelas untuk Quick Quiz</span>
+                                                    <select
+                                                        value={quickQuizProgramId}
+                                                        onChange={(event) => setQuickQuizProgramId(event.target.value)}
+                                                        className="border-0 bg-transparent py-1 pr-8 text-xs font-black focus:ring-0"
+                                                    >
+                                                        <option value="">Semua kelas</option>
+                                                        {quickQuiz.programs.map((program) => (
+                                                            <option key={program.id} value={program.id}>
+                                                                {program.title} ({program.question_count})
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </label>
+                                            )}
                                         </div>
                                     )}
                                 </div>

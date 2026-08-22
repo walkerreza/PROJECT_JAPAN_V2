@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { createPortal } from 'react-dom';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -32,7 +33,9 @@ const typeTones = {
 
 function MaterialDetail({ item, onClose, onPlayAudio }) {
     const tags = Array.isArray(item.tags) ? item.tags : [];
-    const [desktopPanel, setDesktopPanel] = useState(false);
+    const [desktopPanel, setDesktopPanel] = useState(() => (
+        typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches
+    ));
 
     useEffect(() => {
         const mediaQuery = window.matchMedia('(min-width: 640px)');
@@ -54,9 +57,13 @@ function MaterialDetail({ item, onClose, onPlayAudio }) {
         };
     }, [onClose]);
 
-    return (
+    if (typeof document === 'undefined') {
+        return null;
+    }
+
+    return createPortal(
         <motion.div
-            className="fixed inset-0 z-50 bg-black/45"
+            className="fixed inset-0 z-[130] bg-black/45 backdrop-blur-[2px]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -66,7 +73,7 @@ function MaterialDetail({ item, onClose, onPlayAudio }) {
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="material-detail-title"
-                className="absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-y-auto rounded-t-2xl bg-white shadow-2xl dark:bg-gray-900 sm:inset-y-0 sm:left-auto sm:w-[420px] sm:rounded-none"
+                className="absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-y-auto rounded-t-2xl bg-white shadow-2xl dark:bg-gray-900 sm:inset-y-0 sm:left-auto sm:max-h-none sm:w-[420px] sm:rounded-none"
                 initial={desktopPanel ? { x: '100%' } : { y: '100%' }}
                 animate={desktopPanel ? { x: 0 } : { y: 0 }}
                 exit={desktopPanel ? { x: '100%' } : { y: '100%' }}
@@ -166,7 +173,8 @@ function MaterialDetail({ item, onClose, onPlayAudio }) {
                     )}
                 </div>
             </motion.aside>
-        </motion.div>
+        </motion.div>,
+        document.body,
     );
 }
 
@@ -175,6 +183,7 @@ export default function KosakataPage({
     vocabulary = {},
     filters = {},
     categories = [],
+    available_levels = [],
     modules = [],
     selected_module_id = null,
 }) {
@@ -188,14 +197,20 @@ export default function KosakataPage({
     const [selectedItem, setSelectedItem] = useState(null);
 
     const applyFilters = (overrides = {}) => {
+        const selectedModule = overrides.module ?? moduleFilter;
         const nextFilters = {
             search,
             category,
             jlpt_level: jlptLevel,
             content_type: contentType,
-            module: moduleFilter,
             ...overrides,
         };
+
+        if (selectedModule !== 'all' && selectedModule !== '') {
+            nextFilters.module = selectedModule;
+        } else {
+            delete nextFilters.module;
+        }
 
         router.get(route('user.modul.program.kosakata', program.slug), nextFilters, {
             preserveState: true,
@@ -235,7 +250,7 @@ export default function KosakataPage({
 
     return (
         <AuthenticatedLayout header={false}>
-            <Head title={`Pustaka Materi ${program.level || 'N3'} - Japanlingo`} />
+            <Head title={`Pustaka Materi - ${program.title || 'Japanlingo'}`} />
 
             <div className="min-h-[100dvh] bg-gray-50 text-gray-900 transition-colors dark:bg-gray-950 dark:text-white">
                 <main className="mx-auto max-w-5xl px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
@@ -252,7 +267,7 @@ export default function KosakataPage({
                         </span>
                         <div className="min-w-0 flex-1">
                             <h1 className="truncate text-xl font-black sm:text-2xl">
-                                Pustaka Materi {program.level || 'N3'}
+                                Pustaka Materi
                             </h1>
                             <p className="mt-0.5 truncate text-xs font-semibold text-gray-500 dark:text-gray-400">
                                 {program.title || 'Kelas'} · {vocabulary.total ?? rows.length} materi
@@ -337,10 +352,10 @@ export default function KosakataPage({
                                         <label className="grid gap-1">
                                             <span className="text-[10px] font-black uppercase tracking-wide text-gray-400">Level</span>
                                             <select value={jlptLevel} onChange={(event) => setJlptLevel(event.target.value)} className="h-10 rounded-lg border-gray-200 bg-white px-3 text-xs font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
-                                                <option value="all">Semua JLPT</option>
-                                                <option value="N3">N3</option>
-                                                <option value="N4">N4</option>
-                                                <option value="N5">N5</option>
+                                                <option value="all">Semua Level</option>
+                                                {available_levels.map((level) => (
+                                                    <option key={level} value={level}>{level}</option>
+                                                ))}
                                             </select>
                                         </label>
                                         <div className="flex justify-end gap-2 sm:col-span-3">

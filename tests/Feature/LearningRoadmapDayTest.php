@@ -1257,6 +1257,18 @@ it('rejects direct resource URLs for a locked Day', function () {
         ->assertForbidden();
 });
 
+it('treats the all Week vocabulary filter as no module filter', function () {
+    $fixture = createDayRoadmapFixture();
+    $user = Pengguna::factory()->create(['role' => 'user']);
+
+    $this->actingAs($user)
+        ->get(route('user.modul.program.kosakata', $fixture['program']->slug).'?module=all&content_type=kanji')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('User/Kosakata/KosakataPage')
+            ->where('selected_module_id', null));
+});
+
 it('keeps the next Week locked until the previous Week is complete', function () {
     $fixture = createDayRoadmapFixture();
     $user = Pengguna::factory()->create(['role' => 'user']);

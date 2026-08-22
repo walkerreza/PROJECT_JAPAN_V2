@@ -2,7 +2,7 @@
 
 > Dibangkitkan oleh `scripts/generate-code-reference.ps1`. Semua JS, JSX, CSS, Blade, dan source image di `resources/` tercantum di bawah.
 
-Total file dalam `resources/`: 151.
+Total file dalam `resources/`: 152.
 
 ## Stylesheet
 
@@ -229,6 +229,7 @@ Total file dalam `resources/`: 151.
 | `resources/js/Pages/User/Kosakata/KosakataPage.jsx` | `KosakataPage` | Halaman pengguna untuk Kosakata Page. |
 | `resources/js/Pages/User/Kuis/DaftarKuis.jsx` | `DaftarKuis` | Halaman pengguna untuk Daftar Kuis. |
 | `resources/js/Pages/User/Kuis/KerjakanKuis.jsx` | `Quiz` | Halaman pengguna untuk Kerjakan Kuis. |
+| `resources/js/Pages/User/Kuis/QuickKuis.jsx` | `QuickKuis` | Halaman pengguna untuk Quick Kuis. |
 | `resources/js/Pages/User/Modul/DaftarModul.jsx` | `DaftarModul` | Halaman pengguna untuk Daftar Modul. |
 | `resources/js/Pages/User/Peringkat/Leaderboard.jsx` | `Leaderboard` | Halaman pengguna untuk Leaderboard. |
 | `resources/js/Pages/User/Presentasi/PresentasiPage.jsx` | `PresentasiPage` | Halaman pengguna untuk Presentasi Page. |

@@ -12,6 +12,8 @@ Bagian ini adalah peta teknis repository JapanLingo V2. Tujuannya bukan menggant
 6. [Dependencies and tooling](dependencies-and-tooling.md) - Composer, npm, Vite, Tailwind, PHPUnit/Pest, dan script repository.
 7. [Deployment artifacts](deployment-artifacts.md) - hubungan file deployment dengan handbook production.
 
+Komponen multi-kurikulum utama berada di `CurriculumTrack`, relasi jalur pada `ProgramPembelajaran` dan `LevelPembelajaran`, serta migration `2026_08_22_000001_add_curriculum_tracks.php`. Kontrak dan prosedur ekspansinya dijelaskan di [multi-curriculum](../07-learning/multi-curriculum.md).
+
 ## Katalog Otomatis
 
 Tiga katalog file dibangkitkan dari worktree saat ini:
@@ -28,4 +30,3 @@ Jalankan kembali setelah menambah, memindahkan, atau menghapus file pada `app/`,
 - File publik sumber seperti aset stroke kanji dan audio dijelaskan per kelompok, bukan per berkas.
 - Kandidat file lama tidak otomatis dihapus. Status pemakaian harus dibuktikan dari import, route, container binding, command registration, atau test terlebih dahulu.
 - Ditemukan `app/grep.exe.stackdump`. File ini bukan source Laravel dan ditandai sebagai kandidat pembersihan terpisah; katalog tidak menganggapnya sebagai komponen aplikasi.
-

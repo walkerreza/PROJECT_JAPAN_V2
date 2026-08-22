@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ModulRequest;
+use App\Models\CurriculumTrack;
 use App\Models\Kuis;
 use App\Models\LevelPembelajaran;
 use App\Models\Modul;
@@ -18,7 +19,7 @@ class AdminModulController extends Controller
 {
     public function programsIndex(Request $request)
     {
-        $query = ProgramPembelajaran::with('level')
+        $query = ProgramPembelajaran::with(['level', 'curriculumTrack'])
             ->withCount(['modules' => fn ($query) => $query->where('status', 'published')])
             ->orderBy('sort_order')
             ->orderBy('id');
@@ -37,7 +38,8 @@ class AdminModulController extends Controller
 
         return Inertia::render('Admin/ModulMateri/ManajemenKelas', [
             'programs' => $query->paginate(10)->withQueryString(),
-            'levels' => LevelPembelajaran::orderBy('stage')->get(['id', 'level_name']),
+            'tracks' => CurriculumTrack::where('status', 'active')->orderBy('sort_order')->get(['id', 'code', 'name']),
+            'levels' => LevelPembelajaran::with('curriculumTrack:id,code,name')->orderBy('stage')->get(),
             'filters' => $request->only('search', 'status'),
         ]);
     }
@@ -206,7 +208,7 @@ class AdminModulController extends Controller
         return Inertia::render('Admin/ModulMateri/ManajemenModulMateri', [
             'modules' => $modules,
             'levels' => LevelPembelajaran::orderBy('stage')->get(),
-            'programs' => ProgramPembelajaran::with('level')->orderBy('sort_order')->orderBy('id')->get(),
+            'programs' => ProgramPembelajaran::with(['level', 'curriculumTrack'])->orderBy('sort_order')->orderBy('id')->get(),
             'filters' => [
                 ...$request->only('search', 'program_id', 'week_id', 'day_id'),
                 'focus' => $focus,
@@ -276,8 +278,17 @@ class AdminModulController extends Controller
 
     private function validateProgram(Request $request, ?ProgramPembelajaran $program = null): array
     {
+        $track = CurriculumTrack::whereKey($request->integer('curriculum_track_id'))->first();
+
         return $request->validate([
-            'level_id' => ['nullable', 'exists:levels,id'],
+            'curriculum_track_id' => ['required', 'exists:curriculum_tracks,id'],
+            'level_id' => [
+                Rule::requiredIf($track?->code === 'jlpt'),
+                'nullable',
+                Rule::exists('levels', 'id')->where(
+                    fn ($query) => $query->where('curriculum_track_id', $request->integer('curriculum_track_id'))
+                ),
+            ],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'instructor_name' => ['nullable', 'string', 'max:255'],

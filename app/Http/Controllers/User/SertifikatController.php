@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\User;
 
 use App\Http\Controllers\Controller;
-use App\Models\Sertifikat;
 use App\Models\LevelPembelajaran;
+use App\Models\Sertifikat;
 use App\Services\SertifikatService;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -21,7 +21,7 @@ class SertifikatController extends Controller
     public function index()
     {
         $user = Auth::user();
-        $levels = LevelPembelajaran::all();
+        $levels = LevelPembelajaran::with('curriculumTrack:id,name')->get();
 
         $certificatesData = $levels->map(function ($level) use ($user) {
             $certificate = Sertifikat::where('user_id', $user->id)
@@ -30,7 +30,7 @@ class SertifikatController extends Controller
 
             $progress = $this->certificateService->getProgressPercentage($user, $level->id);
 
-            if (!$certificate && $progress >= 100) {
+            if (! $certificate && $progress >= 100) {
                 $certificate = $this->certificateService->checkAndIssueCertificate($user, $level->id);
             }
 
@@ -38,6 +38,7 @@ class SertifikatController extends Controller
                 'level_id' => $level->id,
                 'level_name' => $level->level_name,
                 'stage' => $level->stage,
+                'curriculum' => $level->curriculumTrack?->name,
                 'progress' => $progress,
                 'certificate' => $certificate,
             ];
@@ -55,7 +56,7 @@ class SertifikatController extends Controller
         }
 
         return Inertia::render('User/Sertifikat/DetailSertifikat', [
-            'certificate' => $certificate->load('level'),
+            'certificate' => $certificate->load('level.curriculumTrack:id,name'),
             'user' => Auth::user(),
         ]);
     }

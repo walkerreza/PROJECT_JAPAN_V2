@@ -24,7 +24,7 @@ const emptyForm = {
     reading: '',
     meaning_id: '',
     meaning_en: '',
-    jlpt_level: 'N3',
+    jlpt_level: '',
     category: '',
     tags_text: '',
     example_sentence: '',
@@ -65,7 +65,7 @@ const toForm = (item) => ({
     reading: item.reading || '',
     meaning_id: item.meaning_id || '',
     meaning_en: item.meaning_en || '',
-    jlpt_level: item.jlpt_level || 'N3',
+    jlpt_level: item.jlpt_level || '',
     category: item.category || '',
     tags_text: Array.isArray(item.tags) ? item.tags.join(', ') : '',
     example_sentence: item.example_sentence || '',
@@ -91,7 +91,7 @@ function Field({ label, children, wide = false }) {
     );
 }
 
-export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }) {
+export default function Kosakata({ vocabulary = {}, filters = {}, modules = [], availableLevels = [], program = null }) {
     const rows = vocabulary.data || [];
     const importInputRef = useRef(null);
     const [showForm, setShowForm] = useState(false);
@@ -107,6 +107,9 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
     const form = useForm(emptyForm);
     const { confirmState, openConfirm, closeConfirm } = useConfirmAction();
     const contextualModule = modules.find((module) => String(module.id) === String(filters.module_id));
+    const programJlptLevel = program?.curriculum_track?.code === 'jlpt'
+        ? (program?.level?.level_name?.match(/N[1-5]/i)?.[0]?.toUpperCase() || '')
+        : '';
 
     const openStrokePreview = async (item) => {
         const available = await resolveAvailableCharacters(item.word, item.reading);
@@ -123,6 +126,7 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
             content_type: contentType !== 'all' ? contentType : 'kosakata',
             module_id: moduleId !== 'all' ? moduleId : '',
             module_day_ids: moduleDayId !== 'all' ? [Number(moduleDayId)] : [],
+            jlpt_level: programJlptLevel,
         });
         setShowForm(true);
     };
@@ -182,6 +186,7 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
         const payload = new FormData();
         payload.append('import_file', file);
         payload.append('source_type', 'import');
+        if (filters.program_id) payload.append('program_id', filters.program_id);
         if (contentType !== 'all') payload.append('content_type', contentType);
         if (moduleId !== 'all') payload.append('module_id', moduleId);
         if (moduleDayId !== 'all') payload.append('module_day_id', moduleDayId);
@@ -199,7 +204,7 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
     const deleteVocabulary = (item) => {
         openConfirm({
             variant: 'danger',
-            title: 'Hapus Konten N3?',
+            title: 'Hapus Konten?',
             message: 'Konten ini akan dihapus dari bank dan tidak bisa dipakai lagi untuk flashcard/kuis baru.',
             confirmLabel: 'Iya, Hapus',
             details: [
@@ -216,7 +221,7 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
 
     return (
         <AuthenticatedLayout>
-            <Head title="Admin - Bank Konten N3" />
+            <Head title="Admin - Bank Konten" />
 
             <div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
                 <section className="relative z-20 rounded-[1.5rem] border border-orange-100 bg-gradient-to-br from-orange-50 via-white to-amber-50 p-5 shadow-sm dark:border-orange-900/30 dark:from-gray-900 dark:via-gray-950 dark:to-gray-900">
@@ -232,8 +237,8 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
                                     Kembali ke Hari
                                 </Link>
                             )}
-                            <p className="text-xs font-black uppercase tracking-[0.3em] text-orange-600">Bank Konten N3</p>
-                            <h1 className="mt-1 text-3xl font-black text-gray-900 dark:text-white">Konten N3</h1>
+                            <p className="text-xs font-black uppercase tracking-[0.3em] text-orange-600">Bank Konten</p>
+                            <h1 className="mt-1 text-3xl font-black text-gray-900 dark:text-white">{program?.title || 'Konten Pembelajaran'}</h1>
                             <p className="mt-2 max-w-2xl text-sm font-semibold text-gray-500 dark:text-gray-400">
                                 Satu tempat untuk input kosakata, kanji, dan bunpo. Konten bisa dikunci ke modul mingguan lalu dipakai flashcard dan kuis.
                             </p>
@@ -245,17 +250,17 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
                                 </button>
                                 {showTemplateMenu && (
                                     <div className="absolute right-0 top-12 z-50 w-56 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
-                                        <a href={route('admin.vocabulary.template', { format: 'xlsx' })} onClick={() => setShowTemplateMenu(false)} className="block px-4 py-3 text-sm font-bold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 dark:text-gray-200 dark:hover:bg-emerald-900/20 dark:hover:text-emerald-300">
+                                        <a href={route('admin.vocabulary.template', { format: 'xlsx', program_id: filters.program_id })} onClick={() => setShowTemplateMenu(false)} className="block px-4 py-3 text-sm font-bold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 dark:text-gray-200 dark:hover:bg-emerald-900/20 dark:hover:text-emerald-300">
                                             Download Excel (.xlsx)
                                         </a>
-                                        <a href={route('admin.vocabulary.template', { format: 'csv' })} onClick={() => setShowTemplateMenu(false)} className="block border-t border-gray-100 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-red-50 hover:text-red-700 dark:border-gray-800 dark:text-gray-200 dark:hover:bg-red-900/20 dark:hover:text-red-300">
+                                        <a href={route('admin.vocabulary.template', { format: 'csv', program_id: filters.program_id })} onClick={() => setShowTemplateMenu(false)} className="block border-t border-gray-100 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-red-50 hover:text-red-700 dark:border-gray-800 dark:text-gray-200 dark:hover:bg-red-900/20 dark:hover:text-red-300">
                                             Download CSV (.csv)
                                         </a>
                                     </div>
                                 )}
                             </div>
                             <input ref={importInputRef} type="file" accept=".csv,.txt,.xlsx" className="hidden" onChange={importVocabulary} />
-                            <button onClick={() => importInputRef.current?.click()} className="flex h-11 items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-sm font-bold text-gray-600 transition-colors hover:border-red-200 hover:text-red-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                            <button disabled={!filters.program_id || moduleId === 'all'} onClick={() => importInputRef.current?.click()} className="flex h-11 items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-sm font-bold text-gray-600 transition-colors hover:border-red-200 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-45 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
                                 <FileUploadIcon sx={{ fontSize: 18 }} />
                                 Import CSV/Excel
                             </button>
@@ -280,10 +285,8 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
                             <option value="bunpo">Bunpo</option>
                         </select>
                         <select value={jlptLevel} onChange={(event) => setJlptLevel(event.target.value)} className="h-11 rounded-2xl border border-gray-200 bg-gray-50 px-4 text-sm font-bold dark:border-gray-700 dark:bg-gray-950 dark:text-white">
-                            <option value="all">Semua JLPT</option>
-                            <option value="N3">N3</option>
-                            <option value="N4">N4</option>
-                            <option value="N5">N5</option>
+                            <option value="all">Semua Level</option>
+                            {availableLevels.map((level) => <option key={level} value={level}>{level}</option>)}
                         </select>
                         <SearchableSelect value={moduleId === 'all' ? '' : moduleId} onChange={(value) => { setModuleId(value || 'all'); setModuleDayId('all'); }} placeholder="Semua Modul" searchPlaceholder="Cari week atau judul modul..." allowClear clearLabel="Semua modul" options={modules.map((module) => ({ value: module.id, label: `Week ${module.week_number ?? '-'} - ${module.title}` }))} />
                         <SearchableSelect value={moduleDayId === 'all' ? '' : moduleDayId} onChange={(value) => setModuleDayId(value || 'all')} placeholder="Semua Hari" searchPlaceholder="Cari hari modul..." allowClear clearLabel="Semua hari" options={(modules.find((module) => String(module.id) === String(moduleId))?.days || []).map((day) => ({ value: day.id, label: `Hari ${day.day_number} - ${day.title}` }))} />
@@ -336,7 +339,7 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
 
                 {rows.length === 0 && (
                     <Card>
-                        <p className="text-center text-sm font-bold text-gray-500">Belum ada konten N3. Tambahkan manual atau import CSV/XLSX.</p>
+                        <p className="text-center text-sm font-bold text-gray-500">Belum ada konten. Tambahkan manual atau import CSV/XLSX.</p>
                     </Card>
                 )}
 
@@ -353,7 +356,7 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
                         <div className="mx-auto my-6 max-w-6xl overflow-hidden rounded-[1.6rem] bg-white shadow-2xl dark:bg-gray-900">
                             <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-gray-800">
                                 <div>
-                                    <p className="text-xs font-black uppercase tracking-[0.25em] text-orange-600">Bank Konten N3</p>
+                                    <p className="text-xs font-black uppercase tracking-[0.25em] text-orange-600">Bank Konten</p>
                                     <h2 className="text-xl font-black text-gray-900 dark:text-white">{editing ? 'Edit Konten' : 'Tambah Konten'}</h2>
                                 </div>
                                 <button onClick={closeForm} className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
@@ -369,7 +372,7 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
                                             <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-black">{typeLabels[form.data.content_type] || 'Konten'}</span>
                                             <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-black">{form.data.status}</span>
                                         </div>
-                                        <h3 className="mt-6 break-words text-5xl font-black">{form.data.word || 'Konten N3'}</h3>
+                                        <h3 className="mt-6 break-words text-5xl font-black">{form.data.word || 'Konten'}</h3>
                                         <p className="mt-2 break-words text-lg font-bold text-white/75">{form.data.reading || 'reading / struktur'}</p>
                                         <p className="mt-6 rounded-2xl bg-white px-4 py-3 text-sm font-black text-orange-700">{form.data.meaning_id || form.data.meaning_en || 'Arti akan tampil di sini'}</p>
                                     </div>
@@ -427,12 +430,8 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
                                         <Field label="English Meaning">
                                             <input value={form.data.meaning_en} onChange={(event) => form.setData('meaning_en', event.target.value)} placeholder="meeting" className={inputClass} />
                                         </Field>
-                                        <Field label="JLPT">
-                                            <select value={form.data.jlpt_level} onChange={(event) => form.setData('jlpt_level', event.target.value)} className={inputClass}>
-                                                <option value="N3">N3</option>
-                                                <option value="N4">N4</option>
-                                                <option value="N5">N5</option>
-                                            </select>
+                                        <Field label="Level Program">
+                                            <input value={form.data.jlpt_level} readOnly placeholder={program?.curriculum_track?.code === 'jlpt' ? 'Pilih kelas JLPT' : 'Tidak digunakan'} className={`${inputClass} bg-gray-50 text-gray-500 dark:bg-gray-900`} />
                                         </Field>
                                         <Field label="Status">
                                             <select value={form.data.status} onChange={(event) => form.setData('status', event.target.value)} className={inputClass}>
@@ -477,7 +476,7 @@ export default function Kosakata({ vocabulary = {}, filters = {}, modules = [] }
                                             <input value={form.data.source_type} onChange={(event) => form.setData('source_type', event.target.value)} placeholder="manual, pdf, xlsx, csv" className={inputClass} />
                                         </Field>
                                         <Field label="Judul Sumber">
-                                            <input value={form.data.source_title} onChange={(event) => form.setData('source_title', event.target.value)} placeholder="ALL - BUNPO N3.pdf" className={inputClass} />
+                                            <input value={form.data.source_title} onChange={(event) => form.setData('source_title', event.target.value)} placeholder="Contoh: Modul Bunpo Minggu 1" className={inputClass} />
                                         </Field>
                                     </div>
 

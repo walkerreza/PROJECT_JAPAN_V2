@@ -323,7 +323,7 @@ export default function BuilderUjian({ quiz, questions: initialQuestions = [] })
     const [importing, setImporting] = useState(false);
     const generator = useForm({
         content_type: 'all',
-        jlpt_level: 'N3',
+        jlpt_level: quiz?.module?.level?.level_name || 'all',
         category: 'all',
         count: 10,
         mode: 'word_to_meaning',

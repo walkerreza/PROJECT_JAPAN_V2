@@ -3,6 +3,7 @@ import { KanjiWriter } from 'kanji-recognizer';
 import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 import RestartAltRoundedIcon from '@mui/icons-material/RestartAltRounded';
+import UndoRoundedIcon from '@mui/icons-material/UndoRounded';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import { loadStrokeCharacter } from './strokeData';
 
@@ -39,6 +40,7 @@ export default function KanjiHandwritingCanvas({
     const [failedChecks, setFailedChecks] = useState(0);
     const [evaluation, setEvaluation] = useState(null);
     const [completed, setCompleted] = useState(false);
+    const [strokeFeedback, setStrokeFeedback] = useState(null);
 
     useEffect(() => {
         onChangeRef.current = onChange;
@@ -99,6 +101,7 @@ export default function KanjiHandwritingCanvas({
         setFailedChecks(0);
         setEvaluation(null);
         setCompleted(false);
+        setStrokeFeedback(null);
 
         const isQuizMode = mode === 'quiz';
         const writer = new KanjiWriter(containerId, strokeData.paths, {
@@ -140,15 +143,49 @@ export default function KanjiHandwritingCanvas({
             writer.renderUpcomingStrokes = renderFullGuide;
             renderFullGuide();
             writer.onComplete = () => {};
-            handleFullStrokeEnd = () => {
-                window.setTimeout(() => {
-                    setDrawnStrokes(writer.userStrokes.length);
-                    setEvaluation(null);
-                    setMessage('Selesaikan karakter, lalu tekan Periksa Tulisan.');
-                }, 0);
+            const originalFullStrokeEnd = writer.boundEnd;
+
+            writer.svg.removeEventListener('pointerup', originalFullStrokeEnd);
+            writer.svg.removeEventListener('pointerleave', originalFullStrokeEnd);
+
+            handleFullStrokeEnd = (event) => {
+                const strokeIndex = writer.userStrokes.length;
+                originalFullStrokeEnd(event);
+
+                const userStroke = writer.userStrokes[strokeIndex];
+                const targetStroke = writer.kanjiData[strokeIndex];
+
+                if (!userStroke || !targetStroke) {
+                    return;
+                }
+
+                const strokeResult = writer.recognizer.evaluate(userStroke.points, targetStroke);
+                const nextTotal = writer.userStrokes.length;
+
+                setDrawnStrokes(nextTotal);
+                setEvaluation(null);
+                setCompleted(false);
+
+                if (strokeResult.success) {
+                    userStroke.path.setAttribute('stroke', writer.options.correctColor);
+                    setStrokeFeedback(null);
+                    setMessage(nextTotal >= strokeData.stroke_count
+                        ? 'Semua goresan sudah dibuat. Tekan Periksa Tulisan.'
+                        : 'Stroke tepat. Lanjutkan ke stroke berikutnya.');
+                    return;
+                }
+
+                userStroke.path.setAttribute('stroke', writer.options.incorrectColor);
+                writer.svg.style.pointerEvents = 'none';
+                setStrokeFeedback({
+                    stroke: strokeIndex + 1,
+                    total: strokeData.stroke_count,
+                });
+                setMessage(`Stroke ke-${strokeIndex + 1} belum tepat. Hapus goresan terakhir lalu coba lagi.`);
             };
-            writer.svg.addEventListener('pointerup', handleFullStrokeEnd);
-            writer.svg.addEventListener('pointerleave', handleFullStrokeEnd);
+            writer.boundEnd = handleFullStrokeEnd;
+            writer.svg.addEventListener('pointerup', writer.boundEnd);
+            writer.svg.addEventListener('pointerleave', writer.boundEnd);
             setMessage('Tulis seluruh karakter mengikuti panduan transparan.');
         } else {
             const originalCorrect = writer.onCorrect.bind(writer);
@@ -219,6 +256,7 @@ export default function KanjiHandwritingCanvas({
 
     const reset = () => {
         writerRef.current?.clear();
+        if (writerRef.current?.svg) writerRef.current.svg.style.pointerEvents = '';
         startedAtRef.current = Date.now();
         resultRef.current = initialResult;
         setProgress(0);
@@ -227,6 +265,7 @@ export default function KanjiHandwritingCanvas({
         setEvaluation(null);
         if (mode !== 'quiz') setFailedChecks(0);
         setCompleted(false);
+        setStrokeFeedback(null);
         setMessage(
             mode === 'preview'
                 ? 'Pratinjau diulang.'
@@ -243,6 +282,8 @@ export default function KanjiHandwritingCanvas({
 
         const checkResult = writer.check();
         if (!checkResult) return;
+
+        setStrokeFeedback(null);
 
         const correctStrokes = checkResult.results.filter((result) => result.success).length;
         const incorrectStrokes = Math.max(
@@ -304,6 +345,23 @@ export default function KanjiHandwritingCanvas({
         emitResult(nextResult);
     };
 
+    const undoLastStroke = () => {
+        const writer = writerRef.current;
+        if (!writer || mode !== 'quiz' || writer.userStrokes.length === 0) return;
+
+        const removedStroke = writer.userStrokes.pop();
+        removedStroke?.path?.remove();
+        writer.currentStrokeIndex = Math.max(0, writer.currentStrokeIndex - 1);
+        writer.renderUpcomingStrokes();
+        writer.svg.style.pointerEvents = '';
+
+        setDrawnStrokes(writer.userStrokes.length);
+        setEvaluation(null);
+        setCompleted(false);
+        setStrokeFeedback(null);
+        setMessage('Goresan terakhir dihapus. Coba tulis stroke ini lagi.');
+    };
+
     const reveal = async () => {
         const nextResult = { ...resultRef.current, completed: false, revealed: true };
         resultRef.current = nextResult;
@@ -321,9 +379,11 @@ export default function KanjiHandwritingCanvas({
             setMessage('Panduan tidak dapat diputar.');
         }
         writerRef.current?.clear();
+        if (writerRef.current?.svg) writerRef.current.svg.style.pointerEvents = '';
         setDrawnStrokes(0);
         setProgress(0);
         setEvaluation(null);
+        setStrokeFeedback(null);
         setMessage('Panduan selesai. Sekarang coba tulis kembali dengan tanganmu sendiri.');
     };
 
@@ -370,6 +430,23 @@ export default function KanjiHandwritingCanvas({
                     </p>
                 </div>
             )}
+            {mode === 'quiz' && strokeFeedback && (
+                <div role="alert" className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-left text-red-800 dark:border-red-900/60 dark:bg-red-950/35 dark:text-red-200">
+                    <div className="min-w-0">
+                        <p className="text-sm font-black">Stroke salah</p>
+                        <p className="mt-0.5 text-xs font-semibold leading-5">
+                            Stroke {strokeFeedback.stroke} dari {strokeFeedback.total} tidak sesuai posisi atau arah panduan.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={undoLastStroke}
+                        className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg bg-red-600 px-3 text-xs font-black text-white transition hover:bg-red-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-300/60"
+                    >
+                        <UndoRoundedIcon sx={{ fontSize: 17 }} /> Hapus
+                    </button>
+                </div>
+            )}
             {status === 'ready' && (
                 <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                     {mode === 'preview' && (
@@ -380,6 +457,11 @@ export default function KanjiHandwritingCanvas({
                     <button type="button" onClick={reset} disabled={mode === 'quiz' && drawnStrokes === 0} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white text-xs font-black text-gray-700 transition hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-gray-300/50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700">
                         <RestartAltRoundedIcon sx={{ fontSize: 18 }} /> Ulangi
                     </button>
+                    {mode === 'quiz' && !completed && (
+                        <button type="button" onClick={undoLastStroke} disabled={drawnStrokes === 0} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-orange-200 bg-orange-50 text-xs font-black text-orange-700 transition hover:bg-orange-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-300/50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-300 dark:hover:bg-orange-900/60">
+                            <UndoRoundedIcon sx={{ fontSize: 18 }} /> Hapus
+                        </button>
+                    )}
                     {mode === 'quiz' && !completed && (
                         <button
                             type="button"

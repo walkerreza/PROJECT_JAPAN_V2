@@ -7,13 +7,12 @@ use Illuminate\Database\Eloquent\Model;
 /**
  * Model Sertifikat
  *
- * Merepresentasikan sertifikat yang diterima user setelah menyelesaikan satu level JLPT.
- * Contoh: Setelah menyelesaikan semua module N5, user mendapat sertifikat N5.
+ * Merepresentasikan sertifikat yang diterima user setelah menyelesaikan satu level pembelajaran.
  *
  * Tabel: certificates
  * Relasi:
  *   - belongs to Pengguna  (siapa yang mendapat sertifikat)
- *   - belongs to LevelPembelajaran (sertifikat untuk level apa: N5/N4/N3/N2/N1)
+ *   - belongs to LevelPembelajaran (level atau kategori kelulusan)
  */
 class Sertifikat extends Model
 {
@@ -21,9 +20,9 @@ class Sertifikat extends Model
 
     protected $fillable = [
         'user_id',           // ID pemilik sertifikat
-        'level_id',          // Sertifikat untuk level JLPT apa
+        'level_id',          // Level atau kategori kelulusan
         'issued_at',         // Tanggal sertifikat diterbitkan
-        'certificate_number',// Nomor unik sertifikat (contoh: CERT-2026-00012)
+        'certificate_number', // Nomor unik sertifikat (contoh: CERT-2026-00012)
         'file_path',         // Path file PDF di storage
     ];
 
@@ -40,7 +39,7 @@ class Sertifikat extends Model
     }
 
     /**
-     * LevelPembelajaran JLPT yang sudah diselesaikan (yang menjadi dasar penerbitan sertifikat)
+     * Level pembelajaran yang menjadi dasar penerbitan sertifikat.
      */
     public function level()
     {

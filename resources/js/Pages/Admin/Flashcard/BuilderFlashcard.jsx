@@ -23,7 +23,7 @@ const emptyCard = {
     meaning_en: '',
     hint: '',
     content_type: 'kosakata',
-    jlpt_level: 'N3',
+    jlpt_level: '',
     example_sentence: '',
     example_reading: '',
     example_meaning: '',
@@ -52,7 +52,7 @@ const normalizeCard = (item, keepCardId = true) => {
         meaning_en: source.meaning_en || '',
         hint: source.category || item.hint || '',
         content_type: source.content_type || metadata.content_type || 'kosakata',
-        jlpt_level: source.jlpt_level || 'N3',
+        jlpt_level: source.jlpt_level || '',
         example_sentence: source.example_sentence || item.example_sentence || '',
         example_reading: source.example_reading || '',
         example_meaning: source.example_meaning || item.example_meaning || '',
@@ -177,7 +177,7 @@ export function FlashcardEditorWorkspace({
                 meaning_en: card.meaning_en || '',
                 hint: card.hint || '',
                 content_type: card.content_type || 'kosakata',
-                jlpt_level: card.jlpt_level || 'N3',
+        jlpt_level: card.jlpt_level || '',
                 example_sentence: card.example_sentence || '',
                 example_reading: card.example_reading || '',
                 example_meaning: card.example_meaning || '',
@@ -390,8 +390,8 @@ export function FlashcardEditorWorkspace({
                                         </select>
                                     </label>
                                     <label className="space-y-1">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Level JLPT</span>
-                                        <input value={card.jlpt_level || 'N3'} onChange={(event) => updateCard(index, 'jlpt_level', event.target.value)} placeholder="N3" className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Level</span>
+                                    <input value={card.jlpt_level || ''} onChange={(event) => updateCard(index, 'jlpt_level', event.target.value)} placeholder="Opsional" className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
                                     </label>
                                     <label className="space-y-1">
                                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Depan Kartu</span>
@@ -431,7 +431,7 @@ export function FlashcardEditorWorkspace({
                                 <div className="mt-4 border-t border-gray-100 pt-4 dark:border-gray-800">
                                         <div className="mb-3">
                                             <p className="text-xs font-black uppercase tracking-[0.2em] text-red-600">Detail Kanji (Opsional)</p>
-                                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Isi untuk kartu yang memuat kanji. Data yang sama akan tersimpan di Bank Konten N3.</p>
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Isi untuk kartu yang memuat kanji. Data yang sama akan tersimpan di bank konten.</p>
                                         </div>
                                         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                                             <label className="space-y-1">
@@ -478,7 +478,7 @@ export function FlashcardEditorWorkspace({
                                 </button>
                             </div>
                         <Card>
-                            <h2 className="text-sm font-black uppercase tracking-[0.2em] text-gray-900 dark:text-white">Bank Konten N3</h2>
+                        <h2 className="text-sm font-black uppercase tracking-[0.2em] text-gray-900 dark:text-white">Bank Konten</h2>
                             <form onSubmit={submitFilters} className="mt-4 space-y-3">
                                 <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari kosakata, kanji, bunpo..." className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
                                 <select value={contentType} onChange={(event) => setContentType(event.target.value)} className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white">

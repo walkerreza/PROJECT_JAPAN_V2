@@ -14,8 +14,8 @@ use App\Services\NotifikasiPenggunaService;
 use App\Services\SoalKuisService;
 use App\Services\TemplateExcelService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -25,8 +25,7 @@ class AdminKuisController extends Controller
     public function store(
         KuisRequest $request,
         NotifikasiPenggunaService $notifikasi
-    )
-    {
+    ) {
         $validated = $request->validated();
         $stayOnRoadmap = (bool) Arr::pull($validated, 'stay_on_roadmap', false);
         $validated['available_at'] = filled($validated['module_day_id'] ?? null)
@@ -169,7 +168,10 @@ class AdminKuisController extends Controller
     public function builder(Kuis $quiz, Request $request)
     {
         $quiz->load([
-            'module:id,program_pembelajaran_id,title,week_number',
+            'module:id,program_pembelajaran_id,title,week_number,level_id',
+            'module.level:id,level_name',
+            'module.programPembelajaran:id,curriculum_track_id,level_id,title',
+            'module.programPembelajaran.curriculumTrack:id,code,name',
             'day:id,module_id,day_number,title',
             'questions' => fn ($query) => $query
                 ->withCount([
@@ -247,21 +249,21 @@ class AdminKuisController extends Controller
                 ->where('type', '!=', 'handwriting')
                 ->values()
                 ->map(fn ($question) => [
-                'id' => $question->id,
-                'type' => $question->type ?: ($quiz->type ?: 'multiple_choice'),
-                'question_text' => $question->question_text,
-                'correct_answer' => $question->correct_answer,
-                'options' => $question->options ?? [],
-                'explanation' => $question->explanation,
-                'audio_url' => $question->audio_url,
-                'order' => $question->order,
-                'points' => (int) ($question->points ?? 1),
-                'attempts_count' => (int) $question->attempts_count,
-                'correct_count' => (int) $question->correct_count,
-                'correct_rate' => $question->attempts_count > 0
-                    ? round(($question->correct_count / $question->attempts_count) * 100, 1)
-                    : null,
-            ]),
+                    'id' => $question->id,
+                    'type' => $question->type ?: ($quiz->type ?: 'multiple_choice'),
+                    'question_text' => $question->question_text,
+                    'correct_answer' => $question->correct_answer,
+                    'options' => $question->options ?? [],
+                    'explanation' => $question->explanation,
+                    'audio_url' => $question->audio_url,
+                    'order' => $question->order,
+                    'points' => (int) ($question->points ?? 1),
+                    'attempts_count' => (int) $question->attempts_count,
+                    'correct_count' => (int) $question->correct_count,
+                    'correct_rate' => $question->attempts_count > 0
+                        ? round(($question->correct_count / $question->attempts_count) * 100, 1)
+                        : null,
+                ]),
             'flashcardWorkspace' => $flashcardWorkspace,
         ]);
     }
@@ -392,7 +394,7 @@ class AdminKuisController extends Controller
 
         $created = $questions->generateFromVocabulary($quiz, $validated);
 
-        return redirect()->back()->with('success', "{$created} soal berhasil dibuat dari Bank Konten N3.");
+        return redirect()->back()->with('success', "{$created} soal berhasil dibuat dari bank konten.");
     }
 
     public function previewVocabularyQuestions(Request $request, Kuis $quiz, SoalKuisService $questions)

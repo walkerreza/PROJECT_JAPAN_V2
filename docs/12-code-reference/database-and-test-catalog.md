@@ -2,7 +2,7 @@
 
 > Dibangkitkan oleh `scripts/generate-code-reference.ps1`. Migration, factory, seeder, dan seluruh test tercantum di bawah.
 
-Total file database dan test: 110.
+Total file database dan test: 115.
 
 ## Test bootstrap/config
 
@@ -91,6 +91,8 @@ Total file database dan test: 110.
 | `database/migrations/2026_07_30_180000_create_user_exam_targets_table.php` | `-` | Perubahan skema/data: 2026 07 30 180000 create user exam targets table. |
 | `database/migrations/2026_08_02_170000_create_live_class_tables.php` | `-` | Perubahan skema/data: 2026 08 02 170000 create live class tables. |
 | `database/migrations/2026_08_12_000001_add_scheduled_at_to_live_class_sessions_table.php` | `-` | Perubahan skema/data: 2026 08 12 000001 add scheduled at to live class sessions table. |
+| `database/migrations/2026_08_14_000001_add_audience_scope_to_presentation_decks.php` | `-` | Perubahan skema/data: 2026 08 14 000001 add audience scope to presentation decks. |
+| `database/migrations/2026_08_22_000001_add_curriculum_tracks.php` | `-` | Perubahan skema/data: 2026 08 22 000001 add curriculum tracks. |
 
 ## Seeder
 
@@ -98,19 +100,18 @@ Total file database dan test: 110.
 |---|---|---|
 | `database/seeders/AchievementSeeder.php` | `AchievementSeeder` | Mengisi data referensi/demo: Achievement Seeder. |
 | `database/seeders/DatabaseSeeder.php` | `DatabaseSeeder` | Mengisi data referensi/demo: Database Seeder. |
-| `database/seeders/DemoDataSeeder.php` | `DemoDataSeeder` | Orkestrator reset dan pembuatan ulang dataset demo yang dikenali. |
-| `database/seeders/KelasDemoSeeder.php` | `KelasDemoSeeder` | Membuat kelas mandiri dan mentor dengan 3 Week x 3 Day beserta materi lengkap. |
-| `database/seeders/KloterDemoSeeder.php` | `KloterDemoSeeder` | Membuat kloter mentor, akses siswa mandiri, transaksi, dan keanggotaan siswa mentor. |
+| `database/seeders/DemoDataSeeder.php` | `DemoDataSeeder` | Mengisi data referensi/demo: Demo Data Seeder. |
+| `database/seeders/KelasDemoSeeder.php` | `KelasDemoSeeder` | Mengisi data referensi/demo: Kelas Demo Seeder. |
+| `database/seeders/KloterDemoSeeder.php` | `KloterDemoSeeder` | Mengisi data referensi/demo: Kloter Demo Seeder. |
 | `database/seeders/NewsPortalSeeder.php` | `NewsPortalSeeder` | Mengisi data referensi/demo: News Portal Seeder. |
-| `database/seeders/PenggunaSeeder.php` | `PenggunaSeeder` | Membuat akun tetap superadmin, admin global, mentor, dan dua siswa demo. |
-| `database/seeders/ProgramPaymentPlanSeeder.php` | `ProgramPaymentPlanSeeder` | Membuat paket pembayaran kelas mandiri dan kelas mentor. |
+| `database/seeders/PenggunaSeeder.php` | `PenggunaSeeder` | Mengisi data referensi/demo: Pengguna Seeder. |
+| `database/seeders/ProgramPaymentPlanSeeder.php` | `ProgramPaymentPlanSeeder` | Mengisi data referensi/demo: Program Payment Plan Seeder. |
 
 ## Feature test
 
 | File | Symbol utama | Tujuan |
 |---|---|---|
 | `tests/Feature/AdminGlobalKloterTest.php` | `-` | Regresi HTTP/domain: Admin Global Kloter Test. |
-| `tests/Feature/DemoSeederTest.php` | `-` | Memastikan seeder demo idempotent, kredensial valid, dan akses kedua kelas benar. |
 | `tests/Feature/AdminLegacyContentRoutesTest.php` | `-` | Regresi HTTP/domain: Admin Legacy Content Routes Test. |
 | `tests/Feature/Auth/AuthenticationTest.php` | `-` | Regresi HTTP/domain: Authentication Test. |
 | `tests/Feature/Auth/EmailVerificationTest.php` | `-` | Regresi HTTP/domain: Email Verification Test. |
@@ -119,6 +120,7 @@ Total file database dan test: 110.
 | `tests/Feature/Auth/PasswordResetTest.php` | `-` | Regresi HTTP/domain: Password Reset Test. |
 | `tests/Feature/Auth/PasswordUpdateTest.php` | `-` | Regresi HTTP/domain: Password Update Test. |
 | `tests/Feature/Auth/RegistrationTest.php` | `-` | Regresi HTTP/domain: Registration Test. |
+| `tests/Feature/DemoSeederTest.php` | `-` | Regresi HTTP/domain: Demo Seeder Test. |
 | `tests/Feature/ErrorPageTest.php` | `-` | Regresi HTTP/domain: Error Page Test. |
 | `tests/Feature/ExampleTest.php` | `-` | Regresi HTTP/domain: Example Test. |
 | `tests/Feature/HandwritingFlashcardFlowTest.php` | `-` | Regresi HTTP/domain: Handwriting Flashcard Flow Test. |
@@ -126,13 +128,16 @@ Total file database dan test: 110.
 | `tests/Feature/LearningFeedbackTest.php` | `-` | Regresi HTTP/domain: Learning Feedback Test. |
 | `tests/Feature/LearningRoadmapDayTest.php` | `-` | Regresi HTTP/domain: Learning Roadmap Day Test. |
 | `tests/Feature/LiveClassRoadmapTest.php` | `-` | Regresi HTTP/domain: Live Class Roadmap Test. |
+| `tests/Feature/MultiCurriculumTest.php` | `-` | Regresi HTTP/domain: Multi Curriculum Test. |
 | `tests/Feature/NewsPortalTest.php` | `-` | Regresi HTTP/domain: News Portal Test. |
 | `tests/Feature/ProfileTest.php` | `-` | Regresi HTTP/domain: Profile Test. |
 | `tests/Feature/PublicLegalPagesTest.php` | `-` | Regresi HTTP/domain: Public Legal Pages Test. |
+| `tests/Feature/QuickQuizTest.php` | `-` | Regresi HTTP/domain: Quick Quiz Test. |
 | `tests/Feature/RepetisiPembelajaranTest.php` | `-` | Regresi HTTP/domain: Repetisi Pembelajaran Test. |
 | `tests/Feature/SecurityHardeningTest.php` | `-` | Regresi HTTP/domain: Security Hardening Test. |
 | `tests/Feature/SuperAdminDashboardTest.php` | `-` | Regresi HTTP/domain: Super Admin Dashboard Test. |
 | `tests/Feature/SuperAdminGamifikasiTest.php` | `-` | Regresi HTTP/domain: Super Admin Gamifikasi Test. |
+| `tests/Feature/UserDashboardAccessTest.php` | `-` | Regresi HTTP/domain: User Dashboard Access Test. |
 | `tests/Feature/UserExamTargetTest.php` | `UserExamTargetTest` | Regresi HTTP/domain: User Exam Target Test. |
 
 ## Unit test

@@ -20,6 +20,7 @@ import VideoCameraFrontIcon from '@mui/icons-material/VideoCameraFront';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 
 const emptyForm = {
+    curriculum_track_id: '',
     level_id: '',
     title: '',
     description: '',
@@ -90,7 +91,7 @@ function OptionCard({ href, icon, label, description, tone = 'orange' }) {
     );
 }
 
-export default function ManajemenKelas({ programs = {}, levels = [], filters = {} }) {
+export default function ManajemenKelas({ programs = {}, tracks = [], levels = [], filters = {} }) {
     const { auth } = usePage().props;
     const isAdminGlobal = auth?.user?.admin_scope !== 'kloter';
     const rows = programs.data || [];
@@ -101,6 +102,9 @@ export default function ManajemenKelas({ programs = {}, levels = [], filters = {
     const [managingProgram, setManagingProgram] = useState(null);
     const [deleteTarget, setDeleteTarget] = useState(null);
     const form = useForm(emptyForm);
+    const availableLevels = levels.filter((level) => (
+        String(level.curriculum_track_id) === String(form.data.curriculum_track_id)
+    ));
 
     const openCreate = () => {
         setEditing(null);
@@ -111,6 +115,7 @@ export default function ManajemenKelas({ programs = {}, levels = [], filters = {
     const openEdit = (program) => {
         setEditing(program);
         form.setData({
+            curriculum_track_id: program.curriculum_track_id || '',
             level_id: program.level_id || '',
             title: program.title || '',
             description: program.description || '',
@@ -210,6 +215,7 @@ export default function ManajemenKelas({ programs = {}, levels = [], filters = {
                                     <div className="absolute bottom-4 left-4 right-4">
                                         <div className="mb-2 flex flex-wrap gap-2">
                                             <StatusBadge status={program.status} />
+                                            {program.curriculum_track && <span className="rounded-full bg-white/20 px-3 py-1 text-[10px] font-black text-white backdrop-blur">{program.curriculum_track.name}</span>}
                                             {program.level && <span className="rounded-full bg-white/20 px-3 py-1 text-[10px] font-black text-white backdrop-blur">{program.level.level_name}</span>}
                                         </div>
                                         <h2 className="text-2xl font-black text-white">{program.title}</h2>
@@ -413,15 +419,31 @@ export default function ManajemenKelas({ programs = {}, levels = [], filters = {
                             <div className="max-h-[78vh] overflow-y-auto p-6">
                                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                     <Field label="Judul Kelas" wide>
-                                        <input value={form.data.title} onChange={(event) => form.setData('title', event.target.value)} placeholder="Contoh: JLPT N3 Mingguan" className={inputClass} />
+                                <input value={form.data.title} onChange={(event) => form.setData('title', event.target.value)} placeholder="Contoh: JLPT N4 Mingguan atau SSW Careworker" className={inputClass} />
                                     </Field>
                                     <Field label="Nama Pengajar">
                                         <input value={form.data.instructor_name} onChange={(event) => form.setData('instructor_name', event.target.value)} placeholder="Masukkan nama pengajar" className={inputClass} />
                                     </Field>
+                                    <Field label="Jalur Kurikulum">
+                                        <select
+                                            value={form.data.curriculum_track_id}
+                                            onChange={(event) => {
+                                                form.setData((current) => ({
+                                                    ...current,
+                                                    curriculum_track_id: event.target.value,
+                                                    level_id: '',
+                                                }));
+                                            }}
+                                            className={inputClass}
+                                        >
+                                            <option value="">Pilih jalur</option>
+                                            {tracks.map((track) => <option key={track.id} value={track.id}>{track.name}</option>)}
+                                        </select>
+                                    </Field>
                                     <Field label="Level">
-                                        <select value={form.data.level_id} onChange={(event) => form.setData('level_id', event.target.value)} className={inputClass}>
+                                        <select value={form.data.level_id} onChange={(event) => form.setData('level_id', event.target.value)} disabled={!form.data.curriculum_track_id} className={inputClass}>
                                             <option value="">Tanpa Level</option>
-                                            {levels.map((level) => <option key={level.id} value={level.id}>{level.level_name}</option>)}
+                                            {availableLevels.map((level) => <option key={level.id} value={level.id}>{level.level_name}</option>)}
                                         </select>
                                     </Field>
                                     <Field label="Thumbnail URL" wide>

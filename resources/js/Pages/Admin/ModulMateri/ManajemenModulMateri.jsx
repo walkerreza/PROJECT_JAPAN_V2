@@ -683,7 +683,7 @@ export default function ModulesIndex({ modules, levels = [], programs = [], filt
                                 </label>
                                 <label>
                                     <span className="mb-1.5 block text-xs font-black uppercase tracking-wider text-gray-400">Judul Minggu</span>
-                                    <input value={moduleForm.data.title} onChange={(event) => moduleForm.setData('title', event.target.value)} className={inputClass} placeholder="Contoh: Dasar Percakapan N3" required />
+                                <input value={moduleForm.data.title} onChange={(event) => moduleForm.setData('title', event.target.value)} className={inputClass} placeholder="Contoh: Dasar Percakapan" required />
                                 </label>
                             </div>
                             <label className="block">

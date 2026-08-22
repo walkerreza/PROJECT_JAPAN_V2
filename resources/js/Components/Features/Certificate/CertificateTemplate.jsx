@@ -2,6 +2,11 @@ import TranslateIcon from '@mui/icons-material/Translate';
 import React from 'react';
 
 export default function CertificateTemplate({ certificate, user }) {
+    const levelLabel = [
+        certificate?.level?.curriculum_track?.name,
+        certificate?.level?.level_name,
+    ].filter(Boolean).join(' ') || 'Program JapanLingo';
+
     return (
         <div id="certificate-content" className="w-full max-w-3xl mx-auto bg-white border-4 border-amber-400 rounded-3xl p-12 relative overflow-hidden shadow-2xl" style={{ fontFamily: "'Noto Serif JP', 'Georgia', serif" }}>
             
@@ -32,7 +37,7 @@ export default function CertificateTemplate({ certificate, user }) {
                     {user?.username || 'Nama Peserta'}
                 </h2>
                 <p className="text-gray-600 text-base mt-4 leading-relaxed max-w-lg mx-auto">
-                    Telah berhasil menyelesaikan seluruh program pembelajaran <strong className="text-red-600">Japanese Language Proficiency Test (JLPT) Level N3</strong> pada platform JapanLingo dengan dedikasi dan ketekunan yang luar biasa.
+                    Telah berhasil menyelesaikan seluruh program pembelajaran <strong className="text-red-600">{levelLabel}</strong> pada platform JapanLingo dengan dedikasi dan ketekunan yang luar biasa.
                 </p>
             </div>
 
@@ -50,7 +55,7 @@ export default function CertificateTemplate({ certificate, user }) {
                 </div>
                 <div className="text-center">
                     <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase mb-1">Level</p>
-                    <p className="font-black text-red-600 text-sm">JLPT N3</p>
+                    <p className="font-black text-red-600 text-sm">{levelLabel}</p>
                 </div>
             </div>
 

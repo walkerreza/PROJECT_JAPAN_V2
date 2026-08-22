@@ -2,14 +2,13 @@
 
 namespace App\Services;
 
-use App\Models\PengerjaanKuis;
-use App\Models\LevelPembelajaran;
-use App\Models\Progres;
 use App\Models\Kuis;
-use App\Models\Modul;
 use App\Models\LogReward;
+use App\Models\Modul;
+use App\Models\PengerjaanKuis;
 use App\Models\Pengguna;
 use App\Models\ProgramPembelajaran;
+use App\Models\Progres;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 
@@ -46,6 +45,8 @@ class RingkasanProgresPenggunaService
             ? collect()
             : Kuis::with('module:id,title')->whereIn('id', $attemptedQuizIds)->get(['id', 'module_id', 'type']);
 
+        $learningJourneys = $this->learningJourneys($user, $completedModuleIds)->values()->all();
+
         return [
             'stats' => [
                 'xp' => (int) $user->xp,
@@ -54,7 +55,8 @@ class RingkasanProgresPenggunaService
                 'quizzesDone' => $quizzesDone,
             ],
             'weekActivity' => $this->weekActivity($user)->values()->all(),
-            'jlptJourney' => $this->jlptJourney($completedModuleIds)->values()->all(),
+            'learningJourneys' => $learningJourneys,
+            'jlptJourney' => $learningJourneys,
             'recentActivity' => $this->recentActivity($user)->values()->all(),
             'skills' => $this->topicActivity($modulesDone, $quizzesDone, $completedModules, $completedQuizzes),
             'next_learning' => $this->nextLearning($user, $completedModuleIds),
@@ -63,7 +65,7 @@ class RingkasanProgresPenggunaService
 
     private function cacheKey(Pengguna $user): string
     {
-        return "user-progress-summary:v2:{$user->id}";
+        return "user-progress-summary:v3:{$user->id}";
     }
 
     private function weekActivity(Pengguna $user): Collection
@@ -95,29 +97,45 @@ class RingkasanProgresPenggunaService
 
         return $days->map(fn (array $day) => [
             ...$day,
-            'height' => $day['xp'] > 0 ? min(100, max(10, ($day['xp'] / $peakXp) * 100)) . '%' : '0%',
+            'height' => $day['xp'] > 0 ? min(100, max(10, ($day['xp'] / $peakXp) * 100)).'%' : '0%',
         ]);
     }
 
-    private function jlptJourney(array $completedModuleIds): Collection
+    private function learningJourneys(Pengguna $user, array $completedModuleIds): Collection
     {
         $completed = array_flip($completedModuleIds);
+        $access = app(AksesPremiumService::class);
 
-        return LevelPembelajaran::with(['modules:id,level_id'])
-            ->orderBy('stage')
+        return ProgramPembelajaran::query()
+            ->with([
+                'curriculumTrack:id,code,name',
+                'level:id,level_name',
+                'modules' => fn ($query) => $query->where('status', 'published')->select(['id', 'program_pembelajaran_id']),
+            ])
+            ->where('status', 'published')
+            ->orderBy('sort_order')
+            ->orderBy('id')
             ->get()
-            ->map(function (LevelPembelajaran $level) use ($completed) {
-                $moduleIds = $level->modules->pluck('id');
+            ->filter(fn (ProgramPembelajaran $program) => $access->punyaAksesKelas($user, $program->id))
+            ->map(function (ProgramPembelajaran $program) use ($completed) {
+                $moduleIds = $program->modules->pluck('id');
                 $totalModules = $moduleIds->count();
                 $completedCount = $moduleIds->filter(fn ($id) => isset($completed[$id]))->count();
                 $pct = $totalModules > 0 ? round(($completedCount / $totalModules) * 100) : 0;
 
                 return [
-                    'level' => $level->level_name,
+                    'program' => $program->title,
+                    'level' => $program->level?->level_name,
+                    'curriculum' => $program->curriculumTrack?->name,
+                    'label' => trim(implode(' ', array_filter([
+                        $program->curriculumTrack?->name,
+                        $program->level?->level_name,
+                    ]))) ?: $program->title,
                     'pct' => $pct,
                     'done' => $pct === 100 && $totalModules > 0,
                 ];
-            });
+            })
+            ->values();
     }
 
     private function recentActivity(Pengguna $user): Collection
@@ -225,6 +243,6 @@ class RingkasanProgresPenggunaService
 
     private function quizSkillText(Kuis $quiz): string
     {
-        return trim($quiz->type . ' ' . ($quiz->module?->title ?? ''));
+        return trim($quiz->type.' '.($quiz->module?->title ?? ''));
     }
 }

@@ -198,6 +198,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // LevelPembelajaran CRUD
         Route::apiResource('/levels', AdminLevelController::class)->only(['index', 'store', 'update', 'destroy']);
+        Route::post('/curriculum-tracks', [AdminLevelController::class, 'storeTrack'])->name('curriculum-tracks.store');
+        Route::put('/curriculum-tracks/{curriculumTrack}', [AdminLevelController::class, 'updateTrack'])->name('curriculum-tracks.update');
+        Route::delete('/curriculum-tracks/{curriculumTrack}', [AdminLevelController::class, 'destroyTrack'])->name('curriculum-tracks.destroy');
 
         // Upload Endpoint
         Route::post('/upload', [AdminUnggahController::class, 'store'])->middleware('throttle:admin-uploads')->name('upload');

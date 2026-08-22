@@ -14,6 +14,7 @@ class ProgramPembelajaran extends Model
     protected $table = 'program_pembelajaran';
 
     protected $fillable = [
+        'curriculum_track_id',
         'level_id',
         'title',
         'slug',
@@ -23,6 +24,11 @@ class ProgramPembelajaran extends Model
         'status',
         'sort_order',
     ];
+
+    public function curriculumTrack(): BelongsTo
+    {
+        return $this->belongsTo(CurriculumTrack::class, 'curriculum_track_id');
+    }
 
     public function level(): BelongsTo
     {

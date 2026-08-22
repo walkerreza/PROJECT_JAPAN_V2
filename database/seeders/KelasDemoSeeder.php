@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\CurriculumTrack;
 use App\Models\DeckPresentasi;
 use App\Models\Flashcard;
 use App\Models\HariModul;
@@ -24,9 +25,13 @@ class KelasDemoSeeder extends Seeder
 
     public function run(): void
     {
+        $track = CurriculumTrack::updateOrCreate(
+            ['code' => 'jlpt'],
+            ['name' => 'JLPT', 'status' => 'active', 'sort_order' => 1]
+        );
         $level = LevelPembelajaran::updateOrCreate(
             ['level_name' => 'JLPT N3'],
-            ['stage' => 3, 'is_premium' => true]
+            ['curriculum_track_id' => $track->id, 'stage' => 3, 'is_premium' => true]
         );
         $globalAdmin = Pengguna::where('email', 'admin@japanlingo.com')->first();
         $mentor = Pengguna::where('email', 'admin.kloter@japanlingo.com')->first();
@@ -35,6 +40,7 @@ class KelasDemoSeeder extends Seeder
             $program = ProgramPembelajaran::updateOrCreate(
                 ['slug' => $programData['slug']],
                 [
+                    'curriculum_track_id' => $track->id,
                     'level_id' => $level->id,
                     'title' => $programData['title'],
                     'description' => $programData['description'],

@@ -93,7 +93,7 @@ class AdminHariModulController extends Controller
 
         $moduleDay->vocabulary()->sync($sync);
 
-        return redirect()->back()->with('success', 'Konten N3 untuk Day berhasil diperbarui.');
+        return redirect()->back()->with('success', 'Konten untuk Day berhasil diperbarui.');
     }
 
     private function validateDay(Request $request, Modul $module, ?HariModul $day = null): array

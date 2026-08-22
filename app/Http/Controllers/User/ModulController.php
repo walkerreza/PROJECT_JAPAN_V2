@@ -19,8 +19,8 @@ use App\Models\Soal;
 use App\Models\TargetUjianPengguna;
 use App\Services\AksesKuisPenggunaService;
 use App\Services\AksesPremiumService;
-use App\Services\KloterBelajarService;
 use App\Services\KelasPenggunaPayloadService;
+use App\Services\KloterBelajarService;
 use App\Services\PembelajaranPenggunaService;
 use App\Services\PenilaianJawabanKuisService;
 use App\Services\ProgresRoadmapService;
@@ -41,6 +41,7 @@ class ModulController extends Controller
         $user = Auth::user();
 
         abort_unless($program->status === 'published', 404);
+        $program->loadMissing(['level', 'curriculumTrack']);
 
         $classAccess = $kelasPayload->forProgram($user, $program);
 
@@ -440,6 +441,10 @@ class ModulController extends Controller
                 'slug' => $program->slug,
                 'description' => $program->description,
                 'level' => $program->level?->level_name,
+                'curriculum' => $program->curriculumTrack ? [
+                    'code' => $program->curriculumTrack->code,
+                    'name' => $program->curriculumTrack->name,
+                ] : null,
                 'lessons' => $moduls->count(),
                 'completed_lessons' => $completedWeekCount,
                 'progress' => $moduls->isNotEmpty()
@@ -476,6 +481,7 @@ class ModulController extends Controller
         $user = Auth::user();
 
         abort_unless($program->status === 'published', 404);
+        $program->loadMissing(['level', 'curriculumTrack']);
 
         $moduleIds = $this->accessibleModuleIdsForProgram($program, $user, $aksesPremium, $progresRoadmap);
         $selectedModuleId = $this->selectedAccessibleModuleId($request, $moduleIds);
@@ -517,12 +523,22 @@ class ModulController extends Controller
             ->pluck('category')
             ->filter()
             ->values();
+        $availableLevels = $this->vocabularyQueryForModules($queryModuleIds)
+            ->whereNotNull('jlpt_level')
+            ->distinct()
+            ->orderBy('jlpt_level')
+            ->pluck('jlpt_level')
+            ->values();
 
         return Inertia::render('User/Kosakata/KosakataPage', [
             'program' => [
                 'title' => $program->title,
                 'slug' => $program->slug,
                 'level' => $program->level?->level_name,
+                'curriculum' => $program->curriculumTrack ? [
+                    'code' => $program->curriculumTrack->code,
+                    'name' => $program->curriculumTrack->name,
+                ] : null,
                 'roadmap_url' => route('user.modul.program', $program->slug),
             ],
             'modules' => $program->modules()
@@ -538,6 +554,7 @@ class ModulController extends Controller
                 ->withQueryString(),
             'filters' => $request->only('search', 'category', 'jlpt_level', 'module', 'content_type'),
             'categories' => $categories,
+            'available_levels' => $availableLevels,
         ]);
     }
 
@@ -830,8 +847,7 @@ class ModulController extends Controller
         $user,
         AksesPremiumService $aksesPremium,
         ProgresRoadmapService $progresRoadmap
-    )
-    {
+    ) {
         return $program->modules()
             ->where('status', 'published')
             ->get()
@@ -864,11 +880,17 @@ class ModulController extends Controller
 
     private function selectedAccessibleModuleId(Request $request, $moduleIds): ?int
     {
-        if (! $request->filled('module')) {
+        $module = $request->input('module');
+
+        if ($module === null || $module === '' || $module === 'all') {
             return null;
         }
 
-        $moduleId = $request->integer('module');
+        if (! is_scalar($module) || ! ctype_digit((string) $module) || (int) $module < 1) {
+            return null;
+        }
+
+        $moduleId = (int) $module;
 
         abort_unless($moduleIds->contains($moduleId), 403, 'Selesaikan Minggu sebelumnya terlebih dahulu.');
 
@@ -889,5 +911,4 @@ class ModulController extends Controller
             })
             ->distinct();
     }
-
 }

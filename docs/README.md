@@ -18,11 +18,12 @@ Dokumentasi ini adalah handbook teknis dan operasional JapanLingo V2. Gunakan fo
 12. [Kelas realtime di production](06-live-class/production.md)
 13. [Konten, roadmap, dan progress](07-learning/content-roadmap.md)
 14. [Gamifikasi](07-learning/gamification.md)
-15. [Scheduler, queue, backup, dan monitoring](08-operations/scheduler-queue-backup.md)
-16. [Hardening keamanan](09-security/hardening.md)
-17. [Testing dan checklist rilis](10-testing/release-checklist.md)
-18. [Troubleshooting](11-troubleshooting/common-errors.md)
-19. [Referensi seluruh file kode dan resource](12-code-reference/README.md)
+15. [Ekspansi multi-kurikulum](07-learning/multi-curriculum.md)
+16. [Scheduler, queue, backup, dan monitoring](08-operations/scheduler-queue-backup.md)
+17. [Hardening keamanan](09-security/hardening.md)
+18. [Testing dan checklist rilis](10-testing/release-checklist.md)
+19. [Troubleshooting](11-troubleshooting/common-errors.md)
+20. [Referensi seluruh file kode dan resource](12-code-reference/README.md)
 
 Template HTML Mailtrap berada di [mailtrap-templates](mailtrap-templates/).
 

@@ -36,12 +36,24 @@ class QuickQuizSessionService
                 'target_count' => $active['target_count'],
                 'remaining_count' => max(0, $active['target_count'] - $active['resolved_count']),
                 'program_count' => count($active['program_ids']),
+                'selected_program_id' => $active['selected_program_id'] ?? null,
+                'programs' => [],
                 'start_url' => route('user.quick-quiz.start'),
                 'resume_url' => route('user.quick-quiz.show', $active['id']),
             ];
         }
 
         $candidates = $this->candidates($user);
+        $programs = $candidates
+            ->filter(fn (array $candidate) => $candidate['program_id'])
+            ->groupBy('program_id')
+            ->map(fn (Collection $items) => [
+                'id' => (int) $items->first()['program_id'],
+                'title' => $items->first()['program_title'],
+                'question_count' => $items->count(),
+            ])
+            ->sortBy('title')
+            ->values();
 
         return [
             'available' => $candidates->isNotEmpty(),
@@ -50,19 +62,21 @@ class QuickQuizSessionService
             'remaining_count' => min(self::MAX_TARGETS, $candidates->count()),
             'program_count' => $candidates->pluck('program_id')->filter()->unique()->count(),
             'due_count' => $candidates->where('priority', 0)->count(),
+            'selected_program_id' => null,
+            'programs' => $programs,
             'start_url' => route('user.quick-quiz.start'),
             'resume_url' => null,
         ];
     }
 
-    public function start(Pengguna $user, bool $forceNew = false): ?array
+    public function start(Pengguna $user, bool $forceNew = false, ?int $programId = null): ?array
     {
         if (! $forceNew && $active = $this->active($user)) {
             return $active;
         }
 
         $this->forgetActive($user);
-        $selected = $this->selectTargets($this->candidates($user));
+        $selected = $this->selectTargets($this->candidates($user, $programId));
 
         if ($selected->isEmpty()) {
             return null;
@@ -80,6 +94,7 @@ class QuickQuizSessionService
             'mastered_count' => 0,
             'review_count' => 0,
             'program_ids' => $selected->pluck('program_id')->filter()->unique()->values()->all(),
+            'selected_program_id' => $programId,
             'queue' => $queue,
             'items' => $selected->keyBy('question_id')->map(fn (array $item) => [
                 'attempts' => 0,
@@ -187,7 +202,7 @@ class QuickQuizSessionService
         });
     }
 
-    private function candidates(Pengguna $user): Collection
+    private function candidates(Pengguna $user, ?int $programId = null): Collection
     {
         $quizzes = Kuis::query()
             ->with([
@@ -198,6 +213,10 @@ class QuickQuizSessionService
             ->where('status', 'published')
             ->whereHas('questions')
             ->whereHas('module', fn ($query) => $query->where('status', 'published'))
+            ->when($programId, fn ($query) => $query->whereHas(
+                'module',
+                fn ($moduleQuery) => $moduleQuery->where('program_pembelajaran_id', $programId)
+            ))
             ->get()
             ->filter(fn (Kuis $quiz) => ! $quiz->isWeeklyExam()
                 && $quiz->module?->program_pembelajaran_id
@@ -222,6 +241,7 @@ class QuickQuizSessionService
             return [
                 'question_id' => $question->id,
                 'program_id' => $quiz->module?->program_pembelajaran_id,
+                'program_title' => $quiz->module?->programPembelajaran?->title,
                 'priority' => match (true) {
                     $review?->next_review_at?->isPast() => 0,
                     $review?->last_result === 'wrong' || $review?->status === 'learning' => 1,

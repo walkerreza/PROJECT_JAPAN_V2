@@ -56,13 +56,16 @@ function EmptyState({ children }) {
 export default function Progress({
     stats = {},
     weekActivity = [],
+    learningJourneys = [],
     jlptJourney = [],
     recentActivity = [],
     skills = [],
     next_learning: nextLearning = null,
 }) {
     const weekItems = toList(weekActivity);
-    const journeyItems = toList(jlptJourney);
+    const journeyItems = toList(learningJourneys).length > 0
+        ? toList(learningJourneys)
+        : toList(jlptJourney);
     const recentItems = toList(recentActivity);
     const skillItems = toList(skills);
     const totalXP = weekItems.reduce((total, day) => total + (Number(day.xp) || 0), 0);
@@ -127,7 +130,7 @@ export default function Progress({
                             <div className="p-6 sm:p-8">
                                 <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
                                     <TrendingUpIcon sx={{ fontSize: 15 }} />
-                                    Ruang belajar N3
+                                    Ruang belajar
                                 </div>
                                 <h1 className="mt-4 max-w-xl text-3xl font-black tracking-normal text-slate-950 dark:text-white sm:text-4xl">
                                     Progres Belajar
@@ -257,7 +260,7 @@ export default function Progress({
                             <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                                 <div className="flex items-center justify-between gap-3">
                                     <div>
-                                        <h2 className="text-lg font-black text-slate-950 dark:text-white">Perjalanan JLPT</h2>
+                                        <h2 className="text-lg font-black text-slate-950 dark:text-white">Perjalanan Belajar</h2>
                                         <p className="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">Tahapan yang sudah kamu selesaikan.</p>
                                     </div>
                                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">
@@ -272,13 +275,13 @@ export default function Progress({
                                             const progress = clamp(level.pct);
 
                                             return (
-                                                <div key={`${level.level}-${index}`}>
+                                                <div key={`${level.program || level.label}-${index}`}>
                                                     <div className="flex items-center justify-between gap-3">
                                                         <div className="flex min-w-0 items-center gap-2">
                                                             <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-black ${completed ? 'bg-emerald-500 text-white' : progress > 0 ? 'bg-rose-500 text-white' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300'}`}>
-                                                                {completed ? <CheckCircleIcon sx={{ fontSize: 16 }} /> : level.level}
+                                                                {completed ? <CheckCircleIcon sx={{ fontSize: 16 }} /> : (level.level || index + 1)}
                                                             </span>
-                                                            <span className="truncate text-sm font-black text-slate-800 dark:text-slate-100">{level.level}</span>
+                                                            <span className="truncate text-sm font-black text-slate-800 dark:text-slate-100">{level.program || level.label}</span>
                                                         </div>
                                                         <span className="text-xs font-black tabular-nums text-slate-600 dark:text-slate-300">{progress}%</span>
                                                     </div>

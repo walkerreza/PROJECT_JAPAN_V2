@@ -6,11 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\HariModul;
 use App\Models\Kosakata;
 use App\Models\Modul;
+use App\Models\ProgramPembelajaran;
 use App\Services\ImportSpreadsheetService;
 use App\Services\NotifikasiPenggunaService;
 use App\Services\SoalKuisService;
 use App\Services\TemplateExcelService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -113,6 +115,16 @@ class AdminKosakataController extends Controller
                 ->orderBy('week_number')
                 ->get(['id', 'program_pembelajaran_id', 'title', 'week_number']),
             'contentTypes' => Kosakata::contentTypes(),
+            'availableLevels' => Kosakata::query()
+                ->whereNotNull('jlpt_level')
+                ->distinct()
+                ->orderBy('jlpt_level')
+                ->pluck('jlpt_level')
+                ->values(),
+            'program' => $request->filled('program_id')
+                ? ProgramPembelajaran::with(['level:id,level_name', 'curriculumTrack:id,code,name'])
+                    ->find($request->integer('program_id'))
+                : null,
         ]);
     }
 
@@ -128,7 +140,7 @@ class AdminKosakataController extends Controller
             $this->kirimNotifikasiKosakataTerbit($content, $notifikasi);
         }
 
-        return redirect()->back()->with('success', 'Konten N3 berhasil ditambahkan.');
+        return redirect()->back()->with('success', 'Konten berhasil ditambahkan.');
     }
 
     public function update(Request $request, Kosakata $vocabulary, NotifikasiPenggunaService $notifikasi)
@@ -145,14 +157,14 @@ class AdminKosakataController extends Controller
             $this->kirimNotifikasiKosakataTerbit($vocabulary, $notifikasi);
         }
 
-        return redirect()->back()->with('success', 'Konten N3 berhasil diperbarui.');
+        return redirect()->back()->with('success', 'Konten berhasil diperbarui.');
     }
 
     public function destroy(Kosakata $vocabulary)
     {
         $vocabulary->delete();
 
-        return redirect()->back()->with('success', 'Konten N3 berhasil dihapus.');
+        return redirect()->back()->with('success', 'Konten berhasil dihapus.');
     }
 
     public function import(Request $request, ImportSpreadsheetService $spreadsheets)
@@ -160,7 +172,12 @@ class AdminKosakataController extends Controller
         $validated = $request->validate([
             'import_file' => ['required', 'file', 'max:4096'],
             'content_type' => ['nullable', Rule::in(Kosakata::contentTypes())],
-            'module_id' => ['nullable', 'integer', 'exists:modules,id'],
+            'program_id' => ['required', 'integer', 'exists:program_pembelajaran,id'],
+            'module_id' => [
+                'required',
+                'integer',
+                Rule::exists('modules', 'id')->where('program_pembelajaran_id', $request->integer('program_id')),
+            ],
             'module_day_id' => [
                 'nullable',
                 'integer',
@@ -174,7 +191,7 @@ class AdminKosakataController extends Controller
         $extension = strtolower($file->getClientOriginalExtension());
 
         if (! in_array($extension, ['csv', 'txt', 'xlsx'], true)) {
-            return redirect()->back()->withErrors(['import_file' => 'Gunakan CSV atau XLSX untuk import Bank Konten N3.']);
+            return redirect()->back()->withErrors(['import_file' => 'Gunakan CSV atau XLSX untuk import Bank Konten.']);
         }
 
         $rows = $spreadsheets->rows($file->getRealPath(), $extension);
@@ -183,55 +200,63 @@ class AdminKosakataController extends Controller
             return redirect()->back()->withErrors(['import_file' => 'File kosong atau header tidak valid.']);
         }
 
-        $created = 0;
+        $created = DB::transaction(function () use ($rows, $validated, $extension, $file) {
+            $imported = 0;
 
-        foreach ($rows as $data) {
-            $this->assertImportScope($data, $validated);
-            $contentType = $this->normalizeContentType($data['content_type'] ?? $data['tipe_konten'] ?? $validated['content_type'] ?? Kosakata::TYPE_KOSAKATA);
-            $word = trim((string) ($data['main_text'] ?? $data['word'] ?? $data['kata'] ?? $data['kanji'] ?? $data['pattern'] ?? $data['pola'] ?? ''));
+            foreach ($rows as $data) {
+                $this->assertImportScope($data, $validated);
+                $contentType = $this->normalizeContentType($data['content_type'] ?? $data['tipe_konten'] ?? $validated['content_type'] ?? Kosakata::TYPE_KOSAKATA);
+                $word = trim((string) ($data['main_text'] ?? $data['word'] ?? $data['kata'] ?? $data['kanji'] ?? $data['pattern'] ?? $data['pola'] ?? ''));
 
-            if ($word === '') {
-                continue;
+                if ($word === '') {
+                    continue;
+                }
+
+                $reading = $data['reading'] ?? $data['kana'] ?? $data['onyomi'] ?? $data['struktur'] ?? null;
+                $moduleId = $this->resolveModuleId($data, $validated['module_id']);
+
+                $content = Kosakata::updateOrCreate(
+                    [
+                        'word' => $word,
+                        'reading' => $reading,
+                    ],
+                    [
+                        'content_type' => $contentType,
+                        'module_id' => $moduleId,
+                        'meaning_id' => $data['meaning_id'] ?? $data['arti_indonesia'] ?? $data['arti'] ?? null,
+                        'meaning_en' => $data['meaning_en'] ?? $data['english'] ?? null,
+                        'jlpt_level' => $this->resolvedJlptLevel(
+                            $moduleId,
+                            $data['jlpt_level'] ?? null
+                        ),
+                        'category' => $data['category'] ?? $data['kategori'] ?? null,
+                        'tags' => ! empty($data['tags']) ? preg_split('/\s*\|\s*/', $data['tags']) : null,
+                        'example_sentence' => $data['example_sentence'] ?? $data['contoh_kalimat'] ?? null,
+                        'example_reading' => $data['example_reading'] ?? $data['reading_contoh'] ?? null,
+                        'example_meaning' => $data['example_meaning'] ?? $data['arti_contoh'] ?? null,
+                        'audio_url' => $data['audio_url'] ?? null,
+                        'source_type' => $data['source_type'] ?? $validated['source_type'] ?? $extension,
+                        'source_title' => $data['source_title'] ?? $validated['source_title'] ?? $file->getClientOriginalName(),
+                        'metadata' => $this->metadataFromImportRow($data, $contentType),
+                        'status' => $data['status'] ?? 'draft',
+                    ]
+                );
+
+                if (filled($validated['module_day_id'] ?? null)) {
+                    $content->days()->syncWithoutDetaching([(int) $validated['module_day_id']]);
+                }
+
+                $this->syncLinkedFlashcards($content);
+                $imported++;
             }
 
-            $reading = $data['reading'] ?? $data['kana'] ?? $data['onyomi'] ?? $data['struktur'] ?? null;
+            return $imported;
+        });
 
-            $content = Kosakata::updateOrCreate(
-                [
-                    'word' => $word,
-                    'reading' => $reading,
-                ],
-                [
-                    'content_type' => $contentType,
-                    'module_id' => $this->resolveModuleId($data, $validated['module_id'] ?? null),
-                    'meaning_id' => $data['meaning_id'] ?? $data['arti_indonesia'] ?? $data['arti'] ?? null,
-                    'meaning_en' => $data['meaning_en'] ?? $data['english'] ?? null,
-                    'jlpt_level' => $data['jlpt_level'] ?? 'N3',
-                    'category' => $data['category'] ?? $data['kategori'] ?? null,
-                    'tags' => ! empty($data['tags']) ? preg_split('/\s*\|\s*/', $data['tags']) : null,
-                    'example_sentence' => $data['example_sentence'] ?? $data['contoh_kalimat'] ?? null,
-                    'example_reading' => $data['example_reading'] ?? $data['reading_contoh'] ?? null,
-                    'example_meaning' => $data['example_meaning'] ?? $data['arti_contoh'] ?? null,
-                    'audio_url' => $data['audio_url'] ?? null,
-                    'source_type' => $data['source_type'] ?? $validated['source_type'] ?? $extension,
-                    'source_title' => $data['source_title'] ?? $validated['source_title'] ?? $file->getClientOriginalName(),
-                    'metadata' => $this->metadataFromImportRow($data, $contentType),
-                    'status' => $data['status'] ?? 'draft',
-                ]
-            );
-
-            if (filled($validated['module_day_id'] ?? null)) {
-                $content->days()->syncWithoutDetaching([(int) $validated['module_day_id']]);
-            }
-
-            $this->syncLinkedFlashcards($content);
-            $created++;
-        }
-
-        return redirect()->back()->with('success', "{$created} konten N3 berhasil diimport.");
+        return redirect()->back()->with('success', "{$created} konten berhasil diimport.");
     }
 
-    public function template(TemplateExcelService $templates, ?string $format = 'xlsx')
+    public function template(Request $request, TemplateExcelService $templates, ?string $format = 'xlsx')
     {
         $format = strtolower($format ?: 'xlsx');
 
@@ -239,15 +264,21 @@ class AdminKosakataController extends Controller
             abort(404);
         }
 
+        $program = ProgramPembelajaran::with(['level:id,level_name', 'curriculumTrack:id,code,name'])
+            ->find($request->integer('program_id'));
+        $level = $program?->curriculumTrack?->code === 'jlpt'
+            ? $this->normalizeJlptLevel($program->level?->level_name)
+            : null;
         $headers = $this->importHeaders();
-        $rows = $this->templateRows();
-        $filename = 'japanlingo-bank-konten-n3-template.'.$format;
+        $rows = $this->templateRows($level);
+        $slug = str($program?->slug ?: 'umum')->slug()->toString();
+        $filename = "japanlingo-bank-konten-{$slug}.{$format}";
 
         if ($format === 'csv') {
             return $templates->csvResponse($headers, $rows, $filename);
         }
 
-        $path = $templates->xlsxPath($headers, $rows, 'Bank Konten N3', 'japanlingo_bank_konten_n3_template_');
+        $path = $templates->xlsxPath($headers, $rows, 'Bank Konten', 'japanlingo_bank_konten_template_');
 
         return response()
             ->download($path, $filename, [
@@ -258,7 +289,7 @@ class AdminKosakataController extends Controller
 
     private function validateVocabulary(Request $request, ?Kosakata $vocabulary = null): array
     {
-        return $request->validate([
+        $validated = $request->validate([
             'word' => [
                 'required',
                 'string',
@@ -277,7 +308,7 @@ class AdminKosakataController extends Controller
             'reading' => ['nullable', 'string', 'max:255'],
             'meaning_id' => ['nullable', 'string'],
             'meaning_en' => ['nullable', 'string'],
-            'jlpt_level' => ['required', 'string', 'max:8'],
+            'jlpt_level' => ['nullable', 'string', 'max:8'],
             'category' => ['nullable', 'string', 'max:100'],
             'tags' => ['nullable', 'array'],
             'tags.*' => ['nullable', 'string', 'max:50'],
@@ -297,14 +328,21 @@ class AdminKosakataController extends Controller
             'metadata.notes' => ['nullable', 'string'],
             'status' => ['required', 'in:draft,published'],
         ]);
+
+        $validated['jlpt_level'] = $this->resolvedJlptLevel(
+            isset($validated['module_id']) ? (int) $validated['module_id'] : null,
+            $validated['jlpt_level'] ?? null
+        );
+
+        return $validated;
     }
 
     private function kirimNotifikasiKosakataTerbit(Kosakata $vocabulary, NotifikasiPenggunaService $notifikasi): void
     {
         $notifikasi->kirimKeSemuaPengguna(
             'new_vocabulary',
-            'Konten N3 baru tersedia',
-            "{$vocabulary->word} sudah masuk ke Bank Konten N3.",
+            'Konten baru tersedia',
+            "{$vocabulary->word} sudah masuk ke Bank Konten.",
             route('user.kelas.index'),
             ['vocabulary_id' => $vocabulary->id]
         );
@@ -315,15 +353,47 @@ class AdminKosakataController extends Controller
         return ['content_type', 'module_id', 'module_week', 'main_text', 'reading', 'meaning_id', 'meaning_en', 'jlpt_level', 'category', 'tags', 'example_sentence', 'example_reading', 'example_meaning', 'notes', 'onyomi', 'kunyomi', 'source_type', 'source_title', 'audio_url', 'status', 'day_number', 'radicals', 'stroke_count'];
     }
 
-    private function templateRows(): array
+    private function templateRows(?string $level = null): array
     {
         $rows = [
-            ['kosakata', '', 1, '会議', 'かいぎ', 'rapat', 'meeting', 'N3', 'pekerjaan', 'work|office', '今日は一時から会議があります。', 'きょうはいちじからかいぎがあります。', 'Hari ini ada rapat mulai jam satu.', '', '', '', 'xlsx', 'ALL - KOSAKATA N3-2.pdf', '', 'draft'],
-            ['kanji', '', 1, '割', 'わり', 'membagi, diskon', 'divide, discount', 'N3', 'belanja', 'kanji|shopping', '割引があります。', 'わりびきがあります。', 'Ada diskon.', 'Contoh kata: 割引', 'カツ', 'わ.る', 'xlsx', 'ALL - KANJI N3 2.pdf', '', 'draft'],
-            ['bunpo', '', 1, '〜ように', 'Vる/ない + ように', 'agar, supaya', 'so that', 'N3', 'grammar', 'bunpo|pattern', '忘れないようにメモします。', 'わすれないようにメモします。', 'Saya mencatat supaya tidak lupa.', 'Pakai untuk tujuan atau harapan.', '', '', 'xlsx', 'ALL - BUNPO N3.pdf', '', 'draft'],
+            ['kosakata', '', 1, '会議', 'かいぎ', 'rapat', 'meeting', $level, 'pekerjaan', 'work|office', '今日は一時から会議があります。', 'きょうはいちじからかいぎがあります。', 'Hari ini ada rapat mulai jam satu.', '', '', '', 'xlsx', 'Sumber materi', '', 'draft'],
+            ['kanji', '', 1, '割', 'わり', 'membagi, diskon', 'divide, discount', $level, 'belanja', 'kanji|shopping', '割引があります。', 'わりびきがあります。', 'Ada diskon.', 'Contoh kata: 割引', 'カツ', 'わ.る', 'xlsx', 'Sumber materi', '', 'draft'],
+            ['bunpo', '', 1, '〜ように', 'Vる/ない + ように', 'agar, supaya', 'so that', $level, 'grammar', 'bunpo|pattern', '忘れないようにメモします。', 'わすれないようにメモします。', 'Saya mencatat supaya tidak lupa.', 'Pakai untuk tujuan atau harapan.', '', '', 'xlsx', 'Sumber materi', '', 'draft'],
         ];
 
         return array_map(fn (array $row) => [...$row, '', '', ''], $rows);
+    }
+
+    private function resolvedJlptLevel(?int $moduleId, mixed $value): ?string
+    {
+        if (! $moduleId) {
+            return filled($value) ? $this->normalizeJlptLevel((string) $value) : null;
+        }
+
+        $module = Modul::with(['programPembelajaran.curriculumTrack', 'programPembelajaran.level'])->find($moduleId);
+        $program = $module?->programPembelajaran;
+
+        if ($program?->curriculumTrack?->code !== 'jlpt') {
+            return null;
+        }
+
+        $expected = $this->normalizeJlptLevel($program->level?->level_name);
+        $given = filled($value) ? $this->normalizeJlptLevel((string) $value) : $expected;
+
+        if (! $expected || $given !== $expected) {
+            throw ValidationException::withMessages([
+                'jlpt_level' => 'Level konten harus sama dengan level kelas tujuan.',
+            ]);
+        }
+
+        return $expected;
+    }
+
+    private function normalizeJlptLevel(?string $value): ?string
+    {
+        return preg_match('/N[1-5]/i', (string) $value, $matches)
+            ? strtoupper($matches[0])
+            : null;
     }
 
     private function normalizeContentType(?string $type): string
