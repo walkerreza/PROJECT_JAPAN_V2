@@ -206,8 +206,12 @@ export default function JapaneseSpeechButton({
         const resolvedPlaybackKey = playbackKey || `${audioUrl || 'speech'}:${speakableText}`;
         if (autoPlayedKeyRef.current === resolvedPlaybackKey) return undefined;
 
-        autoPlayedKeyRef.current = resolvedPlaybackKey;
-        const timer = window.setTimeout(() => play(), 0);
+        // Do not mark the key until playback is actually queued. In React Strict Mode,
+        // the first mount timer can be cleaned up before it runs.
+        const timer = window.setTimeout(() => {
+            autoPlayedKeyRef.current = resolvedPlaybackKey;
+            play();
+        }, 0);
 
         return () => window.clearTimeout(timer);
     }, [audioUrl, autoPlay, autoPlayEnabled, play, playbackKey, speakableText, supported]);

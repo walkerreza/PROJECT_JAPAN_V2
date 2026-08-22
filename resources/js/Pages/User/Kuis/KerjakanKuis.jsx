@@ -44,11 +44,11 @@ function normalizeQuestionType(type) {
 
 const japaneseTextPattern = /[\u3040-\u30ff\u3400-\u9fff]/g;
 
-const getJapaneseSpeechText = (question) => {
+const getJapaneseSpeechText = (question, { includeCorrectAnswer = true } = {}) => {
     const source = [
         question?.kanji,
         question?.question,
-        question?.correct_answer,
+        includeCorrectAnswer ? question?.correct_answer : null,
     ].filter(Boolean).join(' ');
 
     const matches = source.match(japaneseTextPattern);
@@ -251,7 +251,9 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
 
     const currentQ = questions[currentIndex];
     const currentType = currentQ?.type || 'multiple_choice';
-    const currentSpeechText = getJapaneseSpeechText(currentQ);
+    const currentSpeechText = getJapaneseSpeechText(currentQ, {
+        includeCorrectAnswer: currentType !== 'multiple_choice',
+    });
     const hasQuestionAudio = Boolean(currentQ?.audio_url || currentSpeechText);
     const narrationAudioUrl = isStreamableAudio(currentQ?.audio_url) ? currentQ.audio_url : null;
     const totalQuestionCount = rawQuestions.length || questions.length;
@@ -976,7 +978,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                 <JapaneseSpeechButton
                     text={currentSpeechText || currentQ?.kanji || currentQ?.question}
                     audioUrl={narrationAudioUrl}
-                    autoPlay={currentType === 'listening' && Boolean(narrationAudioUrl || currentSpeechText)}
+                    autoPlay={Boolean(narrationAudioUrl || currentSpeechText)}
                     autoPlayEnabled={soundEnabled}
                     playbackKey={`question-${currentQ?.attemptKey}`}
                     renderButton={false}
@@ -1007,8 +1009,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                                     <span className="max-w-full break-words px-4 text-[64px] font-medium leading-none text-gray-900 select-none dark:text-white sm:text-[100px] md:text-[140px]">{currentQ.kanji}</span>
                                 ) : !currentQ.audio_url ? (
                                     <div className="max-h-[72%] overflow-y-auto overscroll-contain px-6 text-center sm:px-8">
-                                        <span className="text-xs font-black uppercase tracking-[0.25em] text-gray-600 dark:text-gray-300">Narator Jepang</span>
-                                        <p className="mt-3 break-words text-2xl font-black text-gray-700 dark:text-gray-100 sm:text-3xl md:text-5xl">{currentSpeechText}</p>
+                                        <p className="break-words text-2xl font-black text-gray-700 dark:text-gray-100 sm:text-3xl md:text-5xl">{currentSpeechText}</p>
                                     </div>
                                 ) : null}
                                 
