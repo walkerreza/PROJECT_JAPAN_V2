@@ -582,9 +582,11 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
         e.preventDefault();
         openConfirm({
             variant: 'warning',
-            title: 'Keluar dari Kuis?',
-            message: 'Progres sesi kuis yang belum dikirim akan hilang.',
-            confirmLabel: 'Iya, Keluar',
+            presentation: 'quiz-exit',
+            title: 'Mau jeda dulu?',
+            message: 'Jawaban yang belum dikirim tidak akan tersimpan. Kamu bisa lanjutkan sesi ini kapan saja sebelum keluar.',
+            cancelLabel: 'Lanjutkan kuis',
+            confirmLabel: 'Keluar sesi',
             details: [
                 { label: 'Kuis', value: quiz?.title || quiz?.module?.title || 'Kuis aktif' },
                 { label: 'Progress', value: `${answeredCount}/${totalQuestionCount} soal dijawab` },
@@ -945,6 +947,7 @@ export default function Quiz({ quiz, questions: rawQuestions = [], flashcards = 
                         </button>
                     </div>
                 </main>
+                {exitConfirmation}
             </div>
         );
     }
